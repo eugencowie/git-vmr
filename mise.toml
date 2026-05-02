@@ -1,3 +1,4 @@
 [tools]
 node = "latest"
 "npm:@fission-ai/openspec" = "latest"
+rust = "nightly"
