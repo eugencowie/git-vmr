@@ -9,3 +9,9 @@ repository = "https://github.com/eugencowie/git-vmr"
 license = "GPL-2.0-only"
 
 [dependencies]
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"
