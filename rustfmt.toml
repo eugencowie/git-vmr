@@ -1,0 +1,40 @@
+#
+# https://rust-lang.github.io/rustfmt/
+#
+
+# Enable unstable features
+unstable_features = true
+
+# Newline style
+newline_style = "Unix"
+
+# Maximum line width
+max_width = 80
+use_small_heuristics = "Max"
+wrap_comments = true
+
+# Brace style
+brace_style = "AlwaysNextLine"
+control_brace_style = "AlwaysNextLine"
+where_single_line = true
+match_arm_blocks = false
+
+# Trailing comma
+trailing_comma = "Never"
+
+# Expressions
+overflow_delimited_expr = true
+
+# Imports
+imports_granularity = "Module"
+group_imports = "One"
+
+# Implementation blocks
+reorder_impl_items = true
+
+# Language features
+normalize_comments = true
+normalize_doc_attributes = true
+condense_wildcard_suffixes = true
+use_field_init_shorthand = true
+use_try_shorthand = true
