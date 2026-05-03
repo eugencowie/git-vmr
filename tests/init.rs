@@ -91,3 +91,17 @@ fn init_errors_when_working_dir_argument_does_not_exist()
 
     assert!(!tmp.path().join(".gitvmr").exists());
 }
+
+#[test]
+fn version_flag_prints_package_version()
+{
+    git_vmr()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!(
+            "git-vmr {}",
+            env!("CARGO_PKG_VERSION")
+        )))
+        .stderr(predicate::str::is_empty());
+}

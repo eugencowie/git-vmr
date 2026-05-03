@@ -1,7 +1,7 @@
 mod init;
 
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use std::env;
 use std::path::PathBuf;
 
@@ -13,13 +13,17 @@ enum Command
 }
 
 #[derive(Parser)]
-#[command(name = "git-vmr")]
+#[command(name = "git-vmr", version, disable_version_flag = true)]
 pub struct Cli
 {
     /// Run as if git-vmr was started in <path> instead of the current working
     /// directory
     #[arg(short = 'C', value_name = "path")]
     working_dir: Option<PathBuf>,
+
+    /// Print version
+    #[arg(short, long, action = ArgAction::Version)]
+    version: (),
 
     #[command(subcommand)]
     command: Command
