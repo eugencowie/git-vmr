@@ -1,3 +1,4 @@
+mod add;
 mod init;
 mod status;
 
@@ -12,7 +13,15 @@ enum Command
     /// Create an empty virtual monorepo or reinitialize an existing one
     Init,
 
-    /// Show the virtual monorepo status
+    /// Add file contents to the index
+    Add
+    {
+        /// Files to add content from
+        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+        paths: Vec<PathBuf>
+    },
+
+    /// Show the working tree status
     Status
 }
 
@@ -43,6 +52,7 @@ impl Cli
         // Run command
         match self.command
         {
+            Command::Add { paths } => add::add(&working_dir, &paths),
             Command::Init => init::init(&working_dir),
             Command::Status => status::status(&working_dir)
         }
