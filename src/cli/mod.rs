@@ -1,5 +1,7 @@
 mod add;
 mod init;
+mod rm;
+mod routing;
 mod status;
 
 use anyhow::{Context, Result, bail};
@@ -17,6 +19,18 @@ enum Command
     Add
     {
         /// Files to add content from
+        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+        paths: Vec<PathBuf>
+    },
+
+    /// Remove files from the working tree and from the index
+    Rm
+    {
+        /// Allow recursive removal when a leading directory name is given
+        #[arg(short)]
+        recursive: bool,
+
+        /// Files to remove
         #[arg(required = true, num_args = 1.., value_name = "pathspec")]
         paths: Vec<PathBuf>
     },
@@ -53,6 +67,8 @@ impl Cli
         match self.command
         {
             Command::Add { paths } => add::add(&working_dir, &paths),
+            Command::Rm { paths, recursive } =>
+                rm::rm(&working_dir, &paths, recursive),
             Command::Init => init::init(&working_dir),
             Command::Status => status::status(&working_dir)
         }
