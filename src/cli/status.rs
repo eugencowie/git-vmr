@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -460,8 +460,9 @@ fn render_paths(
     let mut rendered: Vec<(String, FileChange)> = Vec::new();
     for (repo, status) in context.repos
     {
-        let repo_prefix =
-            relative_path(&context.vmr_root.join(repo), context.working_dir);
+        let repo_path = context.vmr_root.join(repo);
+        let repo_prefix = pathdiff::diff_paths(&repo_path, context.working_dir)
+            .unwrap_or(repo_path);
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);
@@ -500,43 +501,6 @@ fn render_paths(
     }
 
     true
-}
-
-fn relative_path(path: &Path, base: &Path) -> PathBuf
-{
-    // Split paths into components
-    let path_components = path.components().collect::<Vec<_>>();
-    let base_components = base.components().collect::<Vec<_>>();
-
-    // Fall back to absolute path when roots differ
-    let path_root =
-        path_components.iter().find(|c| !matches!(c, Component::Normal(_)));
-    let base_root =
-        base_components.iter().find(|c| !matches!(c, Component::Normal(_)));
-    if path_root != base_root
-    {
-        return path.to_path_buf();
-    }
-
-    // Find common prefix length
-    let common = path_components
-        .iter()
-        .zip(base_components.iter())
-        .take_while(|(a, b)| a == b)
-        .count();
-
-    // Build relative path
-    let mut out = PathBuf::new();
-    for _ in &base_components[common..]
-    {
-        out.push("..");
-    }
-    for component in &path_components[common..]
-    {
-        out.push(component.as_os_str());
-    }
-
-    out
 }
 
 #[cfg(test)]
