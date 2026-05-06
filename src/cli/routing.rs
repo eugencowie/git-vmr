@@ -28,6 +28,28 @@ pub fn route_paths(
     Ok(grouped)
 }
 
+pub fn route_single_path(
+    working_dir: &Path,
+    vmr_root: &Path,
+    path: &Path
+) -> Result<(PathBuf, PathBuf)>
+{
+    // Resolve one operand without allowing aggregate VMR root expansion
+    let normalized = normalize_path(&resolve_path(working_dir, path));
+
+    if normalized == vmr_root
+    {
+        bail!("'{}' resolves to the VMR root aggregate", path.display());
+    }
+
+    // Reuse normal child repository ownership checks
+    route_path(vmr_root, &normalized)
+        .with_context(|| format!("failed to route '{}'", path.display()))?
+        .into_iter()
+        .next()
+        .context("path did not route to a child repository")
+}
+
 pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
 {
     // Interpret relative paths against effective working directory
@@ -317,5 +339,40 @@ mod tests
         assert_eq!(routed.get(&tmp.path().join("frontend")).unwrap(), &vec![
             PathBuf::from("app.rs")
         ]);
+    }
+
+    #[test]
+    fn routes_single_path_without_vmr_root_expansion()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+
+        // Act
+        let routed = route_single_path(
+            tmp.path(),
+            tmp.path(),
+            Path::new("backend/src/main.rs")
+        )
+        .expect("path should route");
+
+        // Assert
+        assert_eq!(
+            routed,
+            (tmp.path().join("backend"), PathBuf::from("src/main.rs"))
+        );
+    }
+
+    #[test]
+    fn route_single_path_rejects_vmr_root()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+
+        // Act
+        let err = route_single_path(tmp.path(), tmp.path(), Path::new("."))
+            .expect_err("VMR root should fail");
+
+        // Assert
+        assert!(format!("{err:#}").contains("VMR root aggregate"));
     }
 }

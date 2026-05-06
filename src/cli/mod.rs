@@ -1,5 +1,6 @@
 mod add;
 mod init;
+mod mv;
 mod rm;
 mod routing;
 mod status;
@@ -21,6 +22,18 @@ enum Command
         /// Files to add content from
         #[arg(required = true, num_args = 1.., value_name = "pathspec")]
         paths: Vec<PathBuf>
+    },
+
+    /// Move or rename a file, a directory, or a symlink
+    Mv
+    {
+        /// File to move
+        #[arg(value_name = "source")]
+        source: PathBuf,
+
+        /// Destination path
+        #[arg(value_name = "destination")]
+        destination: PathBuf
     },
 
     /// Remove files from the working tree and from the index
@@ -66,10 +79,12 @@ impl Cli
         // Run command
         match self.command
         {
+            Command::Init => init::init(&working_dir),
             Command::Add { paths } => add::add(&working_dir, &paths),
+            Command::Mv { source, destination } =>
+                mv::mv(&working_dir, &source, &destination),
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
-            Command::Init => init::init(&working_dir),
             Command::Status => status::status(&working_dir)
         }
     }
