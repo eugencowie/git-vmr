@@ -14,7 +14,13 @@ use std::path::PathBuf;
 enum Command
 {
     /// Create an empty virtual monorepo or reinitialize an existing one
-    Init,
+    Init
+    {
+        /// If you provide a directory, the command is run inside it. If this
+        /// directory does not exist, it will be created
+        #[arg(value_name = "directory")]
+        directory: Option<PathBuf>
+    },
 
     /// Add file contents to the index
     Add
@@ -95,7 +101,8 @@ impl Cli
         // Run command
         match self.command
         {
-            Command::Init => init::init(&working_dir),
+            Command::Init { directory } =>
+                init::init(&working_dir, directory.as_deref()),
             Command::Add { paths } => add::add(&working_dir, &paths),
             Command::Mv { source, destination } =>
                 mv::mv(&working_dir, &source, &destination),
@@ -145,6 +152,7 @@ mod tests
     use super::*;
     use clap::Parser;
     use std::fs;
+    use std::path::Path;
 
     #[test]
     fn parses_working_dir_argument()
@@ -162,6 +170,50 @@ mod tests
 
         // Assert
         assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+    }
+
+    #[test]
+    fn parses_init_directory_argument()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "init", "project"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Init { directory } =>
+            {
+                assert_eq!(directory.as_deref(), Some(Path::new("project")));
+            }
+            _ => panic!("expected init command")
+        }
+    }
+
+    #[test]
+    fn parses_working_dir_with_init_directory_argument()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "init",
+            "project"
+        ]);
+
+        // Assert
+        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+        match cli.command
+        {
+            Command::Init { directory } =>
+            {
+                assert_eq!(directory.as_deref(), Some(Path::new("project")));
+            }
+            _ => panic!("expected init command")
+        }
     }
 
     #[test]

@@ -1,7 +1,4 @@
-## Purpose
-Define the `git vmr init` command behavior for creating and reinitializing virtual monorepo metadata.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Init creates .gitvmr/config in target directory
 The `git vmr init` command SHALL create a `.gitvmr/` directory and a `.gitvmr/config` file in the target directory. When no directory argument is provided, the target directory SHALL be the current working directory. When a directory argument is provided, the target directory SHALL be the provided directory. The config file SHALL contain TOML with a `[core]` section and `version = 0`.
@@ -31,28 +28,3 @@ The `git vmr init` command SHALL create a `.gitvmr/` directory and a `.gitvmr/co
 - **WHEN** user runs `git vmr init file` and `file` exists as a file
 - **THEN** the command exits with an error
 - **AND** `file/.gitvmr/config` is not created
-
-### Requirement: Init is idempotent
-The `git vmr init` command SHALL succeed if `.gitvmr/config` already exists and report that the existing virtual monorepo was reinitialized. It SHALL NOT overwrite or modify the existing config file.
-
-#### Scenario: Re-running init with existing config
-- **WHEN** user runs `git vmr init` and `.gitvmr/config` already exists
-- **THEN** the command exits successfully, prints a reinitialization message, and does not modify the file
-
-### Requirement: Init does not require a git repository
-The `git vmr init` command SHALL NOT require the current directory to be inside a git repository. It SHALL work in any directory.
-
-#### Scenario: Init outside a git repo
-- **WHEN** user runs `git vmr init` in a directory that is not a git repository
-- **THEN** `.gitvmr/config` is created successfully
-
-### Requirement: CLI uses clap with subcommand pattern
-The CLI SHALL use clap (derive) with a subcommand pattern. The binary SHALL be named `git-vmr` so that `git vmr <subcommand>` dispatches to it. The CLI SHALL accept a global `-C <path>` flag that overrides the working directory for all subcommands. When `-C` is provided, the path SHALL be canonicalized before dispatching. When `-C` is not provided, the current working directory SHALL be used.
-
-#### Scenario: Running git vmr init
-- **WHEN** user runs `git vmr init`
-- **THEN** the init subcommand is dispatched and executed using the current working directory
-
-#### Scenario: Running git vmr -C /path init
-- **WHEN** user runs `git vmr -C /path init` and `/path` exists
-- **THEN** the init subcommand is dispatched and executed using the canonicalized `/path`
