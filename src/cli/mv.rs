@@ -1,4 +1,3 @@
-use super::routing;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -9,9 +8,9 @@ pub fn mv(working_dir: &Path, source: &Path, destination: &Path) -> Result<()>
 {
     // Find VMR root and route both operands before moving anything
     let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let source = routing::route_single_path(working_dir, &vmr_root, source)?;
+    let source = vmr::route_single_path(working_dir, &vmr_root, source)?;
     let destination =
-        routing::route_single_path(working_dir, &vmr_root, destination)?;
+        vmr::route_single_path(working_dir, &vmr_root, destination)?;
 
     // Delegate same-repository moves to Git and synthesize cross-repository
     // moves

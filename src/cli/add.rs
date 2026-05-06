@@ -1,4 +1,3 @@
-use super::routing;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
@@ -8,7 +7,7 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
 {
     // Find VMR root and route requested paths
     let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let routed = routing::route_paths(working_dir, &vmr_root, paths)?;
+    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?;
 
     // Stage paths in each child repository
     for (repo_path, repo_paths) in routed

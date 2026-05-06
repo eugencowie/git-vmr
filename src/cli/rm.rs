@@ -1,4 +1,3 @@
-use super::routing;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
@@ -18,7 +17,7 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     }
 
     // Route requested paths before removing anything
-    let routed = routing::route_paths(working_dir, &vmr_root, paths)?;
+    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?;
 
     // Remove paths in each child repository
     for (repo_path, repo_paths) in routed
@@ -36,9 +35,9 @@ fn targets_vmr_root(
 ) -> bool
 {
     // Detect root expansion before routing turns it into child repository paths
-    paths.iter().any(|path| {
-        routing::resolve_path(working_dir, path).clean() == vmr_root
-    })
+    paths
+        .iter()
+        .any(|path| vmr::resolve_path(working_dir, path).clean() == vmr_root)
 }
 
 fn git_rm(repo_path: &Path, paths: &[PathBuf], recursive: bool) -> Result<()>

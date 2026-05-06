@@ -3,7 +3,6 @@ mod init;
 mod mv;
 mod restore;
 mod rm;
-mod routing;
 mod status;
 
 use anyhow::{Context, Result, bail};

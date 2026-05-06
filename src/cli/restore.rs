@@ -1,4 +1,3 @@
-use super::routing;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
@@ -14,7 +13,7 @@ pub fn restore(
     // Find VMR root and route all requested paths before mutating any
     // repository
     let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let routed = routing::route_paths(working_dir, &vmr_root, paths)?;
+    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?;
 
     // Restore paths in each child repository
     for (repo_path, repo_paths) in routed
