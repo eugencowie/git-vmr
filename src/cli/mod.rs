@@ -1,6 +1,7 @@
 mod add;
 mod init;
 mod mv;
+mod restore;
 mod rm;
 mod routing;
 mod status;
@@ -34,6 +35,22 @@ enum Command
         /// Destination path
         #[arg(value_name = "destination")]
         destination: PathBuf
+    },
+
+    /// Restore working tree files
+    Restore
+    {
+        /// Restore the working tree
+        #[arg(long)]
+        worktree: bool,
+
+        /// Restore the index
+        #[arg(long)]
+        staged: bool,
+
+        /// Files to restore
+        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+        paths: Vec<PathBuf>
     },
 
     /// Remove files from the working tree and from the index
@@ -83,6 +100,8 @@ impl Cli
             Command::Add { paths } => add::add(&working_dir, &paths),
             Command::Mv { source, destination } =>
                 mv::mv(&working_dir, &source, &destination),
+            Command::Restore { paths, staged, worktree } =>
+                restore::restore(&working_dir, &paths, worktree, staged),
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
             Command::Status => status::status(&working_dir)
