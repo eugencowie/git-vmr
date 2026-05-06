@@ -1,4 +1,5 @@
 mod add;
+mod branch;
 mod init;
 mod mv;
 mod restore;
@@ -71,7 +72,10 @@ enum Command
     },
 
     /// Show the working tree status
-    Status
+    Status,
+
+    /// List branches
+    Branch
 }
 
 #[derive(Parser)]
@@ -110,7 +114,8 @@ impl Cli
                 restore::restore(&working_dir, &paths, worktree, staged),
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
-            Command::Status => status::status(&working_dir)
+            Command::Status => status::status(&working_dir),
+            Command::Branch => branch::branch(&working_dir)
         }
     }
 

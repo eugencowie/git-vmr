@@ -5,7 +5,7 @@
 Run the retained real-repository status benchmark with:
 
 ```sh
-cargo bench --bench status_real_repos
+cargo bench --bench real_repos
 ```
 
 The first run prepares `target/bench-fixtures/real-repos` by cloning the pinned repository manifest and creating the `.gitvmr/` marker. Later runs reuse existing repository directories without fetching or pulling, so setup time is not part of the measured warm-cache full-command wall time.
