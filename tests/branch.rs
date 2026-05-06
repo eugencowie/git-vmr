@@ -37,6 +37,17 @@ fn commit_file(path: &Path, file: &str)
     git(path, ["commit", "-m", "initial"]);
 }
 
+fn branch_exists(path: &Path, branch: &str) -> bool
+{
+    std::process::Command::new("git")
+        .args(["rev-parse", "--verify", branch])
+        .current_dir(path)
+        .output()
+        .expect("failed to run git")
+        .status
+        .success()
+}
+
 #[test]
 fn branch_lists_local_branches_across_child_repositories()
 {
@@ -184,4 +195,137 @@ fn branch_fails_on_corrupted_git_dir()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("failed to read branch information"));
+}
+
+#[test]
+fn branch_creates_branch_in_every_child_repository_with_no_output()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    assert!(branch_exists(&backend, "feature/auth"));
+    assert!(branch_exists(&frontend, "feature/auth"));
+}
+
+#[test]
+fn branch_create_skips_non_git_child_directories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    assert!(branch_exists(&backend, "feature/auth"));
+}
+
+#[test]
+fn branch_create_partial_failure_does_not_stop_other_repositories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    let tools = tmp.path().join("tools");
+    init_repo(&backend);
+    init_repo(&frontend);
+    init_repo(&tools);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    commit_file(&tools, "README.md");
+    git(&backend, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains(
+            "fatal: a branch named 'feature/auth' already exists (backend)"
+        ));
+
+    assert!(branch_exists(&frontend, "feature/auth"));
+    assert!(branch_exists(&tools, "feature/auth"));
+}
+
+#[test]
+fn branch_create_reports_failures_with_repository_suffixes()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    git(&backend, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains(
+                "fatal: a branch named 'feature/auth' already exists (backend)"
+            )
+            .and(
+                predicate::str::contains("fatal: failed to create branch")
+                    .not()
+            )
+        );
+}
+
+#[test]
+fn branch_create_reports_multiple_failures_in_repository_name_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let alpha = tmp.path().join("alpha");
+    let zeta = tmp.path().join("zeta");
+    init_repo(&alpha);
+    init_repo(&zeta);
+    commit_file(&alpha, "README.md");
+    commit_file(&zeta, "README.md");
+    git(&alpha, ["branch", "feature/auth"]);
+    git(&zeta, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::starts_with(
+            "fatal: a branch named 'feature/auth' already exists (alpha)\n\
+             fatal: a branch named 'feature/auth' already exists (zeta)\n"
+        ));
 }

@@ -11,6 +11,35 @@ use clap::{ArgAction, Parser, Subcommand};
 use std::env;
 use std::path::PathBuf;
 
+#[derive(Debug)]
+pub(crate) struct AggregateError
+{
+    errors: Vec<anyhow::Error>
+}
+
+impl AggregateError
+{
+    pub(crate) fn new(errors: Vec<anyhow::Error>) -> Self
+    {
+        Self { errors }
+    }
+
+    pub(crate) fn errors(&self) -> &[anyhow::Error]
+    {
+        &self.errors
+    }
+}
+
+impl std::fmt::Display for AggregateError
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        write!(f, "{} errors occurred", self.errors.len())
+    }
+}
+
+impl std::error::Error for AggregateError {}
+
 #[derive(Subcommand)]
 enum Command
 {
@@ -74,8 +103,14 @@ enum Command
     /// Show the working tree status
     Status,
 
-    /// List branches
+    /// List or create branches
     Branch
+    {
+        /// Creates a new branch head named [branch-name] which points to the
+        /// current HEAD
+        #[arg(value_name = "branch-name")]
+        branch_name: Option<String>
+    }
 }
 
 #[derive(Parser)]
@@ -115,7 +150,8 @@ impl Cli
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
             Command::Status => status::status(&working_dir),
-            Command::Branch => branch::branch(&working_dir)
+            Command::Branch { branch_name } =>
+                branch::branch(&working_dir, branch_name.as_deref()),
         }
     }
 
@@ -285,5 +321,39 @@ mod tests
         let msg = format!("{err:#}");
         assert!(msg.contains("Not a directory"), "unexpected error: {msg}");
         assert!(!file.join(".gitvmr").exists());
+    }
+
+    #[test]
+    fn parses_branch_without_branch_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "branch"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Branch { branch_name } =>
+            {
+                assert_eq!(branch_name, None);
+            }
+            _ => panic!("expected branch command")
+        }
+    }
+
+    #[test]
+    fn parses_branch_with_branch_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "branch", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Branch { branch_name } =>
+            {
+                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
+            }
+            _ => panic!("expected branch command")
+        }
     }
 }

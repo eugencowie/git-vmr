@@ -13,7 +13,17 @@ fn main() -> ExitCode
     // Run command
     if let Err(e) = cli.run()
     {
-        eprintln!("fatal: {e:#}");
+        if let Some(aggregate) = e.downcast_ref::<cli::AggregateError>()
+        {
+            for error in aggregate.errors()
+            {
+                eprintln!("fatal: {error:#}");
+            }
+        }
+        else
+        {
+            eprintln!("fatal: {e:#}");
+        }
         return ExitCode::FAILURE;
     }
 
