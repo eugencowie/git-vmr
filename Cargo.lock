@@ -362,6 +362,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "criterion",
+ "path-clean",
  "pathdiff",
  "predicates",
  "rayon",
@@ -515,6 +516,12 @@ name = "oorandom"
 version = "11.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+
+[[package]]
+name = "path-clean"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
 
 [[package]]
 name = "pathdiff"

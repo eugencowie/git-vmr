@@ -1,6 +1,7 @@
 use super::routing;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
+use path_clean::PathClean;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -36,8 +37,7 @@ fn targets_vmr_root(
 {
     // Detect root expansion before routing turns it into child repository paths
     paths.iter().any(|path| {
-        routing::normalize_path(&routing::resolve_path(working_dir, path))
-            == vmr_root
+        routing::resolve_path(working_dir, path).clean() == vmr_root
     })
 }
 

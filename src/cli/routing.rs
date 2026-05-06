@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use path_clean::PathClean;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
@@ -15,7 +16,7 @@ pub fn route_paths(
     // Resolve and route every path before mutating any repository
     for path in paths
     {
-        let normalized = normalize_path(&resolve_path(working_dir, path));
+        let normalized = resolve_path(working_dir, path).clean();
         let routed = route_path(vmr_root, &normalized)
             .with_context(|| format!("failed to route '{}'", path.display()))?;
 
@@ -35,7 +36,7 @@ pub fn route_single_path(
 ) -> Result<(PathBuf, PathBuf)>
 {
     // Resolve one operand without allowing aggregate VMR root expansion
-    let normalized = normalize_path(&resolve_path(working_dir, path));
+    let normalized = resolve_path(working_dir, path).clean();
 
     if normalized == vmr_root
     {
@@ -54,33 +55,6 @@ pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
 {
     // Interpret relative paths against effective working directory
     if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
-}
-
-pub fn normalize_path(path: &Path) -> PathBuf
-{
-    let mut normalized = PathBuf::new();
-
-    // Normalize components lexically without requiring the path to exist
-    for component in path.components()
-    {
-        match component
-        {
-            Component::CurDir =>
-            {}
-            Component::ParentDir =>
-            {
-                normalized.pop();
-            }
-            Component::Prefix(_)
-            | Component::RootDir
-            | Component::Normal(_) =>
-            {
-                normalized.push(component.as_os_str());
-            }
-        }
-    }
-
-    normalized
 }
 
 pub fn route_path(
@@ -187,8 +161,7 @@ mod tests
     fn normalizes_paths_lexically_without_requiring_existence()
     {
         // Act
-        let path =
-            normalize_path(Path::new("/tmp/vmr/backend/../backend/deleted.rs"));
+        let path = Path::new("/tmp/vmr/backend/../backend/deleted.rs").clean();
 
         // Assert
         assert_eq!(path, PathBuf::from("/tmp/vmr/backend/deleted.rs"));
@@ -265,11 +238,9 @@ mod tests
         let tmp = vmr_fixture();
 
         // Act
-        let err = route_path(
-            tmp.path(),
-            &normalize_path(&tmp.path().join("../outside.txt"))
-        )
-        .expect_err("path should fail");
+        let err =
+            route_path(tmp.path(), &tmp.path().join("../outside.txt").clean())
+                .expect_err("path should fail");
 
         // Assert
         assert!(format!("{err:#}").contains("outside virtual monorepo"));
