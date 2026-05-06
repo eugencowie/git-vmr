@@ -385,10 +385,10 @@ fn render_group(
     let context = RenderContext { repos, working_dir, vmr_root };
 
     // Render initial commit notice
-    if repos.iter().any(|(_, status)| status.initial)
+    let has_initial = repos.iter().any(|(_, status)| status.initial);
+    if has_initial
     {
-        output.push_str("No commits yet.");
-        output.push('\n');
+        output.push_str("\nNo commits yet\n");
     }
 
     // Render change sections
@@ -423,7 +423,7 @@ fn render_group(
     );
 
     // Render clean summary
-    if has_staged || has_unstaged || has_untracked
+    if has_staged || has_unstaged || has_untracked || has_initial
     {
         output.push('\n');
     }
@@ -599,7 +599,7 @@ mod tests
         // Assert
         assert!(output.contains("master"));
         assert!(output.contains("(new-repo)"));
-        assert!(output.contains("No commits yet."));
+        assert!(output.contains("\nNo commits yet\n\n"));
     }
 
     #[test]
@@ -622,7 +622,8 @@ mod tests
             "On branch master\nnothing to commit, working tree clean"
         ));
         assert!(
-            output.contains("On branch master (new-repo)\nNo commits yet.")
+            output
+                .contains("On branch master (new-repo)\n\nNo commits yet\n\n")
         );
         assert!(!output.contains("On branch master (committed, new-repo)"));
     }
