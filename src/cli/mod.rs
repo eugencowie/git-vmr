@@ -2,6 +2,7 @@ mod add;
 mod branch;
 mod commit;
 mod init;
+mod merge;
 mod mv;
 mod restore;
 mod rm;
@@ -119,6 +120,14 @@ enum Command
         /// Use <msg> as the commit message
         #[arg(short, long, required = true, value_name = "msg")]
         message: String
+    },
+
+    /// Join two or more development histories together
+    Merge
+    {
+        /// Commits, usually other branch heads, to merge into our branch
+        #[arg(required = true, value_name = "commit")]
+        commit_ish: String
     }
 }
 
@@ -163,6 +172,8 @@ impl Cli
                 branch::branch(&working_dir, branch_name.as_deref()),
             Command::Commit { message } =>
                 commit::commit(&working_dir, &message),
+            Command::Merge { commit_ish } =>
+                merge::merge(&working_dir, &commit_ish),
         }
     }
 
@@ -419,6 +430,37 @@ mod tests
         let err = match Cli::try_parse_from(["git-vmr", "commit"])
         {
             Ok(_) => panic!("expected commit parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_merge_with_commit_ish()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "merge", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Merge { commit_ish } =>
+            {
+                assert_eq!(commit_ish, "feature/auth");
+            }
+            _ => panic!("expected merge command")
+        }
+    }
+
+    #[test]
+    fn rejects_merge_without_commit_ish()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "merge"])
+        {
+            Ok(_) => panic!("expected merge parse to fail"),
             Err(err) => err
         };
 
