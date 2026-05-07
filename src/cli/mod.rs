@@ -1,5 +1,6 @@
 mod add;
 mod branch;
+mod commit;
 mod init;
 mod mv;
 mod restore;
@@ -110,6 +111,14 @@ enum Command
         /// current HEAD
         #[arg(value_name = "branch-name")]
         branch_name: Option<String>
+    },
+
+    /// Record changes to the repositories
+    Commit
+    {
+        /// Use <msg> as the commit message
+        #[arg(short, long, required = true, value_name = "msg")]
+        message: String
     }
 }
 
@@ -152,6 +161,8 @@ impl Cli
             Command::Status => status::status(&working_dir),
             Command::Branch { branch_name } =>
                 branch::branch(&working_dir, branch_name.as_deref()),
+            Command::Commit { message } =>
+                commit::commit(&working_dir, &message),
         }
     }
 
@@ -355,5 +366,63 @@ mod tests
             }
             _ => panic!("expected branch command")
         }
+    }
+
+    #[test]
+    fn parses_commit_with_short_message()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "commit",
+            "-m",
+            "Implement new feature"
+        ]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Commit { message } =>
+            {
+                assert_eq!(message, "Implement new feature");
+            }
+            _ => panic!("expected commit command")
+        }
+    }
+
+    #[test]
+    fn parses_commit_with_long_message()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "commit",
+            "--message",
+            "Implement new feature"
+        ]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Commit { message } =>
+            {
+                assert_eq!(message, "Implement new feature");
+            }
+            _ => panic!("expected commit command")
+        }
+    }
+
+    #[test]
+    fn rejects_commit_without_message()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "commit"])
+        {
+            Ok(_) => panic!("expected commit parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     }
 }
