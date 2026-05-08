@@ -8,12 +8,12 @@ use std::path::Path;
 pub fn merge(working_dir: &Path, commit_ish: &str) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
 
     let mut successes = Vec::new();
     let mut failures = Vec::new();
 
-    for result in repos
+    for result in vmr
+        .repos()?
         .par_iter()
         .map(|repo| git::merge(&repo.name, &repo.path, commit_ish))
         .collect::<Result<Vec<_>>>()?

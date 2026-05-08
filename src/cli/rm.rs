@@ -1,6 +1,6 @@
 use crate::cli::AggregateError;
 use crate::git;
-use crate::vmr::{self, Vmr};
+use crate::vmr::Vmr;
 use anyhow::{Result, bail};
 use path_clean::PathClean;
 use rayon::prelude::*;
@@ -60,7 +60,11 @@ fn targets_vmr_root(
 ) -> bool
 {
     // Detect root expansion before routing turns it into child repository paths
-    paths
-        .iter()
-        .any(|path| vmr::resolve_path(working_dir, path).clean() == vmr_root)
+    paths.iter().any(|path| resolve_path(working_dir, path).clean() == vmr_root)
+}
+
+fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
+{
+    // Interpret relative paths against effective working directory
+    if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
 }

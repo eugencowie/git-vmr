@@ -10,7 +10,7 @@ pub struct Repo
 
 impl Repo
 {
-    pub fn from_child_dir(path: PathBuf) -> Result<Option<Repo>>
+    pub fn find(path: PathBuf) -> Result<Option<Repo>>
     {
         if !path.join(".git").exists()
         {

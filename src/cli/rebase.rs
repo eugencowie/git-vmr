@@ -8,9 +8,9 @@ use std::path::Path;
 pub fn rebase(working_dir: &Path, upstream: &str) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
 
-    let mut failures = repos
+    let mut failures = vmr
+        .repos()?
         .par_iter()
         .filter_map(|repo| {
             git::rebase(&repo.name, &repo.path, upstream).transpose()
