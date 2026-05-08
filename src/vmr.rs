@@ -20,7 +20,7 @@ pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
     bail!("not a virtual monorepo (or any of the parent directories): .gitvmr")
 }
 
-pub fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
+pub fn find_vmr_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
 {
     let mut repos = Vec::new();
 

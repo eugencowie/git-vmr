@@ -1,6 +1,6 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
 use crate::git::{self, GitOutput, git_output, git_stdout};
+use crate::vmr;
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -123,7 +123,7 @@ fn collect_repo_branches(
 
 fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
 {
-    let repos = vmr::eligible_repos(vmr_root)?;
+    let repos = vmr::find_vmr_repos(vmr_root)?;
     let mut failures = repos
         .par_iter()
         .filter_map(|(repo_name, repo_path)| {

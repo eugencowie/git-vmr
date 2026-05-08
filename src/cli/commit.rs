@@ -1,6 +1,6 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
 use crate::git::{self, git_output};
+use crate::vmr;
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};

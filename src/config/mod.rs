@@ -1,5 +1,4 @@
 mod core;
-pub mod vmr;
 
 use core::Core;
 use serde::{Deserialize, Serialize};

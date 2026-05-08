@@ -1,6 +1,5 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
-use crate::git;
+use crate::{git, vmr};
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use rayon::prelude::*;

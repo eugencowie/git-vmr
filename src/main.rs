@@ -1,9 +1,10 @@
 mod cli;
 mod config;
 mod git;
+mod vmr;
 
 use clap::Parser;
-use cli::Cli;
+use cli::{AggregateError, Cli};
 use std::process::ExitCode;
 
 fn main() -> ExitCode
@@ -14,7 +15,7 @@ fn main() -> ExitCode
     // Run command
     if let Err(e) = cli.run()
     {
-        if let Some(aggregate) = e.downcast_ref::<cli::AggregateError>()
+        if let Some(aggregate) = e.downcast_ref::<AggregateError>()
         {
             for error in aggregate.errors()
             {
@@ -25,6 +26,7 @@ fn main() -> ExitCode
         {
             eprintln!("fatal: {e:#}");
         }
+
         return ExitCode::FAILURE;
     }
 

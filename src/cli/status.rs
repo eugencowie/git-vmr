@@ -1,4 +1,4 @@
-use crate::config::vmr;
+use crate::vmr;
 use anstyle::{AnsiColor, Style};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;

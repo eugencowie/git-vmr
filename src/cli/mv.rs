@@ -1,4 +1,4 @@
-use crate::config::vmr;
+use crate::vmr;
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
