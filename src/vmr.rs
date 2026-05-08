@@ -1,9 +1,100 @@
+use crate::config::Config;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
+
+pub struct Vmr
+{
+    root: PathBuf,
+    #[allow(dead_code)]
+    config: OnceLock<Config>
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Repo
+{
+    pub name: String,
+    pub path: PathBuf
+}
+
+impl Vmr
+{
+    pub fn find(start: &Path) -> Result<Vmr>
+    {
+        Ok(Vmr { root: find_vmr_root(start)?, config: OnceLock::new() })
+    }
+
+    pub fn root(&self) -> &Path
+    {
+        &self.root
+    }
+
+    #[allow(dead_code)]
+    pub fn config(&self) -> Result<&Config>
+    {
+        if let Some(config) = self.config.get()
+        {
+            return Ok(config);
+        }
+
+        let config_path = self.root.join(".gitvmr/config");
+        let contents = fs::read_to_string(&config_path).with_context(|| {
+            format!("failed to read config '{}'", config_path.display())
+        })?;
+        let config = toml::from_str(&contents).with_context(|| {
+            format!("failed to parse config '{}'", config_path.display())
+        })?;
+        let _ = self.config.set(config);
+
+        self.config.get().context("failed to cache VMR config after loading")
+    }
+
+    pub fn repos(&self) -> Result<Vec<Repo>>
+    {
+        find_vmr_repos(&self.root)
+    }
+
+    pub fn route_paths(
+        &self,
+        working_dir: &Path,
+        paths: &[PathBuf]
+    ) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
+    {
+        route_paths(working_dir, &self.root, paths)
+    }
+
+    pub fn route_single_path(
+        &self,
+        working_dir: &Path,
+        path: &Path
+    ) -> Result<(Repo, PathBuf)>
+    {
+        route_single_path(working_dir, &self.root, path)
+    }
+}
+
+impl Repo
+{
+    pub fn from_child_dir(path: PathBuf) -> Result<Option<Repo>>
+    {
+        if !path.join(".git").exists()
+        {
+            return Ok(None);
+        }
+
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("repository path has no valid UTF-8 file name")?
+            .to_owned();
+
+        Ok(Some(Repo { name, path }))
+    }
+}
 
 pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
 {
@@ -20,27 +111,19 @@ pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
     bail!("not a virtual monorepo (or any of the parent directories): .gitvmr")
 }
 
-pub fn find_vmr_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
+pub fn find_vmr_repos(vmr_root: &Path) -> Result<Vec<Repo>>
 {
     let mut repos = Vec::new();
 
     for repo_path in child_dirs(vmr_root)?
     {
-        if !repo_path.join(".git").exists()
+        if let Some(repo) = Repo::from_child_dir(repo_path)?
         {
-            continue;
+            repos.push(repo);
         }
-
-        let repo_name = repo_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("repository path has no valid UTF-8 file name")?
-            .to_owned();
-
-        repos.push((repo_name, repo_path));
     }
 
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
+    repos.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(repos)
 }
@@ -62,9 +145,9 @@ pub fn route_paths(
     working_dir: &Path,
     vmr_root: &Path,
     paths: &[PathBuf]
-) -> Result<BTreeMap<PathBuf, Vec<PathBuf>>>
+) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
 {
-    let mut grouped: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
+    let mut grouped: BTreeMap<Repo, Vec<PathBuf>> = BTreeMap::new();
 
     // Resolve and route every path before mutating any repository
     for path in paths
@@ -86,7 +169,7 @@ pub fn route_single_path(
     working_dir: &Path,
     vmr_root: &Path,
     path: &Path
-) -> Result<(PathBuf, PathBuf)>
+) -> Result<(Repo, PathBuf)>
 {
     // Resolve one operand without allowing aggregate VMR root expansion
     let normalized = resolve_path(working_dir, path).clean();
@@ -110,10 +193,8 @@ pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
     if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
 }
 
-pub fn route_path(
-    vmr_root: &Path,
-    path: &Path
-) -> Result<Vec<(PathBuf, PathBuf)>>
+pub fn route_path(vmr_root: &Path, path: &Path)
+-> Result<Vec<(Repo, PathBuf)>>
 {
     // Expand the aggregate VMR root view across child repositories
     if path == vmr_root
@@ -149,11 +230,9 @@ pub fn route_path(
 
     // Require explicit paths to be owned by child Git repositories
     let repo_path = vmr_root.join(repo_name);
-    if !repo_path.join(".git").exists()
-    {
-        bail!("'{}' is not owned by a child Git repository", path.display());
-    }
-
+    let repo = Repo::from_child_dir(repo_path)?.with_context(|| {
+        format!("'{}' is not owned by a child Git repository", path.display())
+    })?;
     // Build path relative to owning repository
     let mut repo_relative_path = PathBuf::new();
     for component in components
@@ -165,28 +244,20 @@ pub fn route_path(
         repo_relative_path.push(".");
     }
 
-    Ok(vec![(repo_path, repo_relative_path)])
+    Ok(vec![(repo, repo_relative_path)])
 }
 
-fn expand_vmr_root(vmr_root: &Path) -> Result<Vec<(PathBuf, PathBuf)>>
+fn expand_vmr_root(vmr_root: &Path) -> Result<Vec<(Repo, PathBuf)>>
 {
-    // Collect immediate child Git repositories
-    let mut repos = fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .filter(|path| path.join(".git").exists())
-        .map(|path| (path, PathBuf::from(".")))
-        .collect::<Vec<_>>();
+    let mut repos = Vec::new();
+
+    for repo in find_vmr_repos(vmr_root)?
+    {
+        repos.push((repo, PathBuf::from(".")));
+    }
 
     // Keep repository order deterministic
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
+    repos.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
     Ok(repos)
 }
 
@@ -242,6 +313,68 @@ mod tests
         );
     }
 
+    #[test]
+    fn vmr_find_succeeds_without_reading_config()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+
+        // Act
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Assert
+        assert_eq!(vmr.root(), tmp.path());
+    }
+
+    #[test]
+    fn config_parses_on_demand()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::write(tmp.path().join(".gitvmr/config"), "[core]\nversion = 7\n")
+            .unwrap();
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Act
+        let config = vmr.config().unwrap();
+
+        // Assert
+        assert_eq!(config.core.version, 7);
+    }
+
+    #[test]
+    fn missing_config_errors_only_when_config_is_called()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Act
+        let err = vmr.config().unwrap_err();
+
+        // Assert
+        assert!(format!("{err:#}").contains("failed to read config"));
+    }
+
+    #[test]
+    fn malformed_config_errors_only_when_config_is_called()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::write(tmp.path().join(".gitvmr/config"), "not toml = [").unwrap();
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Act
+        let err = vmr.config().unwrap_err();
+
+        // Assert
+        assert!(format!("{err:#}").contains("failed to parse config"));
+    }
+
     fn vmr_fixture() -> tempfile::TempDir
     {
         // Arrange fixture with Git and non-Git children
@@ -291,7 +424,7 @@ mod tests
 
         // Assert
         assert_eq!(routed, vec![(
-            tmp.path().join("backend"),
+            repo(tmp.path(), "backend"),
             PathBuf::from(".")
         )]);
     }
@@ -309,7 +442,7 @@ mod tests
 
         // Assert
         assert_eq!(routed, vec![(
-            tmp.path().join("backend"),
+            repo(tmp.path(), "backend"),
             PathBuf::from("src/main.rs")
         )]);
     }
@@ -325,8 +458,31 @@ mod tests
 
         // Assert
         assert_eq!(routed, vec![
-            (tmp.path().join("backend"), PathBuf::from(".")),
-            (tmp.path().join("frontend"), PathBuf::from("."))
+            (repo(tmp.path(), "backend"), PathBuf::from(".")),
+            (repo(tmp.path(), "frontend"), PathBuf::from("."))
+        ]);
+    }
+
+    #[test]
+    fn vmr_repos_skips_non_git_dirs_and_sorts_by_name()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir(tmp.path().join("zeta")).unwrap();
+        fs::create_dir(tmp.path().join("zeta/.git")).unwrap();
+        fs::create_dir(tmp.path().join("docs")).unwrap();
+        fs::create_dir(tmp.path().join("alpha")).unwrap();
+        fs::create_dir(tmp.path().join("alpha/.git")).unwrap();
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Act
+        let repos = vmr.repos().unwrap();
+
+        // Assert
+        assert_eq!(repos, vec![
+            repo(tmp.path(), "alpha"),
+            repo(tmp.path(), "zeta")
         ]);
     }
 
@@ -402,11 +558,11 @@ mod tests
         .unwrap();
 
         // Assert
-        assert_eq!(routed.get(&tmp.path().join("backend")).unwrap(), &vec![
+        assert_eq!(routed.get(&repo(tmp.path(), "backend")).unwrap(), &vec![
             PathBuf::from("src/main.rs"),
             PathBuf::from("lib.rs")
         ]);
-        assert_eq!(routed.get(&tmp.path().join("frontend")).unwrap(), &vec![
+        assert_eq!(routed.get(&repo(tmp.path(), "frontend")).unwrap(), &vec![
             PathBuf::from("app.rs")
         ]);
     }
@@ -428,7 +584,7 @@ mod tests
         // Assert
         assert_eq!(
             routed,
-            (tmp.path().join("backend"), PathBuf::from("src/main.rs"))
+            (repo(tmp.path(), "backend"), PathBuf::from("src/main.rs"))
         );
     }
 
@@ -444,5 +600,10 @@ mod tests
 
         // Assert
         assert!(format!("{err:#}").contains("VMR root aggregate"));
+    }
+
+    fn repo(root: &Path, name: &str) -> Repo
+    {
+        Repo { name: name.to_owned(), path: root.join(name) }
     }
 }

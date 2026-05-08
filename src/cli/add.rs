@@ -1,26 +1,22 @@
 use crate::cli::AggregateError;
-use crate::{git, vmr};
-use anyhow::{Context, Result};
+use crate::git;
+use crate::vmr::Vmr;
+use anyhow::Result;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
 {
     // Find VMR root and route requested paths
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?
-        .into_iter()
-        .collect::<Vec<_>>();
+    let vmr = Vmr::find(working_dir)?;
+    let routed =
+        vmr.route_paths(working_dir, paths)?.into_iter().collect::<Vec<_>>();
 
     // Stage paths in each child repository
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            repo_name(repo_path)
-                .and_then(|repo_name| {
-                    git::add(&repo_name, repo_path, repo_paths)
-                })
-                .transpose()
+            git::add(&repo_path.name, &repo_path.path, repo_paths).transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -44,13 +40,4 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
     }
 
     Ok(())
-}
-
-fn repo_name(repo_path: &Path) -> Result<String>
-{
-    Ok(repo_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("repository path has no valid UTF-8 file name")?
-        .to_owned())
 }

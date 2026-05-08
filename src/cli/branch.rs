@@ -1,6 +1,6 @@
 use crate::cli::AggregateError;
 use crate::git::{self, GitOutput, git_output, git_stdout};
-use crate::vmr;
+use crate::vmr::{Repo, Vmr};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,50 +22,38 @@ struct RepoBranches
 
 pub fn branch(working_dir: &Path, branch_name: Option<&str>) -> Result<()>
 {
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
+    let vmr = Vmr::find(working_dir)?;
 
     if let Some(branch_name) = branch_name
     {
-        return create_branch(&vmr_root, branch_name);
+        return create_branch(&vmr, branch_name);
     }
 
-    let repos = collect_branches(&vmr_root)?;
+    let repos = collect_branches(&vmr)?;
 
     anstream::print!("{}", render_branches(&repos));
 
     Ok(())
 }
 
-fn collect_branches(vmr_root: &Path) -> Result<Vec<(String, RepoBranches)>>
+fn collect_branches(vmr: &Vmr) -> Result<Vec<(String, RepoBranches)>>
 {
-    let children = vmr::child_dirs(vmr_root)?;
+    let repos = vmr.repos()?;
 
-    let mut repos = children
+    let mut branches = repos
         .par_iter()
-        .filter_map(|path| collect_repo_branches(path).transpose())
+        .filter_map(|repo| collect_repo_branches(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
+    branches.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-    Ok(repos)
+    Ok(branches)
 }
 
-fn collect_repo_branches(
-    repo_path: &Path
-) -> Result<Option<(String, RepoBranches)>>
+fn collect_repo_branches(repo: &Repo)
+-> Result<Option<(String, RepoBranches)>>
 {
-    if !repo_path.join(".git").exists()
-    {
-        return Ok(None);
-    }
-
-    let repo_name = repo_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("repository path has no valid UTF-8 file name")?
-        .to_owned();
-
-    let branches_output = git_stdout(repo_path, [
+    let branches_output = git_stdout(&repo.path, [
         "for-each-ref",
         "--format=%(refname:short)",
         "refs/heads"
@@ -73,7 +61,7 @@ fn collect_repo_branches(
     .with_context(|| {
         format!(
             "failed to read branch information for '{}'",
-            repo_path.display()
+            repo.path.display()
         )
     })?;
     let branches = String::from_utf8_lossy(&branches_output)
@@ -81,7 +69,7 @@ fn collect_repo_branches(
         .map(str::to_owned)
         .collect::<Vec<_>>();
 
-    let head = match git_output(repo_path, [
+    let head = match git_output(&repo.path, [
         "symbolic-ref",
         "--quiet",
         "--short",
@@ -90,7 +78,7 @@ fn collect_repo_branches(
     .with_context(|| {
         format!(
             "failed to read branch information for '{}'",
-            repo_path.display()
+            repo.path.display()
         )
     })?
     {
@@ -99,11 +87,11 @@ fn collect_repo_branches(
         GitOutput { status, .. } if status.code() == Some(1) =>
         {
             let hash = String::from_utf8_lossy(
-                &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
+                &git_stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
                     .with_context(|| {
                         format!(
                             "failed to read branch information for '{}'",
-                            repo_path.display()
+                            repo.path.display()
                         )
                     })?
             )
@@ -113,21 +101,21 @@ fn collect_repo_branches(
         }
         GitOutput { stderr, .. } => bail!(
             "failed to read branch information for '{}': {}",
-            repo_path.display(),
+            repo.path.display(),
             String::from_utf8_lossy(&stderr).trim()
         )
     };
 
-    Ok(Some((repo_name, RepoBranches { branches, head })))
+    Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
 }
 
-fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
+fn create_branch(vmr: &Vmr, branch_name: &str) -> Result<()>
 {
-    let repos = vmr::find_vmr_repos(vmr_root)?;
+    let repos = vmr.repos()?;
     let mut failures = repos
         .par_iter()
-        .filter_map(|(repo_name, repo_path)| {
-            git::branch(repo_name, repo_path, branch_name).transpose()
+        .filter_map(|repo| {
+            git::branch(&repo.name, &repo.path, branch_name).transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 

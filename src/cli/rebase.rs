@@ -1,18 +1,19 @@
 use crate::cli::AggregateError;
-use crate::{git, vmr};
+use crate::git;
+use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
 pub fn rebase(working_dir: &Path, upstream: &str) -> Result<()>
 {
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let repos = vmr::find_vmr_repos(&vmr_root)?;
+    let vmr = Vmr::find(working_dir)?;
+    let repos = vmr.repos()?;
 
     let mut failures = repos
         .par_iter()
-        .filter_map(|(repo_name, repo_path)| {
-            git::rebase(repo_name, repo_path, upstream).transpose()
+        .filter_map(|repo| {
+            git::rebase(&repo.name, &repo.path, upstream).transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
