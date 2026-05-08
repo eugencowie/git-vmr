@@ -1,12 +1,12 @@
 use crate::cli::AggregateError;
 use crate::config::vmr;
+use crate::git::{self, GitOutput, git_output, git_stdout};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
 
 #[derive(Clone, PartialEq, Eq)]
 enum Head
@@ -20,12 +20,6 @@ struct RepoBranches
 {
     branches: Vec<String>,
     head: Head
-}
-
-struct BranchCreateFailure
-{
-    repo_name: String,
-    stderr: String
 }
 
 pub fn branch(working_dir: &Path, branch_name: Option<&str>) -> Result<()>
@@ -88,7 +82,7 @@ fn collect_repo_branches(
         .context("repository path has no valid UTF-8 file name")?
         .to_owned();
 
-    let branches_output = git_output(repo_path, &[
+    let branches_output = git_stdout(repo_path, &[
         "for-each-ref",
         "--format=%(refname:short)",
         "refs/heads"
@@ -104,7 +98,7 @@ fn collect_repo_branches(
         .map(str::to_owned)
         .collect::<Vec<_>>();
 
-    let head = match git_output_with_status(repo_path, &[
+    let head = match git_output(repo_path, &[
         "symbolic-ref",
         "--quiet",
         "--short",
@@ -122,7 +116,7 @@ fn collect_repo_branches(
         GitOutput { status, .. } if status.code() == Some(1) =>
         {
             let hash = String::from_utf8_lossy(
-                &git_output(repo_path, &["rev-parse", "--short", "HEAD"])
+                &git_stdout(repo_path, &["rev-parse", "--short", "HEAD"])
                     .with_context(|| {
                         format!(
                             "failed to read branch information for '{}'",
@@ -146,10 +140,12 @@ fn collect_repo_branches(
 
 fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
 {
-    let children = child_dirs(vmr_root)?;
-    let mut failures = children
+    let repos = eligible_repos(vmr_root)?;
+    let mut failures = repos
         .par_iter()
-        .filter_map(|path| create_branch_in_repo(path, branch_name).transpose())
+        .filter_map(|(repo_name, repo_path)| {
+            git::branch(repo_name, repo_path, branch_name).transpose()
+        })
         .collect::<Result<Vec<_>>>()?;
 
     failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
@@ -162,7 +158,7 @@ fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
                 .map(|failure| {
                     anyhow::anyhow!(
                         "{} ({})",
-                        failure.stderr,
+                        failure.message,
                         failure.repo_name
                     )
                 })
@@ -174,87 +170,29 @@ fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
     Ok(())
 }
 
-fn create_branch_in_repo(
-    repo_path: &Path,
-    branch_name: &str
-) -> Result<Option<BranchCreateFailure>>
+fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
 {
-    if !repo_path.join(".git").exists()
+    let mut repos = Vec::new();
+
+    for repo_path in child_dirs(vmr_root)?
     {
-        return Ok(None);
+        if !repo_path.join(".git").exists()
+        {
+            continue;
+        }
+
+        let repo_name = repo_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("repository path has no valid UTF-8 file name")?
+            .to_owned();
+
+        repos.push((repo_name, repo_path));
     }
 
-    let repo_name = repo_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("repository path has no valid UTF-8 file name")?
-        .to_owned();
+    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-    let output = git_output_with_status(repo_path, &["branch", branch_name])?;
-
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    let stderr = first_non_empty_line(&output.stderr);
-
-    Ok(Some(BranchCreateFailure { repo_name, stderr }))
-}
-
-fn first_non_empty_line(bytes: &[u8]) -> String
-{
-    let stderr = String::from_utf8_lossy(bytes);
-    let line = stderr
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("git branch failed");
-
-    line.strip_prefix("fatal: ").unwrap_or(line).to_owned()
-}
-
-struct GitOutput
-{
-    status: ExitStatus,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>
-}
-
-fn git_output(repo_path: &Path, args: &[&str]) -> Result<Vec<u8>>
-{
-    let output = git_output_with_status(repo_path, args)?;
-
-    if !output.status.success()
-    {
-        bail!(
-            "git {} failed for '{}': {}",
-            args.join(" "),
-            repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    Ok(output.stdout)
-}
-
-fn git_output_with_status(repo_path: &Path, args: &[&str])
--> Result<GitOutput>
-{
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
-        .output()
-        .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
-        })?;
-
-    Ok(GitOutput {
-        status: output.status,
-        stdout: output.stdout,
-        stderr: output.stderr
-    })
+    Ok(repos)
 }
 
 fn render_branches(repos: &[(String, RepoBranches)]) -> String

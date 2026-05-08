@@ -1,15 +1,9 @@
 use crate::cli::AggregateError;
 use crate::config::vmr;
+use crate::git;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-struct RestoreFailure
-{
-    repo_name: String,
-    message: String
-}
 
 pub fn restore(
     working_dir: &Path,
@@ -29,7 +23,13 @@ pub fn restore(
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            git_restore(repo_path, repo_paths, worktree, staged).transpose()
+            repo_name(repo_path)
+                .and_then(|repo_name| {
+                    git::restore(
+                        &repo_name, repo_path, repo_paths, worktree, staged
+                    )
+                })
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -53,48 +53,6 @@ pub fn restore(
     }
 
     Ok(())
-}
-
-fn git_restore(
-    repo_path: &Path,
-    paths: &[PathBuf],
-    worktree: bool,
-    staged: bool
-) -> Result<Option<RestoreFailure>>
-{
-    // Build git restore command for the owning child repository
-    let mut command = Command::new("git");
-    command.arg("--no-optional-locks").arg("-C").arg(repo_path).arg("restore");
-
-    if staged
-    {
-        command.arg("--staged");
-    }
-
-    if worktree
-    {
-        command.arg("--worktree");
-    }
-
-    // Run git restore with literal routed paths
-    let output = command.arg("--").args(paths).output().with_context(|| {
-        format!("failed to invoke git for '{}'", repo_path.display())
-    })?;
-
-    // Convert git failure into anyhow error
-    if !output.status.success()
-    {
-        return Ok(Some(RestoreFailure {
-            repo_name: repo_name(repo_path)?,
-            message: format!(
-                "git restore failed for '{}': {}",
-                repo_path.display(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-        }));
-    }
-
-    Ok(None)
 }
 
 fn repo_name(repo_path: &Path) -> Result<String>
