@@ -65,7 +65,7 @@ fn collect_repo_branches(
         .context("repository path has no valid UTF-8 file name")?
         .to_owned();
 
-    let branches_output = git_stdout(repo_path, &[
+    let branches_output = git_stdout(repo_path, [
         "for-each-ref",
         "--format=%(refname:short)",
         "refs/heads"
@@ -81,7 +81,7 @@ fn collect_repo_branches(
         .map(str::to_owned)
         .collect::<Vec<_>>();
 
-    let head = match git_output(repo_path, &[
+    let head = match git_output(repo_path, [
         "symbolic-ref",
         "--quiet",
         "--short",
@@ -99,7 +99,7 @@ fn collect_repo_branches(
         GitOutput { status, .. } if status.code() == Some(1) =>
         {
             let hash = String::from_utf8_lossy(
-                &git_stdout(repo_path, &["rev-parse", "--short", "HEAD"])
+                &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
                     .with_context(|| {
                         format!(
                             "failed to read branch information for '{}'",

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 
@@ -27,17 +28,7 @@ pub fn add(
     paths: &[PathBuf]
 ) -> Result<Option<GitFailure>>
 {
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .arg("add")
-        .arg("--")
-        .args(paths)
-        .output()
-        .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
-        })?;
+    let output = git_path_output(repo_path, ["add", "--"], paths)?;
 
     if output.status.success()
     {
@@ -49,7 +40,7 @@ pub fn add(
         message: format!(
             "git add failed for '{}': {}",
             repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            stderr(&output)
         )
     }))
 }
@@ -60,7 +51,7 @@ pub fn branch(
     branch_name: &str
 ) -> Result<Option<GitFailure>>
 {
-    let output = git_output(repo_path, &["branch", branch_name])?;
+    let output = git_output(repo_path, ["branch", branch_name])?;
 
     if output.status.success()
     {
@@ -82,7 +73,7 @@ pub fn commit(
     message: &str
 ) -> Result<std::result::Result<GitSuccess, GitFailure>>
 {
-    let output = git_output(repo_path, &["commit", "-m", message])?;
+    let output = git_output(repo_path, ["commit", "-m", message])?;
 
     if output.status.success()
     {
@@ -107,7 +98,7 @@ pub fn merge(
     commit_ish: &str
 ) -> Result<std::result::Result<GitSuccess, GitFailure>>
 {
-    let output = git_output(repo_path, &["merge", commit_ish])?;
+    let output = git_output(repo_path, ["merge", commit_ish])?;
 
     if output.status.success()
     {
@@ -133,7 +124,7 @@ pub fn rebase(
     upstream: &str
 ) -> Result<Option<GitFailure>>
 {
-    let output = git_output(repo_path, &["rebase", upstream])?;
+    let output = git_output(repo_path, ["rebase", upstream])?;
 
     if output.status.success()
     {
@@ -158,22 +149,21 @@ pub fn restore(
     staged: bool
 ) -> Result<Option<GitFailure>>
 {
-    let mut command = Command::new("git");
-    command.arg("--no-optional-locks").arg("-C").arg(repo_path).arg("restore");
+    let mut args = vec![OsString::from("restore")];
 
     if staged
     {
-        command.arg("--staged");
+        args.push(OsString::from("--staged"));
     }
 
     if worktree
     {
-        command.arg("--worktree");
+        args.push(OsString::from("--worktree"));
     }
 
-    let output = command.arg("--").args(paths).output().with_context(|| {
-        format!("failed to invoke git for '{}'", repo_path.display())
-    })?;
+    args.push(OsString::from("--"));
+    args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
+    let output = git_output(repo_path, args)?;
 
     if output.status.success()
     {
@@ -185,7 +175,7 @@ pub fn restore(
         message: format!(
             "git restore failed for '{}': {}",
             repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            stderr(&output)
         )
     }))
 }
@@ -197,17 +187,16 @@ pub fn rm(
     recursive: bool
 ) -> Result<Option<GitFailure>>
 {
-    let mut command = Command::new("git");
-    command.arg("--no-optional-locks").arg("-C").arg(repo_path).arg("rm");
+    let mut args = vec![OsString::from("rm")];
 
     if recursive
     {
-        command.arg("-r");
+        args.push(OsString::from("-r"));
     }
 
-    let output = command.arg("--").args(paths).output().with_context(|| {
-        format!("failed to invoke git for '{}'", repo_path.display())
-    })?;
+    args.push(OsString::from("--"));
+    args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
+    let output = git_output(repo_path, args)?;
 
     if output.status.success()
     {
@@ -219,18 +208,76 @@ pub fn rm(
         message: format!(
             "git rm failed for '{}': {}",
             repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            stderr(&output)
         )
     }))
 }
 
-pub fn git_output(repo_path: &Path, args: &[&str]) -> Result<GitOutput>
+pub fn mv(repo_path: &Path, source: &Path, destination: &Path) -> Result<()>
 {
+    let output =
+        git_path_output(repo_path, ["mv", "--"], [source, destination])?;
+
+    if !output.status.success()
+    {
+        bail!(
+            "git mv failed for '{}': {}",
+            repo_path.display(),
+            stderr(&output)
+        );
+    }
+
+    Ok(())
+}
+
+pub fn ensure_tracked(repo_path: &Path, path: &Path) -> Result<()>
+{
+    let output =
+        git_path_output(repo_path, ["ls-files", "--error-unmatch", "--"], [
+            path
+        ])?;
+
+    if !output.status.success()
+    {
+        bail!(
+            "source path is not tracked in '{}': {}",
+            repo_path.display(),
+            stderr(&output)
+        );
+    }
+
+    Ok(())
+}
+
+pub fn add_path(repo_path: &Path, path: &Path) -> Result<()>
+{
+    let output = git_path_output(repo_path, ["add", "--"], [path])?;
+
+    if !output.status.success()
+    {
+        bail!(
+            "git add failed for '{}': {}",
+            repo_path.display(),
+            stderr(&output)
+        );
+    }
+
+    Ok(())
+}
+
+pub fn git_output<I, S>(repo_path: &Path, args: I) -> Result<GitOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>
+{
+    let args =
+        args.into_iter().map(|arg| arg.as_ref().to_owned()).collect::<Vec<_>>();
+
     let output = Command::new("git")
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo_path)
-        .args(args)
+        .args(&args)
         .output()
         .with_context(|| {
             format!("failed to invoke git for '{}'", repo_path.display())
@@ -243,21 +290,58 @@ pub fn git_output(repo_path: &Path, args: &[&str]) -> Result<GitOutput>
     })
 }
 
-pub fn git_stdout(repo_path: &Path, args: &[&str]) -> Result<Vec<u8>>
+pub fn git_stdout<I, S>(repo_path: &Path, args: I) -> Result<Vec<u8>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>
 {
+    let args =
+        args.into_iter().map(|arg| arg.as_ref().to_owned()).collect::<Vec<_>>();
+    let args_display = format_git_args(&args);
     let output = git_output(repo_path, args)?;
 
     if !output.status.success()
     {
         bail!(
             "git {} failed for '{}': {}",
-            args.join(" "),
+            args_display,
             repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
+            stderr(&output)
         );
     }
 
     Ok(output.stdout)
+}
+
+fn git_path_output<I, S, P>(
+    repo_path: &Path,
+    args: I,
+    paths: P
+) -> Result<GitOutput>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+    P: IntoIterator,
+    P::Item: AsRef<Path>
+{
+    let args = args
+        .into_iter()
+        .map(|arg| arg.as_ref().to_owned())
+        .chain(
+            paths.into_iter().map(|path| path.as_ref().as_os_str().to_owned())
+        )
+        .collect::<Vec<_>>();
+    git_output(repo_path, args)
+}
+
+fn stderr(output: &GitOutput) -> String
+{
+    String::from_utf8_lossy(&output.stderr).trim().to_owned()
+}
+
+fn format_git_args(args: &[OsString]) -> String
+{
+    args.iter().map(|arg| arg.to_string_lossy()).collect::<Vec<_>>().join(" ")
 }
 
 fn first_non_empty_line(bytes: &[u8], fallback: &str) -> String

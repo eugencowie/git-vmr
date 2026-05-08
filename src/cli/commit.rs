@@ -90,7 +90,7 @@ fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
 
 fn has_staged_changes(repo_path: &Path) -> Result<bool>
 {
-    let output = git_output(repo_path, &["diff", "--cached", "--quiet"])
+    let output = git_output(repo_path, ["diff", "--cached", "--quiet"])
         .with_context(|| {
             format!(
                 "failed to inspect staged changes for '{}'",
