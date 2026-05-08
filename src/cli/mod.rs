@@ -4,6 +4,7 @@ mod commit;
 mod init;
 mod merge;
 mod mv;
+mod rebase;
 mod restore;
 mod rm;
 mod status;
@@ -128,6 +129,14 @@ enum Command
         /// Commits, usually other branch heads, to merge into our branch
         #[arg(required = true, value_name = "commit")]
         commit_ish: String
+    },
+
+    /// Reapply commits on top of another base tip
+    Rebase
+    {
+        /// Upstream branch to compare against
+        #[arg(required = true, value_name = "upstream")]
+        upstream: String
     }
 }
 
@@ -174,6 +183,8 @@ impl Cli
                 commit::commit(&working_dir, &message),
             Command::Merge { commit_ish } =>
                 merge::merge(&working_dir, &commit_ish),
+            Command::Rebase { upstream } =>
+                rebase::rebase(&working_dir, &upstream),
         }
     }
 
@@ -461,6 +472,37 @@ mod tests
         let err = match Cli::try_parse_from(["git-vmr", "merge"])
         {
             Ok(_) => panic!("expected merge parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_rebase_with_upstream()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "rebase", "origin/main"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Rebase { upstream } =>
+            {
+                assert_eq!(upstream, "origin/main");
+            }
+            _ => panic!("expected rebase command")
+        }
+    }
+
+    #[test]
+    fn rejects_rebase_without_upstream()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "rebase"])
+        {
+            Ok(_) => panic!("expected rebase parse to fail"),
             Err(err) => err
         };
 
