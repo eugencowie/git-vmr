@@ -20,6 +20,44 @@ pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
     bail!("not a virtual monorepo (or any of the parent directories): .gitvmr")
 }
 
+pub fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
+{
+    let mut repos = Vec::new();
+
+    for repo_path in child_dirs(vmr_root)?
+    {
+        if !repo_path.join(".git").exists()
+        {
+            continue;
+        }
+
+        let repo_name = repo_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("repository path has no valid UTF-8 file name")?
+            .to_owned();
+
+        repos.push((repo_name, repo_path));
+    }
+
+    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+    Ok(repos)
+}
+
+pub fn child_dirs(vmr_root: &Path) -> Result<Vec<PathBuf>>
+{
+    Ok(fs::read_dir(vmr_root)
+        .with_context(|| {
+            format!("failed to read VMR root '{}'", vmr_root.display())
+        })?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter(|entry| entry.file_name() != ".gitvmr")
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>())
+}
+
 pub fn route_paths(
     working_dir: &Path,
     vmr_root: &Path,

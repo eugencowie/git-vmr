@@ -4,9 +4,7 @@ use crate::git::{self, GitOutput, git_output, git_stdout};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Clone, PartialEq, Eq)]
 enum Head
@@ -38,24 +36,9 @@ pub fn branch(working_dir: &Path, branch_name: Option<&str>) -> Result<()>
     Ok(())
 }
 
-fn child_dirs(vmr_root: &Path) -> Result<Vec<PathBuf>>
-{
-    Ok(fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>())
-}
-
 fn collect_branches(vmr_root: &Path) -> Result<Vec<(String, RepoBranches)>>
 {
-    let children = child_dirs(vmr_root)?;
+    let children = vmr::child_dirs(vmr_root)?;
 
     let mut repos = children
         .par_iter()
@@ -140,7 +123,7 @@ fn collect_repo_branches(
 
 fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
 {
-    let repos = eligible_repos(vmr_root)?;
+    let repos = vmr::eligible_repos(vmr_root)?;
     let mut failures = repos
         .par_iter()
         .filter_map(|(repo_name, repo_path)| {
@@ -168,31 +151,6 @@ fn create_branch(vmr_root: &Path, branch_name: &str) -> Result<()>
     }
 
     Ok(())
-}
-
-fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
-{
-    let mut repos = Vec::new();
-
-    for repo_path in child_dirs(vmr_root)?
-    {
-        if !repo_path.join(".git").exists()
-        {
-            continue;
-        }
-
-        let repo_name = repo_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("repository path has no valid UTF-8 file name")?
-            .to_owned();
-
-        repos.push((repo_name, repo_path));
-    }
-
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    Ok(repos)
 }
 
 fn render_branches(repos: &[(String, RepoBranches)]) -> String

@@ -3,8 +3,6 @@ use crate::config::vmr;
 use crate::git::{self, git_output};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
-use std::ffi::OsStr;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn commit(working_dir: &Path, message: &str) -> Result<()>
@@ -66,7 +64,7 @@ fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
 {
     let mut repos = Vec::new();
 
-    for repo_path in child_dirs(vmr_root)?
+    for repo_path in vmr::child_dirs(vmr_root)?
     {
         if !repo_path.join(".git").exists()
         {
@@ -110,19 +108,4 @@ fn has_staged_changes(repo_path: &Path) -> Result<bool>
             String::from_utf8_lossy(&output.stderr).trim()
         )
     }
-}
-
-fn child_dirs(vmr_root: &Path) -> Result<Vec<PathBuf>>
-{
-    Ok(fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>())
 }
