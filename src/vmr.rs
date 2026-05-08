@@ -11,23 +11,33 @@ mod repo;
 
 pub use repo::Repo;
 
+#[derive(Debug)]
 pub struct Vmr
 {
-    root: PathBuf,
-    #[allow(dead_code)]
+    pub path: PathBuf,
     config: OnceLock<Config>
 }
 
 impl Vmr
 {
-    pub fn find(start: &Path) -> Result<Vmr>
+    pub fn find(working_dir: &Path) -> Result<Vmr>
     {
-        Ok(Vmr { root: find_vmr_root(start)?, config: OnceLock::new() })
-    }
+        // Search working directory and ancestors
+        for parent in working_dir.ancestors()
+        {
+            if parent.join(".gitvmr").exists()
+            {
+                return Ok(Vmr {
+                    path: parent.to_path_buf(),
+                    config: OnceLock::new()
+                });
+            }
+        }
 
-    pub fn root(&self) -> &Path
-    {
-        &self.root
+        // Report missing VMR root
+        bail!(
+            "not a virtual monorepo (or any of the parent directories): .gitvmr"
+        );
     }
 
     #[allow(dead_code)]
@@ -38,7 +48,7 @@ impl Vmr
             return Ok(config);
         }
 
-        let config_path = self.root.join(".gitvmr/config");
+        let config_path = self.path.join(".gitvmr/config");
         let contents = fs::read_to_string(&config_path).with_context(|| {
             format!("failed to read config '{}'", config_path.display())
         })?;
@@ -52,7 +62,7 @@ impl Vmr
 
     pub fn repos(&self) -> Result<Vec<Repo>>
     {
-        find_vmr_repos(&self.root)
+        find_vmr_repos(&self.path)
     }
 
     pub fn route_paths(
@@ -61,7 +71,7 @@ impl Vmr
         paths: &[PathBuf]
     ) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
     {
-        route_paths(working_dir, &self.root, paths)
+        route_paths(working_dir, &self.path, paths)
     }
 
     pub fn route_single_path(
@@ -70,23 +80,8 @@ impl Vmr
         path: &Path
     ) -> Result<(Repo, PathBuf)>
     {
-        route_single_path(working_dir, &self.root, path)
+        route_single_path(working_dir, &self.path, path)
     }
-}
-
-pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
-{
-    // Search start directory and ancestors
-    for parent in start.ancestors()
-    {
-        if parent.join(".gitvmr").exists()
-        {
-            return Ok(parent.to_path_buf());
-        }
-    }
-
-    // Report missing VMR root
-    bail!("not a virtual monorepo (or any of the parent directories): .gitvmr")
 }
 
 pub fn find_vmr_repos(vmr_root: &Path) -> Result<Vec<Repo>>
@@ -253,10 +248,10 @@ mod tests
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
 
         // Act
-        let result = find_vmr_root(tmp.path()).unwrap();
+        let result = Vmr::find(tmp.path()).unwrap();
 
         // Assert
-        assert_eq!(result, tmp.path());
+        assert_eq!(result.path, tmp.path());
     }
 
     #[test]
@@ -269,10 +264,10 @@ mod tests
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
 
         // Act
-        let result = find_vmr_root(&nested).unwrap();
+        let result = Vmr::find(&nested).unwrap();
 
         // Assert
-        assert_eq!(result, tmp.path());
+        assert_eq!(result.path, tmp.path());
     }
 
     #[test]
@@ -282,27 +277,10 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        let err = find_vmr_root(tmp.path()).unwrap_err();
+        let err = Vmr::find(tmp.path()).unwrap_err();
 
         // Assert
-        assert!(
-            format!("{err:#}").contains("not a virtual monorepo"),
-            "unexpected error: {err:#}"
-        );
-    }
-
-    #[test]
-    fn vmr_find_succeeds_without_reading_config()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
-
-        // Act
-        let vmr = Vmr::find(tmp.path()).unwrap();
-
-        // Assert
-        assert_eq!(vmr.root(), tmp.path());
+        assert!(format!("{err:#}").contains("not a virtual monorepo"));
     }
 
     #[test]

@@ -13,7 +13,7 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     let vmr = Vmr::find(working_dir)?;
 
     // Require explicit recursive intent for aggregate root removal
-    if !recursive && targets_vmr_root(working_dir, vmr.root(), paths)
+    if !recursive && targets_vmr_root(working_dir, &vmr.path, paths)
     {
         bail!("cannot remove VMR root without -r");
     }
