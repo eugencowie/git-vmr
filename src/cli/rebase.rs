@@ -13,7 +13,9 @@ pub fn rebase(working_dir: &Path, upstream: &str) -> Result<()>
         .repos()?
         .par_iter()
         .filter_map(|repo| {
-            git::rebase(&repo.name, &repo.path, upstream).transpose()
+            git::rebase(&repo.name, &repo.path, upstream)
+                .map(|outcome| outcome.into_failure())
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 

@@ -29,6 +29,7 @@ pub fn restore(
                 worktree,
                 staged
             )
+            .map(|outcome| outcome.into_failure())
             .transpose()
         })
         .collect::<Result<Vec<_>>>()?;

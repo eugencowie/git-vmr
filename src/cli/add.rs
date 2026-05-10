@@ -16,7 +16,9 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            git::add(&repo_path.name, &repo_path.path, repo_paths).transpose()
+            git::add(&repo_path.name, &repo_path.path, repo_paths)
+                .map(|outcome| outcome.into_failure())
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 

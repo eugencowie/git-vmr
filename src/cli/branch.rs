@@ -115,7 +115,9 @@ fn create_branch(vmr: &Vmr, branch_name: &str) -> Result<()>
     let mut failures = repos
         .par_iter()
         .filter_map(|repo| {
-            git::branch(&repo.name, &repo.path, branch_name).transpose()
+            git::branch(&repo.name, &repo.path, branch_name)
+                .map(|outcome| outcome.into_failure())
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 

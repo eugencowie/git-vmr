@@ -27,6 +27,7 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
             git::rm(&repo_path.name, &repo_path.path, repo_paths, recursive)
+                .map(|outcome| outcome.into_failure())
                 .transpose()
         })
         .collect::<Result<Vec<_>>>()?;

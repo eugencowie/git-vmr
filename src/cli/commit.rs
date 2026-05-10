@@ -25,8 +25,8 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     {
         match result
         {
-            Ok(success) => successes.push(success),
-            Err(failure) => failures.push(failure)
+            git::GitCommandOutcome::Success(success) => successes.push(success),
+            git::GitCommandOutcome::Failure(failure) => failures.push(failure)
         }
     }
 
@@ -35,7 +35,10 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
 
     for success in successes
     {
-        println!("{} ({})", success.stdout, success.repo_name);
+        if let Some(message) = success.message
+        {
+            println!("{} ({})", message, success.repo_name);
+        }
     }
 
     if !failures.is_empty()
