@@ -1,145 +1,48 @@
-use crate::cli::AggregateError;
-use crate::git::{self, GitOutput, git_output, git_stdout};
-use crate::vmr::{Repo, Vmr};
-use anyhow::{Context, Result, bail};
+use crate::cli::print_results;
+use crate::git;
+use crate::vmr::{Head, RepoBranches, Vmr};
+use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-#[derive(Clone, PartialEq, Eq)]
-enum Head
+pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
 {
-    Branch(String),
-    Detached(String)
-}
-
-#[derive(Clone, PartialEq, Eq)]
-struct RepoBranches
-{
-    branches: Vec<String>,
-    head: Head
-}
-
-pub fn branch(working_dir: &Path, branch_name: Option<&str>) -> Result<()>
-{
+    // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
 
-    if let Some(branch_name) = branch_name
-    {
-        return create_branch(&vmr, branch_name);
-    }
-
-    let repos = collect_branches(&vmr)?;
-
-    anstream::print!("{}", render_branches(&repos));
-
-    Ok(())
-}
-
-fn collect_branches(vmr: &Vmr) -> Result<Vec<(String, RepoBranches)>>
-{
+    // Get list of repositories
     let repos = vmr.repos()?;
 
-    let mut branches = repos
+    // Branch in each repository
+    let results = repos
         .par_iter()
-        .filter_map(|repo| collect_repo_branches(repo).transpose())
-        .collect::<Result<Vec<_>>>()?;
-
-    branches.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    Ok(branches)
-}
-
-fn collect_repo_branches(repo: &Repo)
--> Result<Option<(String, RepoBranches)>>
-{
-    let branches_output = git_stdout(&repo.path, [
-        "for-each-ref",
-        "--format=%(refname:short)",
-        "refs/heads"
-    ])
-    .with_context(|| {
-        format!(
-            "failed to read branch information for '{}'",
-            repo.path.display()
-        )
-    })?;
-    let branches = String::from_utf8_lossy(&branches_output)
-        .lines()
-        .map(str::to_owned)
+        .map(|repo| git::branch(&repo.name, &repo.path, branch_name))
         .collect::<Vec<_>>();
 
-    let head = match git_output(&repo.path, [
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "HEAD"
-    ])
-    .with_context(|| {
-        format!(
-            "failed to read branch information for '{}'",
-            repo.path.display()
-        )
-    })?
-    {
-        GitOutput { status, stdout, stderr: _ } if status.success() =>
-            Head::Branch(String::from_utf8_lossy(&stdout).trim().to_owned()),
-        GitOutput { status, .. } if status.code() == Some(1) =>
-        {
-            let hash = String::from_utf8_lossy(
-                &git_stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
-                    .with_context(|| {
-                        format!(
-                            "failed to read branch information for '{}'",
-                            repo.path.display()
-                        )
-                    })?
-            )
-            .trim()
-            .to_owned();
-            Head::Detached(hash)
-        }
-        GitOutput { stderr, .. } => bail!(
-            "failed to read branch information for '{}': {}",
-            repo.path.display(),
-            String::from_utf8_lossy(&stderr).trim()
-        )
-    };
-
-    Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
+    // Print results
+    print_results(results)
 }
 
-fn create_branch(vmr: &Vmr, branch_name: &str) -> Result<()>
+pub fn branches(working_dir: &Path) -> Result<()>
 {
+    // Find virtual monorepo
+    let vmr = Vmr::find(working_dir)?;
+
+    // Get list of repositories
     let repos = vmr.repos()?;
-    let mut failures = repos
+
+    // Collect branch information from repositories
+    let mut branches = repos
         .par_iter()
-        .filter_map(|repo| {
-            git::branch(&repo.name, &repo.path, branch_name)
-                .map(|outcome| outcome.into_failure())
-                .transpose()
-        })
+        .filter_map(|repo| repo.branches().transpose())
         .collect::<Result<Vec<_>>>()?;
 
-    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
+    // Keep branch order deterministic
+    branches.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-    if !failures.is_empty()
-    {
-        return Err(AggregateError::new(
-            failures
-                .into_iter()
-                .map(|failure| {
-                    anyhow::anyhow!(
-                        "{} ({})",
-                        failure.message,
-                        failure.repo_name
-                    )
-                })
-                .collect()
-        )
-        .into());
-    }
-
+    // Print results
+    anstream::print!("{}", render_branches(&branches));
     Ok(())
 }
 

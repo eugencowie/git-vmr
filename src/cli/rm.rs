@@ -1,4 +1,4 @@
-use crate::cli::AggregateError;
+use crate::cli::print_results;
 use crate::git;
 use crate::vmr::Vmr;
 use anyhow::{Result, bail};
@@ -23,35 +23,14 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
         vmr.route_paths(working_dir, paths)?.into_iter().collect::<Vec<_>>();
 
     // Remove paths in each child repository
-    let mut failures = routed
+    let results = routed
         .par_iter()
-        .filter_map(|(repo_path, repo_paths)| {
+        .map(|(repo_path, repo_paths)| {
             git::rm(&repo_path.name, &repo_path.path, repo_paths, recursive)
-                .map(|outcome| outcome.into_failure())
-                .transpose()
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
-    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
-
-    if !failures.is_empty()
-    {
-        return Err(AggregateError::new(
-            failures
-                .into_iter()
-                .map(|failure| {
-                    anyhow::anyhow!(
-                        "{} ({})",
-                        failure.message,
-                        failure.repo_name
-                    )
-                })
-                .collect()
-        )
-        .into());
-    }
-
-    Ok(())
+    print_results(results)
 }
 
 fn targets_vmr_root(

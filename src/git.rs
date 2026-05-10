@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
@@ -10,55 +10,17 @@ pub struct GitOutput
     pub stderr: Vec<u8>
 }
 
-pub struct GitFailure
-{
-    pub repo_name: String,
-    pub message: String
-}
-
-pub struct GitSuccess
-{
-    pub repo_name: String,
-    pub message: Option<String>
-}
-
-pub enum GitCommandOutcome
-{
-    Success(GitSuccess),
-    Failure(GitFailure)
-}
-
-impl GitCommandOutcome
-{
-    #[allow(dead_code)]
-    pub fn into_success(self) -> Option<GitSuccess>
-    {
-        match self
-        {
-            GitCommandOutcome::Success(success) => Some(success),
-            GitCommandOutcome::Failure(_) => None
-        }
-    }
-
-    pub fn into_failure(self) -> Option<GitFailure>
-    {
-        match self
-        {
-            GitCommandOutcome::Success(_) => None,
-            GitCommandOutcome::Failure(failure) => Some(failure)
-        }
-    }
-}
+pub type GitCommandResult = Result<Option<String>>;
 
 pub fn add(
     repo_name: &str,
     repo_path: &Path,
     paths: &[PathBuf]
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let output = git_path_output(repo_path, ["add", "--"], paths)?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |_| None,
@@ -69,18 +31,18 @@ pub fn add(
                 stderr(output)
             )
         }
-    ))
+    )
 }
 
 pub fn branch(
     repo_name: &str,
     repo_path: &Path,
     branch_name: &str
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["branch", branch_name])?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |_| None,
@@ -90,36 +52,36 @@ pub fn branch(
                 "git branch failed"
             )
         }
-    ))
+    )
 }
 
 pub fn commit(
     repo_name: &str,
     repo_path: &Path,
     message: &str
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["commit", "-m", message])?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |output| {
             Some(first_non_empty_line(&output.stdout, "git commit succeeded"))
         },
         |output| first_non_empty_line(&output.stderr, "git commit failed")
-    ))
+    )
 }
 
 pub fn merge(
     repo_name: &str,
     repo_path: &Path,
     commit_ish: &str
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["merge", commit_ish])?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |output| {
@@ -132,18 +94,18 @@ pub fn merge(
                 "git merge failed"
             )
         }
-    ))
+    )
 }
 
 pub fn rebase(
     repo_name: &str,
     repo_path: &Path,
     upstream: &str
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["rebase", upstream])?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |_| None,
@@ -154,7 +116,7 @@ pub fn rebase(
                 "git rebase failed"
             )
         }
-    ))
+    )
 }
 
 pub fn restore(
@@ -163,7 +125,7 @@ pub fn restore(
     paths: &[PathBuf],
     worktree: bool,
     staged: bool
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let mut args = vec![OsString::from("restore")];
 
@@ -181,7 +143,7 @@ pub fn restore(
     args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
     let output = git_output(repo_path, args)?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |_| None,
@@ -192,7 +154,7 @@ pub fn restore(
                 stderr(output)
             )
         }
-    ))
+    )
 }
 
 pub fn rm(
@@ -200,7 +162,7 @@ pub fn rm(
     repo_path: &Path,
     paths: &[PathBuf],
     recursive: bool
-) -> Result<GitCommandOutcome>
+) -> GitCommandResult
 {
     let mut args = vec![OsString::from("rm")];
 
@@ -213,7 +175,7 @@ pub fn rm(
     args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
     let output = git_output(repo_path, args)?;
 
-    Ok(command_outcome(
+    command_result(
         repo_name,
         &output,
         |_| None,
@@ -224,7 +186,7 @@ pub fn rm(
                 stderr(output)
             )
         }
-    ))
+    )
 }
 
 pub fn mv(repo_path: &Path, source: &Path, destination: &Path) -> Result<()>
@@ -279,26 +241,21 @@ pub fn add_path(repo_path: &Path, path: &Path) -> Result<()>
     Ok(())
 }
 
-fn command_outcome(
+fn command_result(
     repo_name: &str,
     output: &GitOutput,
     success_message: impl FnOnce(&GitOutput) -> Option<String>,
     failure_message: impl FnOnce(&GitOutput) -> String
-) -> GitCommandOutcome
+) -> GitCommandResult
 {
     if output.status.success()
     {
-        GitCommandOutcome::Success(GitSuccess {
-            repo_name: repo_name.to_owned(),
-            message: success_message(output)
-        })
+        Ok(success_message(output)
+            .map(|message| format!("{message} ({repo_name})")))
     }
     else
     {
-        GitCommandOutcome::Failure(GitFailure {
-            repo_name: repo_name.to_owned(),
-            message: failure_message(output)
-        })
+        Err(anyhow!("{} ({})", failure_message(output), repo_name))
     }
 }
 
