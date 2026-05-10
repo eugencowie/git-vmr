@@ -2,7 +2,7 @@ mod repo;
 
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
-pub use repo::{FileChange, FileEntry, Head, Repo, RepoBranches, RepoStatus};
+pub use repo::Repo;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};

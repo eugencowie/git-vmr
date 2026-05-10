@@ -1,7 +1,9 @@
 use crate::git::{
-    GitCommandResult, command_result, first_non_empty_line_strip_fatal,
-    git_output
+    GitCommandResult, GitOutput, Head, RepoBranches, command_result,
+    first_non_empty_line_strip_fatal, git_output, git_stdout
 };
+use crate::vmr::Repo;
+use anyhow::{Context, Result, bail};
 use std::path::Path;
 
 pub fn branch(
@@ -23,4 +25,62 @@ pub fn branch(
             )
         }
     )
+}
+
+pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
+{
+    let branches_output = git_stdout(&repo.path, [
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/heads"
+    ])
+    .with_context(|| {
+        format!(
+            "failed to read branch information for '{}'",
+            repo.path.display()
+        )
+    })?;
+    let branches = String::from_utf8_lossy(&branches_output)
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+    let head = match git_output(&repo.path, [
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "HEAD"
+    ])
+    .with_context(|| {
+        format!(
+            "failed to read branch information for '{}'",
+            repo.path.display()
+        )
+    })?
+    {
+        GitOutput { status, stdout, stderr: _ } if status.success() =>
+            Head::Branch(String::from_utf8_lossy(&stdout).trim().to_owned()),
+        GitOutput { status, .. } if status.code() == Some(1) =>
+        {
+            let hash = String::from_utf8_lossy(
+                &git_stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
+                    .with_context(|| {
+                        format!(
+                            "failed to read branch information for '{}'",
+                            repo.path.display()
+                        )
+                    })?
+            )
+            .trim()
+            .to_owned();
+            Head::Detached(hash)
+        }
+        GitOutput { stderr, .. } => bail!(
+            "failed to read branch information for '{}': {}",
+            repo.path.display(),
+            String::from_utf8_lossy(&stderr).trim()
+        )
+    };
+
+    Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
 }

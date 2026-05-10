@@ -1,24 +1,70 @@
 mod add;
 mod branch;
 mod commit;
+mod diff;
 mod merge;
 mod mv;
 mod rebase;
 mod restore;
 mod rm;
+mod status;
 
 pub use add::{add, add_path};
 use anyhow::{Context, Result, anyhow, bail};
-pub use branch::branch;
+pub use branch::{branch, branches};
 pub use commit::commit;
+pub use diff::is_dirty;
 pub use merge::merge;
 pub use mv::{ensure_tracked, mv};
 pub use rebase::rebase;
 pub use restore::restore;
 pub use rm::rm;
+pub use status::status;
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum Head
+{
+    Branch(String),
+    Detached(String)
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RepoBranches
+{
+    pub branches: Vec<String>,
+    pub head: Head
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FileChange
+{
+    NewFile,
+    Modified,
+    Deleted,
+    Renamed,
+    TypeChange,
+    Copied
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct FileEntry
+{
+    pub path: PathBuf,
+    pub change: FileChange
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RepoStatus
+{
+    pub head: Head,
+    pub initial: bool,
+    pub staged_changes: Vec<FileEntry>,
+    pub unstaged_changes: Vec<FileEntry>,
+    pub untracked_files: Vec<FileEntry>
+}
 
 pub struct GitOutput
 {
@@ -181,4 +227,38 @@ pub(crate) fn first_non_empty_line_with_fallback_strip_fatal(
     {
         primary_line
     }
+}
+
+pub(crate) fn status_head(
+    repo_path: &Path,
+    context: &str,
+    header: &[u8]
+) -> Result<(Head, bool)>
+{
+    // Decode and validate branch header.
+    let header = String::from_utf8_lossy(header);
+    let header = header
+        .strip_prefix("## ")
+        .context("git status branch header had unexpected format")?;
+
+    if let Some(branch) = header.strip_prefix("No commits yet on ")
+    {
+        return Ok((Head::Branch(branch.to_owned()), true));
+    }
+
+    if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
+    {
+        let hash = String::from_utf8_lossy(
+            &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
+                .with_context(|| {
+                    format!("{context} for '{}'", repo_path.display())
+                })?
+        )
+        .trim()
+        .to_owned();
+        return Ok((Head::Detached(hash), false));
+    }
+
+    let branch = header.split("...").next().unwrap_or(header).to_owned();
+    Ok((Head::Branch(branch), false))
 }

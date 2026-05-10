@@ -1,4 +1,5 @@
-use crate::vmr::{FileChange, FileEntry, Head, Repo, RepoStatus, Vmr};
+use crate::git::{self, FileChange, FileEntry, Head, RepoStatus};
+use crate::vmr::{Repo, Vmr};
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use rayon::prelude::*;
@@ -56,7 +57,7 @@ pub fn status(working_dir: &Path) -> Result<()>
     // Collect status information from repositories
     let mut statuses = repos
         .par_iter()
-        .filter_map(|repo| repo.status().transpose())
+        .filter_map(|repo| git::status(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Keep status order deterministic
