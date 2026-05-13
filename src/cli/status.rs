@@ -28,7 +28,8 @@ impl StatusStyle
 struct StatusStyles
 {
     staged: StatusStyle,
-    changed: StatusStyle
+    changed: StatusStyle,
+    repo_list: StatusStyle
 }
 
 impl StatusStyles
@@ -42,6 +43,9 @@ impl StatusStyles
             ),
             changed: StatusStyle(
                 Style::new().fg_color(Some(AnsiColor::Red.into()))
+            ),
+            repo_list: StatusStyle(
+                Style::new().fg_color(Some(AnsiColor::BrightBlack.into()))
             )
         }
     }
@@ -122,9 +126,11 @@ fn render_status(
         else
         {
             output.push_str(&format!(
-                "On branch {} ({})\n",
+                "On branch {} {}\n",
                 branch,
-                repo_names.join(", ")
+                styles
+                    .repo_list
+                    .render_text(&format!("({})", repo_names.join(", ")))
             ));
         }
 
@@ -134,8 +140,11 @@ fn render_status(
     // Render detached repositories
     for (repo, hash, status) in detached
     {
-        output
-            .push_str(&format!("HEAD detached at {} ({})\n", hash, repo.name));
+        output.push_str(&format!(
+            "HEAD detached at {} {}\n",
+            hash,
+            styles.repo_list.render_text(&format!("({})", repo.name))
+        ));
         render_group(
             &mut output,
             &[(repo, status)],
@@ -351,9 +360,9 @@ mod tests
 
         // Assert
         assert!(output.contains("main"));
-        assert!(output.contains("(backend)"));
+        assert!(output.contains("\u{1b}[90m(backend)\u{1b}[0m"));
         assert!(output.contains("feature/auth"));
-        assert!(output.contains("(frontend)"));
+        assert!(output.contains("\u{1b}[90m(frontend)\u{1b}[0m"));
     }
 
     #[test]
@@ -371,7 +380,7 @@ mod tests
         // Assert
         assert!(output.contains("HEAD detached at "));
         assert!(output.contains("a1b2c3d"));
-        assert!(output.contains("(tools)"));
+        assert!(output.contains("\u{1b}[90m(tools)\u{1b}[0m"));
         assert!(!output.contains("\u{1b}[33m"));
     }
 
@@ -389,7 +398,7 @@ mod tests
 
         // Assert
         assert!(output.contains("master"));
-        assert!(output.contains("(new-repo)"));
+        assert!(output.contains("\u{1b}[90m(new-repo)\u{1b}[0m"));
         assert!(output.contains("\nNo commits yet\n\n"));
     }
 
@@ -413,8 +422,7 @@ mod tests
             "On branch master\nnothing to commit, working tree clean"
         ));
         assert!(
-            output
-                .contains("On branch master (new-repo)\n\nNo commits yet\n\n")
+            output.contains("On branch master \u{1b}[90m(new-repo)\u{1b}[0m\n\nNo commits yet\n\n")
         );
         assert!(!output.contains("On branch master (committed, new-repo)"));
     }
