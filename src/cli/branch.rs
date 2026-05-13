@@ -20,7 +20,8 @@ impl BranchStyle
 
 struct BranchStyles
 {
-    active: BranchStyle
+    active: BranchStyle,
+    repo_list: BranchStyle
 }
 
 impl BranchStyles
@@ -30,6 +31,9 @@ impl BranchStyles
         Self {
             active: BranchStyle(
                 Style::new().fg_color(Some(AnsiColor::Green.into()))
+            ),
+            repo_list: BranchStyle(
+                Style::new().fg_color(Some(AnsiColor::BrightBlack.into()))
             )
         }
     }
@@ -129,9 +133,12 @@ fn render_branches(repos: &[(String, RepoBranches)]) -> String
         if branch_repos.len() != repo_count
         {
             let repo_names = branch_repos.into_iter().collect::<Vec<_>>();
-            output.push_str(" (");
-            output.push_str(&repo_names.join(", "));
-            output.push(')');
+            output.push(' ');
+            output.push_str(
+                &styles
+                    .repo_list
+                    .render_text(&format!("({})", repo_names.join(", ")))
+            );
         }
 
         output.push('\n');
@@ -183,9 +190,14 @@ mod tests
 
         let output = render_branches(&repos);
 
-        assert!(output.contains("* \x1b[32mfeature/auth\x1b[0m (frontend)\n"));
+        assert!(output.contains(
+            "* \x1b[32mfeature/auth\x1b[0m \x1b[90m(frontend)\x1b[0m\n"
+        ));
         assert!(output.contains("* \x1b[32mmain\x1b[0m\n"));
-        assert!(output.contains("  release/1.2 (backend, frontend)\n"));
+        assert!(
+            output
+                .contains("  release/1.2 \x1b[90m(backend, frontend)\x1b[0m\n")
+        );
     }
 
     #[test]
