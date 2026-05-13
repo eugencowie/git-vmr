@@ -15,13 +15,18 @@ The `git vmr status` command SHALL discover all immediate child directories of t
 - **THEN** the command SHALL succeed with no output
 
 ### Requirement: Status output is grouped by branch name
-The output SHALL group repositories by their checked-out branch name. When all repositories share the same branch, the output SHALL omit the repository list from the branch header, making it indistinguishable from regular `git status`. When repositories are on different branches, each branch group SHALL list the repos in parentheses.
+The output SHALL group repositories by their checked-out branch name. The committed branch group containing the most repositories SHALL omit the repository list from the branch header. When more than one committed branch group is tied for the most repositories, all tied branch groups SHALL list the repos in parentheses.
 
 #### Scenario: All repos on the same branch
 - **WHEN** `backend` and `frontend` are both on branch `main`
 - **THEN** the output SHALL show `On branch main` without listing repo names
 
-#### Scenario: Repos on different branches
+#### Scenario: One branch contains the most repos
+- **WHEN** `frontend`, `backend`, and `docs` are on branch `develop`, `shared` and `common` are on branch `new-feature`, and `tools` is on branch `bug-fix`
+- **THEN** the output SHALL show `On branch develop` without listing repo names
+- **AND** the output SHALL show separate sections: `On branch new-feature (shared, common)` and `On branch bug-fix (tools)`
+
+#### Scenario: Different branches are tied for the most repos
 - **WHEN** `backend` is on `main` and `frontend` is on `feature/auth`
 - **THEN** the output SHALL show separate sections: `On branch main (backend)` and `On branch feature/auth (frontend)`
 

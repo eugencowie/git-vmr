@@ -3,7 +3,7 @@ use crate::vmr::{Repo, Vmr};
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use rayon::prelude::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 struct RenderContext<'a>
@@ -83,18 +83,6 @@ fn render_status(
     let mut output = String::new();
     let styles = StatusStyles::new();
 
-    // Count regular committed branches
-    let regular_branch_count = statuses
-        .iter()
-        .filter_map(|(_, status)| match &status.head
-        {
-            Head::Branch(branch) if !status.initial => Some(branch.as_str()),
-            Head::Detached(_) => None,
-            Head::Branch(_) => None
-        })
-        .collect::<BTreeSet<_>>()
-        .len();
-
     let mut branch_groups: BTreeMap<(&str, bool), Vec<(&Repo, &RepoStatus)>> =
         BTreeMap::new();
     let mut detached = Vec::new();
@@ -112,6 +100,8 @@ fn render_status(
         }
     }
 
+    let largest_committed_branch = largest_committed_branch(&branch_groups);
+
     // Render branch groups
     for ((branch, initial), repos) in branch_groups
     {
@@ -119,7 +109,7 @@ fn render_status(
             .iter()
             .map(|(repo, _)| repo.name.as_str())
             .collect::<Vec<_>>();
-        if !initial && regular_branch_count == 1 && detached.is_empty()
+        if !initial && largest_committed_branch == Some(branch)
         {
             output.push_str(&format!("On branch {}\n", branch));
         }
@@ -155,6 +145,37 @@ fn render_status(
     }
 
     output
+}
+
+fn largest_committed_branch<'a>(
+    branch_groups: &BTreeMap<(&'a str, bool), Vec<(&Repo, &RepoStatus)>>
+) -> Option<&'a str>
+{
+    let mut largest = None;
+    let mut largest_size = 0;
+    let mut tie = false;
+
+    for ((branch, initial), repos) in branch_groups
+    {
+        if *initial
+        {
+            continue;
+        }
+
+        let size = repos.len();
+        if size > largest_size
+        {
+            largest = Some(*branch);
+            largest_size = size;
+            tie = false;
+        }
+        else if size == largest_size
+        {
+            tie = true;
+        }
+    }
+
+    if tie { None } else { largest }
 }
 
 fn render_group(
@@ -363,6 +384,36 @@ mod tests
         assert!(output.contains("\u{1b}[90m(backend)\u{1b}[0m"));
         assert!(output.contains("feature/auth"));
         assert!(output.contains("\u{1b}[90m(frontend)\u{1b}[0m"));
+    }
+
+    #[test]
+    fn renders_largest_branch_group_without_repo_names()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let statuses = vec![
+            (repo(tmp.path(), "backend"), repo_status("develop")),
+            (repo(tmp.path(), "common"), repo_status("new-feature")),
+            (repo(tmp.path(), "docs"), repo_status("develop")),
+            (repo(tmp.path(), "frontend"), repo_status("develop")),
+            (repo(tmp.path(), "shared"), repo_status("new-feature")),
+            (repo(tmp.path(), "tools"), repo_status("bug-fix")),
+        ];
+
+        // Act
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+
+        // Assert
+        assert!(output.contains("On branch develop\n"));
+        assert!(!output.contains(
+            "On branch develop \u{1b}[90m(backend, docs, frontend)\u{1b}[0m"
+        ));
+        assert!(output.contains(
+            "On branch new-feature \u{1b}[90m(common, shared)\u{1b}[0m"
+        ));
+        assert!(
+            output.contains("On branch bug-fix \u{1b}[90m(tools)\u{1b}[0m")
+        );
     }
 
     #[test]
