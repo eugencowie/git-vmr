@@ -1,10 +1,39 @@
 use crate::cli::print_results;
 use crate::git::{self, Head, RepoBranches};
 use crate::vmr::Vmr;
+use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+#[derive(Clone, Copy)]
+struct BranchStyle(Style);
+
+impl BranchStyle
+{
+    fn render_text(self, text: &str) -> String
+    {
+        format!("{}{text}{}", self.0.render(), self.0.render_reset())
+    }
+}
+
+struct BranchStyles
+{
+    active: BranchStyle
+}
+
+impl BranchStyles
+{
+    fn new() -> Self
+    {
+        Self {
+            active: BranchStyle(
+                Style::new().fg_color(Some(AnsiColor::Green.into()))
+            )
+        }
+    }
+}
 
 pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
 {
@@ -49,6 +78,7 @@ pub fn branches(working_dir: &Path) -> Result<()>
 fn render_branches(repos: &[(String, RepoBranches)]) -> String
 {
     let mut output = String::new();
+    let styles = BranchStyles::new();
     let repo_count = repos.len();
     let mut branch_groups: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     let mut active_branches = BTreeSet::new();
@@ -83,10 +113,18 @@ fn render_branches(repos: &[(String, RepoBranches)]) -> String
 
     for (branch, branch_repos) in branch_groups
     {
-        let marker = if active_branches.contains(branch) { '*' } else { ' ' };
+        let active = active_branches.contains(branch);
+        let marker = if active { '*' } else { ' ' };
         output.push(marker);
         output.push(' ');
-        output.push_str(branch);
+        if active
+        {
+            output.push_str(&styles.active.render_text(branch));
+        }
+        else
+        {
+            output.push_str(branch);
+        }
 
         if branch_repos.len() != repo_count
         {
@@ -122,7 +160,7 @@ mod tests
 
         let output = render_branches(&repos);
 
-        assert_eq!(output, "* main\n");
+        assert_eq!(output, "* \x1b[32mmain\x1b[0m\n");
     }
 
     #[test]
@@ -145,8 +183,8 @@ mod tests
 
         let output = render_branches(&repos);
 
-        assert!(output.contains("* feature/auth (frontend)\n"));
-        assert!(output.contains("* main\n"));
+        assert!(output.contains("* \x1b[32mfeature/auth\x1b[0m (frontend)\n"));
+        assert!(output.contains("* \x1b[32mmain\x1b[0m\n"));
         assert!(output.contains("  release/1.2 (backend, frontend)\n"));
     }
 
@@ -160,7 +198,7 @@ mod tests
 
         let output = render_branches(&repos);
 
-        assert!(output.contains("* main\n"));
+        assert!(output.contains("* \x1b[32mmain\x1b[0m\n"));
         assert!(output.contains("  topic\n"));
     }
 
