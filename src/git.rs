@@ -11,7 +11,7 @@ mod status;
 
 pub use add::{add, add_path};
 use anyhow::{Context, Result, anyhow, bail};
-pub use branch::{branch, branches};
+pub use branch::{branch, branches, delete_branch};
 pub use commit::commit;
 pub use diff::is_dirty;
 pub use merge::merge;

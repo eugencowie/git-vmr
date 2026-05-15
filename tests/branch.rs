@@ -48,6 +48,16 @@ fn branch_exists(path: &Path, branch: &str) -> bool
         .success()
 }
 
+fn create_unmerged_branch(path: &Path, branch: &str)
+{
+    git(path, ["checkout", "-b", branch]);
+    fs::write(path.join("feature.txt"), "feature\n")
+        .expect("failed to write file");
+    git(path, ["add", "feature.txt"]);
+    git(path, ["commit", "-m", "feature"]);
+    git(path, ["checkout", "master"]);
+}
+
 #[test]
 fn branch_lists_local_branches_across_child_repositories()
 {
@@ -327,5 +337,189 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
         .stderr(predicate::str::starts_with(
             "fatal: a branch named 'feature/auth' already exists (alpha)\n\
              fatal: a branch named 'feature/auth' already exists (zeta)\n"
+        ));
+}
+
+#[test]
+fn branch_delete_safely_deletes_branch_in_every_child_repository()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&backend, ["branch", "feature/auth"]);
+    git(&frontend, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted branch feature/auth (was")
+                .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains(" (frontend)"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!branch_exists(&backend, "feature/auth"));
+    assert!(!branch_exists(&frontend, "feature/auth"));
+}
+
+#[test]
+fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    create_unmerged_branch(&backend, "feature/auth");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "fatal: error: the branch 'feature/auth' is not fully merged (backend)"
+        ));
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-D", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted branch feature/auth (was")
+                .and(predicate::str::contains(" (backend)"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!branch_exists(&backend, "feature/auth"));
+}
+
+#[test]
+fn branch_delete_skips_non_git_child_directories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    git(&backend, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted branch feature/auth (was")
+                .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains("docs").not())
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!branch_exists(&backend, "feature/auth"));
+}
+
+#[test]
+fn branch_delete_partial_failure_does_not_stop_other_repositories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    let tools = tmp.path().join("tools");
+    init_repo(&backend);
+    init_repo(&frontend);
+    init_repo(&tools);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    commit_file(&tools, "README.md");
+    create_unmerged_branch(&backend, "feature/auth");
+    git(&frontend, ["branch", "feature/auth"]);
+    git(&tools, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(
+            predicate::str::contains("Deleted branch feature/auth (was")
+                .and(predicate::str::contains(" (frontend)"))
+                .and(predicate::str::contains(" (tools)"))
+        )
+        .stderr(predicate::str::contains(
+            "fatal: error: the branch 'feature/auth' is not fully merged (backend)"
+        ));
+
+    assert!(branch_exists(&backend, "feature/auth"));
+    assert!(!branch_exists(&frontend, "feature/auth"));
+    assert!(!branch_exists(&tools, "feature/auth"));
+}
+
+#[test]
+fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&frontend, ["checkout", "-b", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("fatal: error: branch 'feature/auth' not found (backend)")
+                .and(predicate::str::contains(
+                    "fatal: error: cannot delete branch 'feature/auth' used by worktree at"
+                ))
+                .and(predicate::str::contains(" (frontend)"))
+        );
+}
+
+#[test]
+fn branch_delete_reports_multiple_failures_in_repository_name_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let alpha = tmp.path().join("alpha");
+    let zeta = tmp.path().join("zeta");
+    init_repo(&alpha);
+    init_repo(&zeta);
+    commit_file(&alpha, "README.md");
+    commit_file(&zeta, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["branch", "-d", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::starts_with(
+            "fatal: error: branch 'feature/auth' not found (alpha)\n\
+             fatal: error: branch 'feature/auth' not found (zeta)\n"
         ));
 }
