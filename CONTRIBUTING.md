@@ -1,8 +1,8 @@
 # Contributing
 
-## Status Benchmark
+## Benchmarks
 
-Run the retained real-repository status benchmark with:
+Run the real-repository benchmarks with:
 
 ```sh
 cargo bench --bench real_repos
