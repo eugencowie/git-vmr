@@ -1,9 +1,28 @@
+use crate::cli::print_results;
 use crate::git::{self};
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+pub fn create(working_dir: &Path, tag_name: &str) -> Result<()>
+{
+    // Find virtual monorepo
+    let vmr = Vmr::find(working_dir)?;
+
+    // Get list of repositories
+    let repos = vmr.repos()?;
+
+    // Create tag in each repository
+    let results = repos
+        .par_iter()
+        .map(|repo| git::tag(&repo.name, &repo.path, tag_name))
+        .collect::<Vec<_>>();
+
+    // Print results
+    print_results(results)
+}
 
 pub fn tag(working_dir: &Path) -> Result<()>
 {

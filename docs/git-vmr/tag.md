@@ -80,7 +80,7 @@ lightweight tags by default.
 | **--cleanup=***\<mode\>* | Set how the tag message is cleaned up. The *\<mode\>* can be one of **verbatim**, **whitespace** and **strip**. The **strip** mode is default. The **verbatim** mode does not change message at all, **whitespace** removes just leading/trailing whitespace lines and **strip** removes both whitespace and commentary. | ❌ |
 | **--create-reflog** | Create a reflog for the tag. To globally enable reflogs for tags, see **core.logAllRefUpdates** in **git-config**(1). The negated form **--no-create-reflog** only overrides an earlier **--create-reflog**, but currently does not negate the setting of **core.logAllRefUpdates**. | ❌ |
 | **--format=***\<format\>* | A string that interpolates **%**(**fieldname**) from a tag ref being shown and the object it points at. The format is the same as that of **git-for-each-ref**(1). When unspecified, defaults to **%**(**refname:strip=2**). | ❌ |
-| *\<tagname\>* | The name of the tag to create, delete, or describe. The new tag name must pass all checks defined by **git-check-ref-format**(1). Some of these checks may restrict the characters allowed in a tag name. | ❌ |
+| *\<tagname\>* | The name of the tag to create, delete, or describe. The new tag name must pass all checks defined by **git-check-ref-format**(1). Some of these checks may restrict the characters allowed in a tag name. | ✅ |
 | *\<commit\>*, *\<object\>* | The object that the new tag will refer to, usually a commit. Defaults to **HEAD**. | ❌ |
 
 ## CONFIGURATION
