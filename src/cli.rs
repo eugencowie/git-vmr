@@ -9,6 +9,7 @@ mod rebase;
 mod restore;
 mod rm;
 mod status;
+mod tag;
 
 use crate::git::GitCommandResult;
 use anyhow::{Context, Result, bail};
@@ -210,7 +211,10 @@ enum Command
         /// Upstream branch to compare against
         #[arg(required = true, value_name = "upstream")]
         upstream: String
-    }
+    },
+
+    /// Create, list, delete or verify tags
+    Tag
 }
 
 #[derive(Parser)]
@@ -309,6 +313,7 @@ impl Cli
                 merge::merge(&working_dir, &commit_ish),
             Command::Rebase { upstream } =>
                 rebase::rebase(&working_dir, &upstream),
+            Command::Tag => tag::tag(&working_dir)
         }
     }
 
@@ -610,6 +615,64 @@ mod tests
             }
             _ => panic!("expected branch command")
         }
+    }
+
+    #[test]
+    fn parses_tag_without_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "tag"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Tag =>
+            {}
+            _ => panic!("expected tag command")
+        }
+    }
+
+    #[test]
+    fn rejects_tag_creation_operand()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "tag", "v1.0.0"])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_delete_flag()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "tag", "-d", "v1.0.0"])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_filter_flag()
+    {
+        // Act
+        let err =
+            match Cli::try_parse_from(["git-vmr", "tag", "--contains", "HEAD"])
+            {
+                Ok(_) => panic!("expected tag parse to fail"),
+                Err(err) => err
+            };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]

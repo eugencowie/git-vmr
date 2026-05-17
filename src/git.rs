@@ -8,6 +8,7 @@ mod rebase;
 mod restore;
 mod rm;
 mod status;
+mod tag;
 
 pub use add::{add, add_path};
 use anyhow::{Context, Result, anyhow, bail};
@@ -23,6 +24,7 @@ pub use status::status;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+pub use tag::tags;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Head

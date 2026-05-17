@@ -64,7 +64,7 @@ These are common git-vmr commands used in various situations:
 | [rebase](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/rebase.md) | Reapply commits on top of another base tip | ✅ |
 | reset   | Set `HEAD` or the index to a known state | ❌ |
 | switch  | Switch branches | ❌ |
-| tag     | Create, list, delete or verify tags | ❌ |
+| [tag](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/tag.md) | Create, list, delete or verify tags | ✅ |
 
 ### Collaborate
 

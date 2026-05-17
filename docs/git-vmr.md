@@ -113,7 +113,7 @@ ancillary user utilities.
 | [status](git-vmr/status.md) | Show the working tree status. | ✅ |
 | submodule | Initialize, update or inspect submodules. | ❌ |
 | switch | Switch branches. | ❌ |
-| tag | Create, list, delete or verify tags. | ❌ |
+| [tag](git-vmr/tag.md) | Create, list, delete or verify tags. | ✅ |
 | worktree | Manage multiple working trees. | ❌ |
 | gitk | The Git repository browser. | ❌ |
 | scalar | A tool for managing large Git repositories. | ❌ |
