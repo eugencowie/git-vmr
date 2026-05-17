@@ -24,6 +24,24 @@ pub fn create(working_dir: &Path, tag_name: &str) -> Result<()>
     print_results(results)
 }
 
+pub fn delete(working_dir: &Path, tag_name: &str) -> Result<()>
+{
+    // Find virtual monorepo
+    let vmr = Vmr::find(working_dir)?;
+
+    // Get list of repositories
+    let repos = vmr.repos()?;
+
+    // Delete tag in each repository
+    let results = repos
+        .par_iter()
+        .map(|repo| git::delete_tag(&repo.name, &repo.path, tag_name))
+        .collect::<Vec<_>>();
+
+    // Print results
+    print_results(results)
+}
+
 pub fn tag(working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo

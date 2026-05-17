@@ -59,7 +59,7 @@ lightweight tags by default.
 | **--no-sign** | Override **tag.gpgSign** configuration variable that is set to force each and every tag to be signed. | ❌ |
 | **-u** *\<key-id\>*, **--local-user=***\<key-id\>* | Make a cryptographically signed tag using the given key. The format of the \<key-id\> and the backend used depend on the **gpg.format** configuration variable. See **git-config**(1). | ❌ |
 | **-f**, **--force** | Replace an existing tag with the given name (instead of failing) | ❌ |
-| **-d**, **--delete** | Delete existing tags with the given names. | ❌ |
+| **-d**, **--delete** | Delete existing tags with the given names. | ✅ |
 | **-v**, **--verify** | Verify the cryptographic signature of the given tags. | ❌ |
 | **-n***\<num\>* | *\<num\>* specifies how many lines from the annotation, if any, are printed when using **-l**. Implies **--list**. | ❌ |
 | **-l**, **--list** | List tags. With optional *\<pattern\>*..., e.g. **git** **tag** **--list** v-\*, list only the tags that match the pattern(s). | ❌ |

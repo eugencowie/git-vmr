@@ -24,7 +24,7 @@ pub use status::status;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
-pub use tag::{tag, tags};
+pub use tag::{delete_tag, tag, tags};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Head

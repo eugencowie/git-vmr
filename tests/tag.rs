@@ -356,3 +356,183 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
              fatal: tag 'v1.0.0' already exists (zeta)\n"
         ));
 }
+
+#[test]
+fn tag_delete_deletes_tag_in_every_child_repository()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&backend, ["tag", "v1.0.0"]);
+    git(&frontend, ["tag", "v1.0.0"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "-d", "v1.0.0"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted tag 'v1.0.0'")
+                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(frontend)"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tag_exists(&backend, "v1.0.0"));
+    assert!(!tag_exists(&frontend, "v1.0.0"));
+}
+
+#[test]
+fn tag_long_delete_deletes_tag_in_every_child_repository()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&backend, ["tag", "v1.0.0"]);
+    git(&frontend, ["tag", "v1.0.0"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "--delete", "v1.0.0"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted tag 'v1.0.0'")
+                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(frontend)"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tag_exists(&backend, "v1.0.0"));
+    assert!(!tag_exists(&frontend, "v1.0.0"));
+}
+
+#[test]
+fn tag_delete_skips_non_git_child_directories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    git(&backend, ["tag", "v1.0.0"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "-d", "v1.0.0"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Deleted tag 'v1.0.0'")
+                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("docs").not())
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tag_exists(&backend, "v1.0.0"));
+}
+
+#[test]
+fn tag_delete_partial_failure_does_not_stop_other_repositories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    let tools = tmp.path().join("tools");
+    init_repo(&backend);
+    init_repo(&frontend);
+    init_repo(&tools);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    commit_file(&tools, "README.md");
+    git(&frontend, ["tag", "v1.0.0"]);
+    git(&tools, ["tag", "v1.0.0"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "-d", "v1.0.0"])
+        .assert()
+        .failure()
+        .stdout(
+            predicate::str::contains("Deleted tag 'v1.0.0'")
+                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("(tools)"))
+        )
+        .stderr(predicate::str::contains(
+            "error: tag 'v1.0.0' not found. (backend)"
+        ));
+
+    assert!(!tag_exists(&frontend, "v1.0.0"));
+    assert!(!tag_exists(&tools, "v1.0.0"));
+}
+
+#[test]
+fn tag_delete_reports_failures_with_repository_suffixes()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let tools = tmp.path().join("tools");
+    init_repo(&backend);
+    init_repo(&tools);
+    commit_file(&backend, "README.md");
+    commit_file(&tools, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "-d", "v1.0.0"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains(
+                "error: tag 'v1.0.0' not found. (backend)"
+            )
+            .and(predicate::str::contains(
+                "error: tag 'v1.0.0' not found. (tools)"
+            ))
+            .and(predicate::str::contains("fatal: git tag failed").not())
+        );
+}
+
+#[test]
+fn tag_delete_reports_multiple_failures_in_repository_name_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let alpha = tmp.path().join("alpha");
+    let zeta = tmp.path().join("zeta");
+    init_repo(&alpha);
+    init_repo(&zeta);
+    commit_file(&alpha, "README.md");
+    commit_file(&zeta, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["tag", "-d", "v1.0.0"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::starts_with(
+            "fatal: error: tag 'v1.0.0' not found. (alpha)\n\
+             fatal: error: tag 'v1.0.0' not found. (zeta)\n"
+        ));
+}
