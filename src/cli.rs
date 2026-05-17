@@ -1,5 +1,6 @@
 mod add;
 mod branch;
+mod clone;
 mod commit;
 mod init;
 mod merge;
@@ -77,6 +78,18 @@ fn print_results(results: Vec<GitCommandResult>) -> Result<()>
 #[derive(Subcommand)]
 enum Command
 {
+    /// Clone a repository into a new directory
+    Clone
+    {
+        /// The (possibly remote) <repository> to clone from
+        #[arg(value_name = "repository")]
+        repository: String,
+
+        /// The name of a new directory to clone into
+        #[arg(value_name = "directory")]
+        directory: Option<PathBuf>
+    },
+
     /// Create an empty virtual monorepo or reinitialize an existing one
     Init
     {
@@ -263,6 +276,8 @@ impl Cli
         // Run command
         match self.command
         {
+            Command::Clone { repository, directory } =>
+                clone::clone(&working_dir, &repository, directory.as_deref()),
             Command::Init { directory } =>
                 init::init(&working_dir, directory.as_deref()),
             Command::Add { paths } => add::add(&working_dir, &paths),
@@ -434,6 +449,80 @@ mod tests
                 assert_eq!(directory.as_deref(), Some(Path::new("project")));
             }
             _ => panic!("expected init command")
+        }
+    }
+
+    #[test]
+    fn parses_clone_repository_argument()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "clone",
+            "https://example.com/repo.git"
+        ]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Clone { repository, directory } =>
+            {
+                assert_eq!(repository, "https://example.com/repo.git");
+                assert_eq!(directory, None);
+            }
+            _ => panic!("expected clone command")
+        }
+    }
+
+    #[test]
+    fn parses_clone_repository_and_directory_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "clone",
+            "https://example.com/repo.git",
+            "copy"
+        ]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Clone { repository, directory } =>
+            {
+                assert_eq!(repository, "https://example.com/repo.git");
+                assert_eq!(directory.as_deref(), Some(Path::new("copy")));
+            }
+            _ => panic!("expected clone command")
+        }
+    }
+
+    #[test]
+    fn parses_working_dir_with_clone_arguments()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "clone",
+            "https://example.com/repo.git",
+            "copy"
+        ]);
+
+        // Assert
+        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+        match cli.command
+        {
+            Command::Clone { repository, directory } =>
+            {
+                assert_eq!(repository, "https://example.com/repo.git");
+                assert_eq!(directory.as_deref(), Some(Path::new("copy")));
+            }
+            _ => panic!("expected clone command")
         }
     }
 

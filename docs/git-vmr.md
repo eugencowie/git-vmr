@@ -83,7 +83,7 @@ ancillary user utilities.
 | cherry-pick | Apply the changes introduced by some existing commits. | ❌ |
 | citool | Graphical alternative to git-commit. | ❌ |
 | clean | Remove untracked files from the working tree. | ❌ |
-| clone | Clone a repository into a new directory. | ❌ |
+| [clone](git-vmr/clone.md) | Clone a repository into a new directory. | ✅ |
 | [commit](git-vmr/commit.md) | Record changes to the repository. | ✅ |
 | describe | Give an object a human readable name based on an available ref. | ❌ |
 | diff | Show changes between commits, commit and working tree, etc. | ❌ |

@@ -30,7 +30,7 @@ These are common git-vmr commands used in various situations:
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| clone   | Clone a repository into a new directory | ❌ |
+| [clone](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/clone.md) | Clone a repository into a new directory | ✅ |
 | [init](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/init.md) | Create an empty virtual monorepo or reinitialize an existing one | ✅ |
 
 ### Work on the current change
