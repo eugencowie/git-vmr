@@ -112,7 +112,7 @@ ancillary user utilities.
 | stash | Stash the changes in a dirty working directory away. | ❌ |
 | [status](git-vmr/status.md) | Show the working tree status. | ✅ |
 | submodule | Initialize, update or inspect submodules. | ❌ |
-| switch | Switch branches. | ❌ |
+| [switch](git-vmr/switch.md) | Switch branches. | ✅ |
 | [tag](git-vmr/tag.md) | Create, list, delete or verify tags. | ✅ |
 | worktree | Manage multiple working trees. | ❌ |
 | gitk | The Git repository browser. | ❌ |

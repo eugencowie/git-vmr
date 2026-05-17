@@ -9,6 +9,7 @@ mod rebase;
 mod restore;
 mod rm;
 mod status;
+mod switch;
 mod tag;
 
 use crate::git::GitCommandResult;
@@ -213,6 +214,14 @@ enum Command
         upstream: String
     },
 
+    /// Switch branches
+    Switch
+    {
+        /// Branch to switch to
+        #[arg(required = true, value_name = "branch")]
+        branch_name: String
+    },
+
     /// Create, list, delete or verify tags
     Tag
     {
@@ -322,6 +331,8 @@ impl Cli
                 merge::merge(&working_dir, &commit_ish),
             Command::Rebase { upstream } =>
                 rebase::rebase(&working_dir, &upstream),
+            Command::Switch { branch_name } =>
+                switch::switch(&working_dir, &branch_name),
             Command::Tag { delete, tag_name } => match (tag_name, delete)
             {
                 (Some(tag_name), true) => tag::delete(&working_dir, &tag_name),
@@ -1018,6 +1029,37 @@ mod tests
         let err = match Cli::try_parse_from(["git-vmr", "rebase"])
         {
             Ok(_) => panic!("expected rebase parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_switch_with_branch_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "switch", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Switch { branch_name } =>
+            {
+                assert_eq!(branch_name, "feature/auth");
+            }
+            _ => panic!("expected switch command")
+        }
+    }
+
+    #[test]
+    fn rejects_switch_without_branch_name()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "switch"])
+        {
+            Ok(_) => panic!("expected switch parse to fail"),
             Err(err) => err
         };
 
