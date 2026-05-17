@@ -2,6 +2,7 @@ mod add;
 mod branch;
 mod clone;
 mod commit;
+mod fetch;
 mod init;
 mod merge;
 mod mv;
@@ -232,6 +233,19 @@ enum Command
         /// The name of the tag to create, delete, or describe
         #[arg(value_name = "tagname")]
         tag_name: Option<String>
+    },
+
+    /// Download objects and refs from another repository
+    Fetch
+    {
+        /// The "remote" repository that is the source of a fetch or pull
+        /// operation
+        #[arg(value_name = "repository")]
+        repository: Option<String>,
+
+        /// Specifies which refs to fetch and which local refs to update
+        #[arg(value_name = "refspec")]
+        refspecs: Vec<String>
     }
 }
 
@@ -339,7 +353,9 @@ impl Cli
                 (Some(tag_name), false) => tag::create(&working_dir, &tag_name),
                 (None, false) => tag::tag(&working_dir),
                 _ => unreachable!()
-            }
+            },
+            Command::Fetch { repository, refspecs } =>
+                fetch::fetch(&working_dir, repository.as_deref(), &refspecs),
         }
     }
 
@@ -972,6 +988,113 @@ mod tests
 
         // Assert
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_fetch_without_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "fetch"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Fetch { repository, refspecs } =>
+            {
+                assert_eq!(repository, None);
+                assert!(refspecs.is_empty());
+            }
+            _ => panic!("expected fetch command")
+        }
+    }
+
+    #[test]
+    fn parses_fetch_with_repository_argument()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "fetch", "origin"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Fetch { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert!(refspecs.is_empty());
+            }
+            _ => panic!("expected fetch command")
+        }
+    }
+
+    #[test]
+    fn parses_fetch_with_repository_and_single_refspec()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "fetch", "origin", "main"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Fetch { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main"]);
+            }
+            _ => panic!("expected fetch command")
+        }
+    }
+
+    #[test]
+    fn parses_fetch_with_repository_and_multiple_refspecs()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "fetch",
+            "origin",
+            "main",
+            "release:release"
+        ]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Fetch { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main", "release:release"]);
+            }
+            _ => panic!("expected fetch command")
+        }
+    }
+
+    #[test]
+    fn parses_working_dir_with_fetch_arguments()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "fetch",
+            "origin",
+            "main"
+        ]);
+
+        // Assert
+        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+        match cli.command
+        {
+            Command::Fetch { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main"]);
+            }
+            _ => panic!("expected fetch command")
+        }
     }
 
     #[test]

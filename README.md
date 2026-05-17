@@ -70,7 +70,7 @@ These are common git-vmr commands used in various situations:
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| fetch   | Download objects and refs from another repository | ❌ |
+| [fetch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/fetch.md) | Download objects and refs from another repository | ✅ |
 | pull    | Fetch from and integrate with another repository or a local branch | ❌ |
 | push    | Update remote refs along with associated objects | ❌ |
 
