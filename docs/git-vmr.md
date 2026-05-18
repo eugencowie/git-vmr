@@ -98,7 +98,7 @@ ancillary user utilities.
 | [merge](git-vmr/merge.md) | Join two or more development histories together. | ✅ |
 | [mv](git-vmr/mv.md) | Move or rename a file, a directory, or a symlink. | ✅ |
 | notes | Add or inspect object notes. | ❌ |
-| pull | Fetch from and integrate with another repository or a local branch. | ❌ |
+| [pull](git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch. | ✅ |
 | push | Update remote refs along with associated objects. | ❌ |
 | range-diff | Compare two commit ranges (e.g. two versions of a branch). | ❌ |
 | [rebase](git-vmr/rebase.md) | Reapply commits on top of another base tip. | ✅ |

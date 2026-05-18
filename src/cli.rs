@@ -6,6 +6,7 @@ mod fetch;
 mod init;
 mod merge;
 mod mv;
+mod pull;
 mod rebase;
 mod restore;
 mod rm;
@@ -246,6 +247,19 @@ enum Command
         /// Specifies which refs to fetch and which local refs to update
         #[arg(value_name = "refspec")]
         refspecs: Vec<String>
+    },
+
+    /// Fetch from and integrate with another repository or a local branch
+    Pull
+    {
+        /// The "remote" repository to pull from
+        #[arg(value_name = "repository")]
+        repository: Option<String>,
+
+        /// Which branch or other reference(s) to fetch and integrate into the
+        /// current branch
+        #[arg(value_name = "refspec")]
+        refspecs: Vec<String>
     }
 }
 
@@ -356,6 +370,8 @@ impl Cli
             },
             Command::Fetch { repository, refspecs } =>
                 fetch::fetch(&working_dir, repository.as_deref(), &refspecs),
+            Command::Pull { repository, refspecs } =>
+                pull::pull(&working_dir, repository.as_deref(), &refspecs),
         }
     }
 
@@ -1094,6 +1110,108 @@ mod tests
                 assert_eq!(refspecs, ["main"]);
             }
             _ => panic!("expected fetch command")
+        }
+    }
+
+    #[test]
+    fn parses_pull_without_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "pull"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Pull { repository, refspecs } =>
+            {
+                assert_eq!(repository, None);
+                assert!(refspecs.is_empty());
+            }
+            _ => panic!("expected pull command")
+        }
+    }
+
+    #[test]
+    fn parses_pull_with_repository_argument()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "pull", "origin"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Pull { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert!(refspecs.is_empty());
+            }
+            _ => panic!("expected pull command")
+        }
+    }
+
+    #[test]
+    fn parses_pull_with_repository_and_single_refspec()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "pull", "origin", "main"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Pull { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main"]);
+            }
+            _ => panic!("expected pull command")
+        }
+    }
+
+    #[test]
+    fn parses_pull_with_repository_and_multiple_refspecs()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "pull", "origin", "main", "release"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Pull { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main", "release"]);
+            }
+            _ => panic!("expected pull command")
+        }
+    }
+
+    #[test]
+    fn parses_working_dir_with_pull_arguments()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "pull",
+            "origin",
+            "main"
+        ]);
+
+        // Assert
+        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+        match cli.command
+        {
+            Command::Pull { repository, refspecs } =>
+            {
+                assert_eq!(repository.as_deref(), Some("origin"));
+                assert_eq!(refspecs, ["main"]);
+            }
+            _ => panic!("expected pull command")
         }
     }
 
