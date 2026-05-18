@@ -9,13 +9,14 @@ mod mv;
 mod pull;
 mod push;
 mod rebase;
+mod reset;
 mod restore;
 mod rm;
 mod status;
 mod switch;
 mod tag;
 
-use crate::git::GitCommandResult;
+use crate::git::{GitCommandResult, ResetMode};
 use anyhow::{Context, Result, bail};
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use std::env;
@@ -217,6 +218,39 @@ enum Command
         upstream: String
     },
 
+    /// Set `HEAD` or the index to a known state
+    Reset
+    {
+        /// Leave your working directory unchanged
+        #[arg(long, conflicts_with_all = ["soft", "hard", "merge", "keep"])]
+        mixed: bool,
+
+        /// Leave your working tree files and the index unchanged
+        #[arg(long, conflicts_with_all = ["mixed", "hard", "merge", "keep"])]
+        soft: bool,
+
+        /// Overwrite all files and directories with the version from [commit],
+        /// and may overwrite untracked files
+        #[arg(long, conflicts_with_all = ["soft", "mixed", "merge", "keep"])]
+        hard: bool,
+
+        /// Reset the index and update the files in the working tree that are
+        /// different between <commit> and HEAD, but keep those which are
+        /// different between the index and working tree (i.e. which have
+        /// changes which have not been added)
+        #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "keep"])]
+        merge: bool,
+
+        /// Resets index entries and updates files in the working tree that are
+        /// different between <commit> and HEAD
+        #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "merge"])]
+        keep: bool,
+
+        /// Set the current branch head (HEAD) to point at <commit>
+        #[arg(value_name = "commit")]
+        commit: Option<String>
+    },
+
     /// Switch branches
     Switch
     {
@@ -372,6 +406,12 @@ impl Cli
                 merge::merge(&working_dir, &commit_ish),
             Command::Rebase { upstream } =>
                 rebase::rebase(&working_dir, &upstream),
+            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
+                reset::reset(
+                    &working_dir,
+                    reset_mode(soft, mixed, hard, merge, keep),
+                    commit.as_deref()
+                ),
             Command::Switch { branch_name } =>
                 switch::switch(&working_dir, &branch_name),
             Command::Tag { delete, tag_name } => match (tag_name, delete)
@@ -428,6 +468,26 @@ fn display_bin_name(bin_name: &str) -> String
     {
         "git-vmr" => "git vmr".to_owned(),
         _ => bin_name.to_owned()
+    }
+}
+
+fn reset_mode(
+    soft: bool,
+    mixed: bool,
+    hard: bool,
+    merge: bool,
+    keep: bool
+) -> Option<ResetMode>
+{
+    match (soft, mixed, hard, merge, keep)
+    {
+        (true, false, false, false, false) => Some(ResetMode::Soft),
+        (false, true, false, false, false) => Some(ResetMode::Mixed),
+        (false, false, true, false, false) => Some(ResetMode::Hard),
+        (false, false, false, true, false) => Some(ResetMode::Merge),
+        (false, false, false, false, true) => Some(ResetMode::Keep),
+        (false, false, false, false, false) => None,
+        _ => unreachable!()
     }
 }
 
@@ -1392,6 +1452,162 @@ mod tests
 
         // Assert
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_reset_without_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "reset"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
+            {
+                assert!(!soft);
+                assert!(!mixed);
+                assert!(!hard);
+                assert!(!merge);
+                assert!(!keep);
+                assert_eq!(commit, None);
+            }
+            _ => panic!("expected reset command")
+        }
+    }
+
+    #[test]
+    fn parses_reset_modes()
+    {
+        for (flag, expected) in [
+            ("--soft", ResetMode::Soft),
+            ("--mixed", ResetMode::Mixed),
+            ("--hard", ResetMode::Hard),
+            ("--merge", ResetMode::Merge),
+            ("--keep", ResetMode::Keep)
+        ]
+        {
+            // Act
+            let cli = Cli::parse_from(["git-vmr", "reset", flag]);
+
+            // Assert
+            match cli.command
+            {
+                Command::Reset { soft, mixed, hard, merge, keep, commit } =>
+                {
+                    assert_eq!(
+                        reset_mode(soft, mixed, hard, merge, keep),
+                        Some(expected)
+                    );
+                    assert_eq!(commit, None);
+                }
+                _ => panic!("expected reset command")
+            }
+        }
+    }
+
+    #[test]
+    fn parses_reset_mode_with_commit()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "reset", "--hard", "HEAD~1"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
+            {
+                assert_eq!(
+                    reset_mode(soft, mixed, hard, merge, keep),
+                    Some(ResetMode::Hard)
+                );
+                assert_eq!(commit.as_deref(), Some("HEAD~1"));
+            }
+            _ => panic!("expected reset command")
+        }
+    }
+
+    #[test]
+    fn parses_working_dir_with_reset_arguments()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            tmp.path().to_str().unwrap(),
+            "reset",
+            "--soft",
+            "HEAD~1"
+        ]);
+
+        // Assert
+        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+        match cli.command
+        {
+            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
+            {
+                assert_eq!(
+                    reset_mode(soft, mixed, hard, merge, keep),
+                    Some(ResetMode::Soft)
+                );
+                assert_eq!(commit.as_deref(), Some("HEAD~1"));
+            }
+            _ => panic!("expected reset command")
+        }
+    }
+
+    #[test]
+    fn reset_modes_conflict()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr", "reset", "--soft", "--hard", "HEAD~1"
+        ])
+        {
+            Ok(_) => panic!("expected reset parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn rejects_reset_extra_arguments()
+    {
+        // Act
+        let err =
+            match Cli::try_parse_from(["git-vmr", "reset", "HEAD~1", "extra"])
+            {
+                Ok(_) => panic!("expected reset parse to fail"),
+                Err(err) => err
+            };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_reset_pathspec_separator()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "reset",
+            "HEAD",
+            "--",
+            "backend/file.txt"
+        ])
+        {
+            Ok(_) => panic!("expected reset parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]
