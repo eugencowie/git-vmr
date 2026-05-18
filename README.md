@@ -72,7 +72,7 @@ These are common git-vmr commands used in various situations:
 | ------- | ----------- | ---------- |
 | [fetch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/fetch.md) | Download objects and refs from another repository | ✅ |
 | [pull](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch | ✅ |
-| push    | Update remote refs along with associated objects | ❌ |
+| [push](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/push.md) | Update remote refs along with associated objects | ✅ |
 
 [docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
 
