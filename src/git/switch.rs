@@ -31,3 +31,33 @@ pub fn switch(
         }
     )
 }
+
+pub fn create(
+    repo_name: &str,
+    repo_path: &Path,
+    branch_name: &str
+) -> GitCommandResult
+{
+    let output = git_output(repo_path, ["switch", "--create", branch_name])?;
+
+    if output.status.success()
+    {
+        Ok(Some(first_non_empty_line_with_fallback(
+            &output.stdout,
+            &output.stderr,
+            "git switch succeeded"
+        )))
+    }
+    else
+    {
+        Err(anyhow::anyhow!(
+            "{} ({})",
+            first_non_empty_line_with_fallback(
+                &output.stderr,
+                &output.stdout,
+                "git switch failed"
+            ),
+            repo_name
+        ))
+    }
+}

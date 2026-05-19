@@ -33,7 +33,7 @@ pub use status::status;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
-pub use switch::switch;
+pub use switch::{create, switch};
 pub use tag::{delete_tag, tag, tags};
 
 #[derive(Clone, PartialEq, Eq)]

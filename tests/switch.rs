@@ -301,3 +301,161 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
     assert_eq!(current_branch(&backend), "feature/auth");
     assert_eq!(current_branch(&frontend), "feature/auth");
 }
+
+#[test]
+fn switch_create_shared_branch_across_multiple_child_repositories_deduplicates_success()
+
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    setup_repo_with_initial_commit(&backend);
+    setup_repo_with_initial_commit(&frontend);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&backend), "feature/auth");
+    assert_eq!(current_branch(&frontend), "feature/auth");
+}
+
+#[test]
+fn switch_create_short_form_creates_and_switches()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    setup_repo_with_initial_commit(&backend);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "-c", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&backend), "feature/auth");
+}
+
+#[test]
+fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    let backend = tmp.path().join("backend");
+    setup_repo_with_initial_commit(&backend);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Switched to a new branch 'feature/auth'")
+                .and(predicate::str::contains("backend").not())
+                .and(predicate::str::contains("docs").not())
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&backend), "feature/auth");
+}
+
+#[test]
+fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_others()
+
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    let tools = tmp.path().join("tools");
+    setup_repo_with_initial_commit(&backend);
+    setup_repo_with_initial_commit(&frontend);
+    setup_repo_with_initial_commit(&tools);
+    create_branch(&backend, "feature/auth");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stderr(predicate::str::contains(
+            "fatal: a branch named 'feature/auth' already exists (backend)"
+        ));
+
+    assert_eq!(current_branch(&backend), "master");
+    assert_eq!(current_branch(&frontend), "feature/auth");
+    assert_eq!(current_branch(&tools), "feature/auth");
+}
+
+#[test]
+fn switch_create_successes_are_not_rolled_back_after_failure()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    setup_repo_with_initial_commit(&backend);
+    setup_repo_with_initial_commit(&frontend);
+    create_branch(&backend, "feature/auth");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains(
+            "Switched to a new branch 'feature/auth'"
+        ))
+        .stderr(predicate::str::contains(
+            "fatal: a branch named 'feature/auth' already exists (backend)"
+        ));
+
+    assert_eq!(current_branch(&backend), "master");
+    assert_eq!(current_branch(&frontend), "feature/auth");
+}
+
+#[test]
+fn switch_create_reports_multiple_failures_in_repository_name_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let alpha = tmp.path().join("alpha");
+    let zeta = tmp.path().join("zeta");
+    setup_repo_with_initial_commit(&alpha);
+    setup_repo_with_initial_commit(&zeta);
+    create_branch(&alpha, "feature/auth");
+    create_branch(&zeta, "feature/auth");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "--create", "feature/auth"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::starts_with(
+            "fatal: fatal: a branch named 'feature/auth' already exists (alpha)\n\
+             fatal: fatal: a branch named 'feature/auth' already exists (zeta)\n"
+        ));
+
+    assert_eq!(current_branch(&alpha), "master");
+    assert_eq!(current_branch(&zeta), "master");
+}
