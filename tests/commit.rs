@@ -252,8 +252,8 @@ fn commit_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: alpha rejected (alpha)\n\
-             fatal: zeta rejected (zeta)\n"
+            "alpha rejected (alpha)\n\
+             zeta rejected (zeta)\n"
         ));
 }
 

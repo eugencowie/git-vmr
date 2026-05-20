@@ -153,8 +153,8 @@ When `-d` or `-D` is provided with a branch name, the `git vmr branch` command S
 - **WHEN** branch deletion fails in `backend` with Git error `error: the branch 'feature/auth' is not fully merged`
 - **AND** branch deletion fails in `tools` with Git error `error: branch 'feature/auth' not found`
 - **AND** user runs `git vmr branch -d feature/auth`
-- **THEN** stderr SHALL contain `fatal: error: the branch 'feature/auth' is not fully merged (backend)`
-- **AND** stderr SHALL contain `fatal: error: branch 'feature/auth' not found (tools)`
+- **THEN** stderr SHALL contain `error: the branch 'feature/auth' is not fully merged (backend)`
+- **AND** stderr SHALL contain `error: branch 'feature/auth' not found (tools)`
 - **AND** each reported failure line SHALL use the first line of the underlying Git error followed by the repository name in parentheses
 
 #### Scenario: Failed branch deletion reports are deterministic

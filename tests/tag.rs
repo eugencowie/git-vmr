@@ -528,6 +528,6 @@ fn tag_delete_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: error: tag 'v1.0.0' not found. (alpha, zeta)\n"
+            "error: tag 'v1.0.0' not found. (alpha, zeta)\n"
         ));
 }

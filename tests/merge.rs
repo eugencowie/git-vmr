@@ -261,9 +261,12 @@ fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .args(["merge", "feature/auth"])
         .assert()
         .failure()
-        .stdout(predicate::str::contains("Updating").and(predicate::str::contains("(beta)")))
+        .stdout(
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(beta)"))
+        )
         .stderr(predicate::str::starts_with(
-            "fatal: merge: feature/auth - not something we can merge (alpha, zeta)\n"
+            "merge: feature/auth - not something we can merge (alpha, zeta)\n"
         ));
 }
 

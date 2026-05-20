@@ -1,6 +1,6 @@
 use crate::git::{
-    GitCommandResult, command_result, first_non_empty_line_strip_fatal,
-    git_output, git_stdout
+    GitCommandResult, command_result, first_non_empty_line, git_output,
+    git_stdout
 };
 use crate::vmr::Repo;
 use anyhow::{Context, Result};
@@ -18,9 +18,7 @@ pub fn tag(
         repo_name,
         &output,
         |_| None,
-        |output| {
-            first_non_empty_line_strip_fatal(&output.stderr, "git tag failed")
-        }
+        |output| first_non_empty_line(&output.stderr, "git tag failed")
     )
 }
 
@@ -35,13 +33,8 @@ pub fn delete_tag(
     command_result(
         repo_name,
         &output,
-        |output| {
-            first_non_empty_line_strip_fatal(&output.stdout, "git tag failed")
-                .into()
-        },
-        |output| {
-            first_non_empty_line_strip_fatal(&output.stderr, "git tag failed")
-        }
+        |output| first_non_empty_line(&output.stdout, "git tag failed").into(),
+        |output| first_non_empty_line(&output.stderr, "git tag failed")
     )
 }
 

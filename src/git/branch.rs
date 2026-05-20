@@ -1,6 +1,6 @@
 use crate::git::{
     GitCommandResult, GitOutput, Head, RepoBranches, command_result,
-    first_non_empty_line_strip_fatal, git_output, git_stdout
+    first_non_empty_line, git_output, git_stdout
 };
 use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
@@ -18,12 +18,7 @@ pub fn branch(
         repo_name,
         &output,
         |_| None,
-        |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stderr,
-                "git branch failed"
-            )
-        }
+        |output| first_non_empty_line(&output.stderr, "git branch failed")
     )
 }
 
@@ -41,18 +36,9 @@ pub fn delete_branch(
         repo_name,
         &output,
         |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stdout,
-                "git branch failed"
-            )
-            .into()
+            first_non_empty_line(&output.stdout, "git branch failed").into()
         },
-        |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stderr,
-                "git branch failed"
-            )
-        }
+        |output| first_non_empty_line(&output.stderr, "git branch failed")
     )
 }
 

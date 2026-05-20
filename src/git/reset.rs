@@ -1,6 +1,6 @@
 use crate::git::{
     GitCommandResult, command_result, first_non_empty_line_with_fallback,
-    first_non_empty_line_with_fallback_strip_fatal, git_output
+    git_output
 };
 use std::ffi::OsString;
 use std::path::Path;
@@ -64,7 +64,7 @@ pub fn reset(
             if message.is_empty() { None } else { Some(message) }
         },
         |output| {
-            first_non_empty_line_with_fallback_strip_fatal(
+            first_non_empty_line_with_fallback(
                 &output.stderr,
                 &output.stdout,
                 "git reset failed"

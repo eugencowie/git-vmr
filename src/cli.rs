@@ -231,6 +231,22 @@ mod aggregate_output_tests
             "remote rejected (6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)"
         ]);
     }
+
+    #[test]
+    fn grouped_failure_rendering_preserves_error_prefix()
+    {
+        let messages = grouped_messages(
+            vec![repo_message(
+                "backend",
+                "error: branch 'feature/auth' not found"
+            )],
+            SuccessRepositoryFormat::NamesWithCount
+        );
+
+        assert_eq!(messages, vec![
+            "error: branch 'feature/auth' not found (backend)"
+        ]);
+    }
 }
 
 #[derive(Subcommand)]

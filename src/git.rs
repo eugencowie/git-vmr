@@ -226,18 +226,6 @@ pub(crate) fn first_non_empty_line(bytes: &[u8], fallback: &str) -> String
         .to_owned()
 }
 
-pub(crate) fn first_non_empty_line_strip_fatal(
-    bytes: &[u8],
-    fallback: &str
-) -> String
-{
-    let text = String::from_utf8_lossy(bytes);
-    let line =
-        text.lines().find(|line| !line.trim().is_empty()).unwrap_or(fallback);
-
-    line.strip_prefix("fatal: ").unwrap_or(line).to_owned()
-}
-
 pub(crate) fn first_non_empty_line_with_fallback(
     primary: &[u8],
     secondary: &[u8],
@@ -249,24 +237,6 @@ pub(crate) fn first_non_empty_line_with_fallback(
     if primary_line.is_empty()
     {
         first_non_empty_line(secondary, fallback)
-    }
-    else
-    {
-        primary_line
-    }
-}
-
-pub(crate) fn first_non_empty_line_with_fallback_strip_fatal(
-    primary: &[u8],
-    secondary: &[u8],
-    fallback: &str
-) -> String
-{
-    let primary_line = first_non_empty_line_strip_fatal(primary, "");
-
-    if primary_line.is_empty()
-    {
-        first_non_empty_line_strip_fatal(secondary, fallback)
     }
     else
     {

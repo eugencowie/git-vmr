@@ -1,6 +1,6 @@
 use crate::git::{
-    GitCommandResult, command_result,
-    first_non_empty_line_with_fallback_strip_fatal, git_output
+    GitCommandResult, command_result, first_non_empty_line_with_fallback,
+    git_output
 };
 use std::path::Path;
 
@@ -17,7 +17,7 @@ pub fn rebase(
         &output,
         |_| None,
         |output| {
-            first_non_empty_line_with_fallback_strip_fatal(
+            first_non_empty_line_with_fallback(
                 &output.stderr,
                 &output.stdout,
                 "git rebase failed"
