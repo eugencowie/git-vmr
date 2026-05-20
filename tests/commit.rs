@@ -275,7 +275,9 @@ fn commit_reports_nothing_to_commit_when_no_child_repo_has_staged_changes()
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("nothing to commit"));
+        .stderr(predicate::str::contains("error: nothing to commit").and(
+            predicate::str::contains("fatal: error: nothing to commit").not()
+        ));
 }
 
 #[test]

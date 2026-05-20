@@ -17,14 +17,18 @@ pub fn status(repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
         "--no-ahead-behind"
     ])
     .with_context(|| {
-        format!("failed to read git status for '{}'", repo.path.display())
+        format!(
+            "fatal: failed to read git status for '{}'",
+            repo.path.display()
+        )
     })?;
     let mut records = status_output
         .split(|byte| *byte == 0)
         .filter(|record| !record.is_empty());
 
-    let branch_header =
-        records.next().context("git status did not return a branch header")?;
+    let branch_header = records
+        .next()
+        .context("fatal: git status did not return a branch header")?;
     let (head, initial) =
         status_head(&repo.path, "failed to read git status", branch_header)?;
 

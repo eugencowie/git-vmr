@@ -35,8 +35,8 @@ impl Vmr
 
         // Report missing VMR root
         bail!(
-            "not a virtual monorepo (or any of the parent directories): .gitvmr"
-        );
+            "fatal: not a virtual monorepo (or any of the parent directories): .gitvmr"
+        )
     }
 
     pub fn repos(&self) -> Result<Vec<Repo>>
@@ -46,7 +46,10 @@ impl Vmr
         // Scan immediate child directories
         for repo_path in fs::read_dir(&self.path)
             .with_context(|| {
-                format!("failed to read VMR root '{}'", self.path.display())
+                format!(
+                    "fatal: failed to read VMR root '{}'",
+                    self.path.display()
+                )
             })?
             .filter_map(|entry| entry.ok())
             .filter(|entry| {
@@ -82,7 +85,7 @@ impl Vmr
         {
             let normalized = resolve_path(working_dir, path).clean();
             let routed = self.route_path(&normalized).with_context(|| {
-                format!("failed to route '{}'", path.display())
+                format!("error: failed to route '{}'", path.display())
             })?;
 
             for (repo_path, repo_relative_path) in routed
@@ -105,15 +108,20 @@ impl Vmr
 
         if normalized == self.path
         {
-            bail!("'{}' resolves to the VMR root aggregate", path.display());
+            bail!(
+                "error: '{}' resolves to the VMR root aggregate",
+                path.display()
+            );
         }
 
         // Reuse normal child repository ownership checks
         self.route_path(&normalized)
-            .with_context(|| format!("failed to route '{}'", path.display()))?
+            .with_context(|| {
+                format!("error: failed to route '{}'", path.display())
+            })?
             .into_iter()
             .next()
-            .context("path did not route to a child repository")
+            .context("error: path did not route to a child repository")
     }
 
     fn route_path(&self, path: &Path) -> Result<Vec<(Repo, PathBuf)>>
@@ -136,7 +144,7 @@ impl Vmr
         // Ensure path stays inside the VMR root
         let relative = path.strip_prefix(&self.path).with_context(|| {
             format!(
-                "'{}' is outside virtual monorepo '{}'",
+                "error: '{}' is outside virtual monorepo '{}'",
                 path.display(),
                 self.path.display()
             )
@@ -148,14 +156,19 @@ impl Vmr
         {
             Some(Component::Normal(name)) => name,
             _ =>
-                bail!("'{}' is not owned by a child repository", path.display()),
+            {
+                bail!(
+                    "error: '{}' is not owned by a child repository",
+                    path.display()
+                );
+            }
         };
 
         // Reject VMR metadata paths
         if repo_name == ".gitvmr"
         {
             bail!(
-                "cannot route virtual monorepo metadata path '{}'",
+                "error: cannot route virtual monorepo metadata path '{}'",
                 path.display()
             );
         }
@@ -164,7 +177,7 @@ impl Vmr
         let repo_path = self.path.join(repo_name);
         let repo = Repo::find(repo_path).with_context(|| {
             format!(
-                "'{}' is not owned by a child Git repository",
+                "error: '{}' is not owned by a child Git repository",
                 path.display()
             )
         })?;

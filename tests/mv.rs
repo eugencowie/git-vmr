@@ -334,14 +334,22 @@ fn mv_rejects_cross_repo_destination_conflicts_and_missing_parents_before_moving
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("already exists"));
+        .stderr(
+            predicate::str::contains("error: destination")
+                .and(predicate::str::contains("already exists"))
+                .and(
+                    predicate::str::contains("fatal: error: destination").not()
+                )
+        );
     git_vmr()
         .current_dir(tmp.path())
         .args(["mv", "backend/src/lib.rs", "frontend/missing/lib.rs"])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("destination parent"));
+        .stderr(predicate::str::contains("error: destination parent").and(
+            predicate::str::contains("fatal: error: destination parent").not()
+        ));
 
     assert!(backend.join("src/main.rs").exists());
     assert!(backend.join("src/lib.rs").exists());

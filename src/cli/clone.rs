@@ -28,7 +28,7 @@ pub fn clone(
             .map(|directory| format!(" into '{}'", directory.display()))
             .unwrap_or_default();
         format!(
-            "failed to invoke git clone '{}'{} from '{}'",
+            "fatal: failed to invoke git clone '{}'{} from '{}'",
             repository,
             destination,
             working_dir.display()
@@ -37,7 +37,7 @@ pub fn clone(
 
     if !status.success()
     {
-        bail!("git clone '{}' failed with {status}", repository);
+        bail!("fatal: git clone '{}' failed with {status}", repository);
     }
 
     Ok(())

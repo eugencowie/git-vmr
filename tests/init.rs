@@ -169,6 +169,10 @@ fn init_errors_when_working_dir_argument_does_not_exist()
         .stderr(
             predicate::str::contains("fatal: cannot change to")
                 .and(predicate::str::contains(missing.display().to_string()))
+                .and(
+                    predicate::str::contains("fatal: fatal: cannot change to")
+                        .not()
+                )
         );
 
     assert!(!tmp.path().join(".gitvmr").exists());

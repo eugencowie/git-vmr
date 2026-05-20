@@ -46,7 +46,10 @@ pub fn tags(repo: &Repo) -> Result<Option<(String, Vec<String>)>>
         "refs/tags"
     ])
     .with_context(|| {
-        format!("failed to read tag information for '{}'", repo.path.display())
+        format!(
+            "fatal: failed to read tag information for '{}'",
+            repo.path.display()
+        )
     })?;
     let tags = String::from_utf8_lossy(&tags_output)
         .lines()

@@ -153,7 +153,7 @@ where
         .args(&args)
         .output()
         .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
+            format!("fatal: failed to invoke git for '{}'", repo_path.display())
         })?;
 
     Ok(GitOutput {
@@ -254,7 +254,7 @@ pub(crate) fn status_head(
     let header = String::from_utf8_lossy(header);
     let header = header
         .strip_prefix("## ")
-        .context("git status branch header had unexpected format")?;
+        .context("fatal: git status branch header had unexpected format")?;
 
     if let Some(branch) = header.strip_prefix("No commits yet on ")
     {
@@ -266,7 +266,7 @@ pub(crate) fn status_head(
         let hash = String::from_utf8_lossy(
             &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
                 .with_context(|| {
-                    format!("{context} for '{}'", repo_path.display())
+                    format!("fatal: {context} for '{}'", repo_path.display())
                 })?
         )
         .trim()

@@ -51,7 +51,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
     ])
     .with_context(|| {
         format!(
-            "failed to read branch information for '{}'",
+            "fatal: failed to read branch information for '{}'",
             repo.path.display()
         )
     })?;
@@ -68,7 +68,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
     ])
     .with_context(|| {
         format!(
-            "failed to read branch information for '{}'",
+            "fatal: failed to read branch information for '{}'",
             repo.path.display()
         )
     })?
@@ -81,7 +81,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
                 &git_stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
                     .with_context(|| {
                         format!(
-                            "failed to read branch information for '{}'",
+                            "fatal: failed to read branch information for '{}'",
                             repo.path.display()
                         )
                     })?
@@ -91,7 +91,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
             Head::Detached(hash)
         }
         GitOutput { stderr, .. } => bail!(
-            "failed to read branch information for '{}': {}",
+            "fatal: failed to read branch information for '{}': {}",
             repo.path.display(),
             String::from_utf8_lossy(&stderr).trim()
         )

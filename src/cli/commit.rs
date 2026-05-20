@@ -26,7 +26,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     // Check if there are no dirty repositories
     if dirty_repos.is_empty()
     {
-        bail!("nothing to commit, working tree clean");
+        bail!("error: nothing to commit, working tree clean");
     }
 
     // Commit in each dirty repository
