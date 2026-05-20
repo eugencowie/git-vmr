@@ -335,8 +335,7 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: a branch named 'feature/auth' already exists (alpha)\n\
-             fatal: a branch named 'feature/auth' already exists (zeta)\n"
+            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
         ));
 }
 
@@ -362,8 +361,7 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth (was")
-                .and(predicate::str::contains(" (backend)"))
-                .and(predicate::str::contains(" (frontend)"))
+                .and(predicate::str::contains("(backend, frontend)"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -458,8 +456,8 @@ fn branch_delete_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth (was")
-                .and(predicate::str::contains(" (frontend)"))
-                .and(predicate::str::contains(" (tools)"))
+                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
             "fatal: error: the branch 'feature/auth' is not fully merged (backend)"
@@ -519,7 +517,6 @@ fn branch_delete_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: error: branch 'feature/auth' not found (alpha)\n\
-             fatal: error: branch 'feature/auth' not found (zeta)\n"
+            "fatal: error: branch 'feature/auth' not found (alpha, zeta)\n"
         ));
 }

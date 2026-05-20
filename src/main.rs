@@ -18,7 +18,7 @@ fn main() -> ExitCode
         {
             for error in aggregate.errors()
             {
-                eprintln!("fatal: {error:#}");
+                eprintln!("{}", fatal_message(error));
             }
         }
         else
@@ -30,4 +30,40 @@ fn main() -> ExitCode
     }
 
     ExitCode::SUCCESS
+}
+
+fn fatal_message(message: &str) -> String
+{
+    if message.starts_with("fatal:")
+    {
+        message.to_owned()
+    }
+    else
+    {
+        format!("fatal: {message}")
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn fatal_message_does_not_duplicate_existing_prefix()
+    {
+        assert_eq!(
+            fatal_message("fatal: invalid reference: feature/auth"),
+            "fatal: invalid reference: feature/auth"
+        );
+    }
+
+    #[test]
+    fn fatal_message_adds_missing_prefix()
+    {
+        assert_eq!(
+            fatal_message("invalid reference"),
+            "fatal: invalid reference"
+        );
+    }
 }

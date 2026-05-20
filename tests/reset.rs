@@ -101,10 +101,9 @@ fn reset_applies_across_multiple_child_repositories_and_skips_non_git_children()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Unstaged changes after reset: (backend)")
-                .and(predicate::str::contains(
-                    "Unstaged changes after reset: (frontend)"
-                ))
+            predicate::str::contains("Unstaged changes after reset:")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -175,8 +174,8 @@ fn reset_without_commit_lets_git_use_default_target()
         .success()
         .stdout(
             predicate::str::contains("HEAD is now at")
-                .and(predicate::str::contains("(backend)"))
-                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -207,10 +206,9 @@ fn reset_missing_ref_fails_only_affected_repository_and_attempts_others()
         .assert()
         .failure()
         .stdout(
-            predicate::str::contains("Unstaged changes after reset: (backend)")
-                .and(predicate::str::contains(
-                    "Unstaged changes after reset: (tools)"
-                ))
+            predicate::str::contains("Unstaged changes after reset:")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains("(frontend)"));
 
@@ -282,17 +280,9 @@ fn reset_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .assert()
         .failure()
         .stdout(predicate::str::contains("HEAD is now at").and(predicate::str::contains("(beta)")))
-        .stderr(
-            predicate::str::contains(
-                "ambiguous argument 'release-base': unknown revision or path not in the working tree. (alpha)\n"
-            )
-                .and(predicate::str::contains(
-                    "ambiguous argument 'release-base': unknown revision or path not in the working tree. (zeta)\n"
-                ))
-                .and(predicate::str::starts_with(
-                    "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. (alpha)"
-                ))
-        );
+        .stderr(predicate::str::starts_with(
+            "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. (alpha, zeta)\n"
+        ));
 }
 
 #[test]
@@ -313,10 +303,9 @@ fn reset_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Unstaged changes after reset: (backend)")
-                .and(predicate::str::contains(
-                    "Unstaged changes after reset: (frontend)"
-                ))
+            predicate::str::contains("Unstaged changes after reset:")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
     assert_eq!(head(&backend), backend_target);
@@ -334,10 +323,9 @@ fn reset_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Unstaged changes after reset: (backend)")
-                .and(predicate::str::contains(
-                    "Unstaged changes after reset: (frontend)"
-                ))
+            predicate::str::contains("Unstaged changes after reset:")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
     assert_eq!(head(&backend), backend_target);

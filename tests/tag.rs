@@ -352,8 +352,7 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: tag 'v1.0.0' already exists (alpha)\n\
-             fatal: tag 'v1.0.0' already exists (zeta)\n"
+            "fatal: tag 'v1.0.0' already exists (alpha, zeta)\n"
         ));
 }
 
@@ -379,8 +378,8 @@ fn tag_delete_deletes_tag_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend)"))
-                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -410,8 +409,8 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend)"))
-                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -471,8 +470,8 @@ fn tag_delete_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(
             predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(frontend)"))
-                .and(predicate::str::contains("(tools)"))
+                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
             "error: tag 'v1.0.0' not found. (backend)"
@@ -503,11 +502,8 @@ fn tag_delete_reports_failures_with_repository_suffixes()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: tag 'v1.0.0' not found. (backend)"
+                "error: tag 'v1.0.0' not found. (backend, tools)"
             )
-            .and(predicate::str::contains(
-                "error: tag 'v1.0.0' not found. (tools)"
-            ))
             .and(predicate::str::contains("fatal: git tag failed").not())
         );
 }
@@ -532,7 +528,6 @@ fn tag_delete_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: error: tag 'v1.0.0' not found. (alpha)\n\
-             fatal: error: tag 'v1.0.0' not found. (zeta)\n"
+            "fatal: error: tag 'v1.0.0' not found. (alpha, zeta)\n"
         ));
 }

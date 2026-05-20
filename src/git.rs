@@ -16,7 +16,7 @@ mod switch;
 mod tag;
 
 pub use add::{add, add_path};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 pub use branch::{branch, branches, delete_branch};
 pub use commit::commit;
 pub use diff::is_dirty;
@@ -85,7 +85,37 @@ pub struct GitOutput
     pub stderr: Vec<u8>
 }
 
-pub type GitCommandResult = Result<Option<String>>;
+pub struct RepoMessage
+{
+    pub repo: String,
+    pub message: String
+}
+
+pub enum RepoOutcome
+{
+    Success(Option<RepoMessage>),
+    Failure(RepoMessage)
+}
+
+pub type GitCommandResult = Result<RepoOutcome>;
+
+pub(crate) fn quiet_success() -> RepoOutcome
+{
+    RepoOutcome::Success(None)
+}
+
+pub(crate) fn success_message(repo_name: &str, message: String) -> RepoOutcome
+{
+    RepoOutcome::Success(Some(RepoMessage {
+        repo: repo_name.to_owned(),
+        message
+    }))
+}
+
+pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
+{
+    RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
+}
 
 pub(crate) fn command_result(
     repo_name: &str,
@@ -96,12 +126,15 @@ pub(crate) fn command_result(
 {
     if output.status.success()
     {
-        Ok(success_message(output)
-            .map(|message| format!("{message} ({repo_name})")))
+        Ok(match success_message(output)
+        {
+            Some(message) => crate::git::success_message(repo_name, message),
+            None => quiet_success()
+        })
     }
     else
     {
-        Err(anyhow!("{} ({})", failure_message(output), repo_name))
+        Ok(crate::git::failure_message(repo_name, failure_message(output)))
     }
 }
 
