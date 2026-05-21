@@ -1,12 +1,19 @@
 use crate::config::Config;
 use anyhow::{Context, Result, bail};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
 {
     // Resolve init target directory
-    let target_dir = resolve_target_dir(working_dir, directory);
+    let target_dir = match directory
+    {
+        // Resolve provided directory against the effective working directory
+        Some(directory) => working_dir.join(directory),
+
+        // If none provided, use the effective working directory
+        None => working_dir.to_path_buf()
+    };
 
     // Ensure the target path is a directory
     if target_dir.exists() && !target_dir.is_dir()
@@ -53,18 +60,6 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
     Ok(())
 }
 
-fn resolve_target_dir(working_dir: &Path, directory: Option<&Path>) -> PathBuf
-{
-    match directory
-    {
-        // Resolve provided directory against the effective working directory
-        Some(directory) => working_dir.join(directory),
-
-        // If none provided, use the effective working directory
-        None => working_dir.to_path_buf()
-    }
-}
-
 #[cfg(test)]
 mod tests
 {
@@ -86,43 +81,17 @@ mod tests
     }
 
     #[test]
-    fn resolves_missing_directory_argument_to_working_dir()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let target = resolve_target_dir(tmp.path(), None);
-
-        // Assert
-        assert_eq!(target, tmp.path());
-    }
-
-    #[test]
-    fn resolves_relative_directory_argument_against_working_dir()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let target = resolve_target_dir(tmp.path(), Some(Path::new("project")));
-
-        // Assert
-        assert_eq!(target, tmp.path().join("project"));
-    }
-
-    #[test]
-    fn preserves_absolute_directory_argument()
+    fn creates_config_in_absolute_target_directory()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let target = tmp.path().join("project");
 
         // Act
-        let resolved = resolve_target_dir(Path::new("/ignored"), Some(&target));
+        init(Path::new("/ignored"), Some(&target)).unwrap();
 
         // Assert
-        assert_eq!(resolved, target);
+        assert!(target.join(".gitvmr/config").is_file());
     }
 
     #[test]

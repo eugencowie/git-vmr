@@ -1,4 +1,3 @@
-use crate::cli::print_results;
 use crate::git::{self};
 use crate::vmr::Vmr;
 use anyhow::Result;
@@ -21,7 +20,7 @@ pub fn create(working_dir: &Path, tag_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    print_results(results)
+    git::print_results(results)
 }
 
 pub fn delete(working_dir: &Path, tag_name: &str) -> Result<()>
@@ -39,7 +38,7 @@ pub fn delete(working_dir: &Path, tag_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    print_results(results)
+    git::print_results(results)
 }
 
 pub fn tag(working_dir: &Path) -> Result<()>

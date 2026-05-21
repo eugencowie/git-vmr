@@ -1,4 +1,3 @@
-use crate::cli::print_results;
 use crate::git::{self, Head, RepoBranches};
 use crate::vmr::Vmr;
 use anstyle::{AnsiColor, Style};
@@ -54,7 +53,7 @@ pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    print_results(results)
+    git::print_results(results)
 }
 
 pub fn delete(working_dir: &Path, branch_name: &str) -> Result<()>
@@ -88,7 +87,7 @@ fn delete_branch(
         .collect::<Vec<_>>();
 
     // Print results
-    print_results(results)
+    git::print_results(results)
 }
 
 pub fn branches(working_dir: &Path) -> Result<()>

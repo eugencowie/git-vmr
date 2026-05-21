@@ -1,10 +1,14 @@
+use crate::git;
 use crate::vmr::Vmr;
-use crate::{cli, git};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
-pub fn rebase(working_dir: &Path, upstream: &str) -> Result<()>
+pub fn push(
+    working_dir: &Path,
+    repository: Option<&str>,
+    refspecs: &[String]
+) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -12,12 +16,12 @@ pub fn rebase(working_dir: &Path, upstream: &str) -> Result<()>
     // Get list of repositories
     let repos = vmr.repos()?;
 
-    // Rebase in each repository
+    // Push in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::rebase(&repo.name, &repo.path, upstream))
+        .map(|repo| git::push(&repo.name, &repo.path, repository, refspecs))
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }

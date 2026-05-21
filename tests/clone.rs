@@ -132,22 +132,16 @@ fn clone_failed_git_process_exits_non_zero()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let workspace = tmp.path().join("workspace");
-    let missing = tmp.path().join("missing");
     fs::create_dir(&workspace).expect("failed to create workspace");
 
     git_vmr()
         .current_dir(&workspace)
         .arg("clone")
-        .arg(&missing)
-        .arg("copy")
+        .arg("foo")
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(
-            predicate::str::contains("fatal:")
-                .and(predicate::str::contains("git clone"))
-                .and(predicate::str::contains(missing.display().to_string()))
-        );
+        .stderr("fatal: repository 'foo' does not exist\n");
 
-    assert!(!workspace.join("copy").exists());
+    assert!(!workspace.join("foo").exists());
 }

@@ -1,4 +1,3 @@
-use crate::cli::print_results;
 use crate::git;
 use crate::vmr::Vmr;
 use anyhow::{Result, bail};
@@ -30,7 +29,7 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
         })
         .collect::<Vec<_>>();
 
-    print_results(results)
+    git::print_results(results)
 }
 
 fn targets_vmr_root(

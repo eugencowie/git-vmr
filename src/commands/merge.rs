@@ -1,5 +1,5 @@
+use crate::git;
 use crate::vmr::Vmr;
-use crate::{cli, git};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
@@ -19,5 +19,5 @@ pub fn merge(working_dir: &Path, commit_ish: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }

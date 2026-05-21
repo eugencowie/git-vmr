@@ -1,5 +1,5 @@
+use crate::git;
 use crate::vmr::Vmr;
-use crate::{cli, git};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
@@ -19,7 +19,7 @@ pub fn switch(working_dir: &Path, branch_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }
 
 pub fn create(working_dir: &Path, branch_name: &str) -> Result<()>
@@ -37,5 +37,5 @@ pub fn create(working_dir: &Path, branch_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }

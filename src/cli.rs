@@ -1,260 +1,9 @@
-mod add;
-mod branch;
-mod clone;
-mod commit;
-mod fetch;
-mod init;
-mod merge;
-mod mv;
-mod pull;
-mod push;
-mod rebase;
-mod reset;
-mod restore;
-mod rm;
-mod status;
-mod switch;
-mod tag;
-
-use crate::git::{GitCommandResult, RepoMessage, RepoOutcome, ResetMode};
+use crate::commands::Command;
 use anyhow::{Context, Result, bail};
-use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap::{ArgAction, CommandFactory, FromArgMatches, Parser};
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
-
-#[derive(Subcommand)]
-enum Command
-{
-    /// Clone a repository into a new directory
-    Clone
-    {
-        /// The (possibly remote) <repository> to clone from
-        #[arg(value_name = "repository")]
-        repository: String,
-
-        /// The name of a new directory to clone into
-        #[arg(value_name = "directory")]
-        directory: Option<PathBuf>
-    },
-
-    /// Create an empty virtual monorepo or reinitialize an existing one
-    Init
-    {
-        /// If you provide a directory, the command is run inside it. If this
-        /// directory does not exist, it will be created
-        #[arg(value_name = "directory")]
-        directory: Option<PathBuf>
-    },
-
-    /// Add file contents to the index
-    Add
-    {
-        /// Files to add content from
-        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
-        paths: Vec<PathBuf>
-    },
-
-    /// Move or rename a file, a directory, or a symlink
-    Mv
-    {
-        /// File to move
-        #[arg(value_name = "source")]
-        source: PathBuf,
-
-        /// Destination path
-        #[arg(value_name = "destination")]
-        destination: PathBuf
-    },
-
-    /// Restore working tree files
-    Restore
-    {
-        /// Restore the working tree
-        #[arg(long)]
-        worktree: bool,
-
-        /// Restore the index
-        #[arg(long)]
-        staged: bool,
-
-        /// Files to restore
-        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
-        paths: Vec<PathBuf>
-    },
-
-    /// Remove files from the working tree and from the index
-    Rm
-    {
-        /// Allow recursive removal when a leading directory name is given
-        #[arg(short)]
-        recursive: bool,
-
-        /// Files to remove
-        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
-        paths: Vec<PathBuf>
-    },
-
-    /// Show the working tree status
-    Status,
-
-    /// List, create, or delete branches
-    Branch
-    {
-        /// Delete a branch. The branch must be fully merged in its upstream
-        /// branch
-        #[arg(
-            short,
-            long,
-            conflicts_with = "force_delete",
-            requires = "branch_name"
-        )]
-        delete: bool,
-
-        /// Shortcut for `--delete --force`
-        #[arg(
-            short = 'D',
-            conflicts_with = "delete",
-            requires = "branch_name"
-        )]
-        force_delete: bool,
-
-        /// In combination with `-d` (or `--delete`), allow deleting the branch
-        /// irrespective of its merged status, or whether it even points to a
-        /// valid commit
-        #[arg(
-            short,
-            long,
-            conflicts_with = "force_delete",
-            requires_all = ["branch_name", "delete"]
-        )]
-        force: bool,
-
-        /// Creates a new branch head named [branch-name] which points to the
-        /// current HEAD
-        #[arg(value_name = "branch-name")]
-        branch_name: Option<String>
-    },
-
-    /// Record changes to the repositories
-    Commit
-    {
-        /// Use <msg> as the commit message
-        #[arg(short, long, required = true, value_name = "msg")]
-        message: String
-    },
-
-    /// Join two or more development histories together
-    Merge
-    {
-        /// Commits, usually other branch heads, to merge into our branch
-        #[arg(required = true, value_name = "commit")]
-        commit_ish: String
-    },
-
-    /// Reapply commits on top of another base tip
-    Rebase
-    {
-        /// Upstream branch to compare against
-        #[arg(required = true, value_name = "upstream")]
-        upstream: String
-    },
-
-    /// Set `HEAD` or the index to a known state
-    Reset
-    {
-        /// Leave your working directory unchanged
-        #[arg(long, conflicts_with_all = ["soft", "hard", "merge", "keep"])]
-        mixed: bool,
-
-        /// Leave your working tree files and the index unchanged
-        #[arg(long, conflicts_with_all = ["mixed", "hard", "merge", "keep"])]
-        soft: bool,
-
-        /// Overwrite all files and directories with the version from [commit],
-        /// and may overwrite untracked files
-        #[arg(long, conflicts_with_all = ["soft", "mixed", "merge", "keep"])]
-        hard: bool,
-
-        /// Reset the index and update the files in the working tree that are
-        /// different between <commit> and HEAD, but keep those which are
-        /// different between the index and working tree (i.e. which have
-        /// changes which have not been added)
-        #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "keep"])]
-        merge: bool,
-
-        /// Resets index entries and updates files in the working tree that are
-        /// different between <commit> and HEAD
-        #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "merge"])]
-        keep: bool,
-
-        /// Set the current branch head (HEAD) to point at <commit>
-        #[arg(value_name = "commit")]
-        commit: Option<String>
-    },
-
-    /// Switch branches
-    Switch
-    {
-        /// Create a new branch named [branch] before switching to the branch
-        #[arg(short = 'c', long)]
-        create: bool,
-
-        /// Branch to switch to
-        #[arg(required = true, value_name = "branch")]
-        branch_name: String
-    },
-
-    /// Create, list, delete or verify tags
-    Tag
-    {
-        /// Delete existing tags with the given names
-        #[arg(short, long, requires = "tag_name")]
-        delete: bool,
-
-        /// The name of the tag to create, delete, or describe
-        #[arg(value_name = "tagname")]
-        tag_name: Option<String>
-    },
-
-    /// Download objects and refs from another repository
-    Fetch
-    {
-        /// The "remote" repository that is the source of a fetch or pull
-        /// operation
-        #[arg(value_name = "repository")]
-        repository: Option<String>,
-
-        /// Specifies which refs to fetch and which local refs to update
-        #[arg(value_name = "refspec")]
-        refspecs: Vec<String>
-    },
-
-    /// Fetch from and integrate with another repository or a local branch
-    Pull
-    {
-        /// The "remote" repository to pull from
-        #[arg(value_name = "repository")]
-        repository: Option<String>,
-
-        /// Which branch or other reference(s) to fetch and integrate into the
-        /// current branch
-        #[arg(value_name = "refspec")]
-        refspecs: Vec<String>
-    },
-
-    /// Update remote refs along with associated objects
-    Push
-    {
-        /// The "remote" repository that is the destination of a push operation
-        #[arg(value_name = "repository")]
-        repository: Option<String>,
-
-        /// Specify what destination ref to update with what source object
-        #[arg(value_name = "refspec")]
-        refspecs: Vec<String>
-    }
-}
 
 #[derive(Parser)]
 #[command(name = "git-vmr", version, disable_version_flag = true)]
@@ -316,101 +65,38 @@ impl Cli
         // Get working directory
         let working_dir = self.get_working_dir()?;
 
-        // Run command
-        match self.command
-        {
-            Command::Clone { repository, directory } =>
-                clone::clone(&working_dir, &repository, directory.as_deref()),
-            Command::Init { directory } =>
-                init::init(&working_dir, directory.as_deref()),
-            Command::Add { paths } => add::add(&working_dir, &paths),
-            Command::Mv { source, destination } =>
-                mv::mv(&working_dir, &source, &destination),
-            Command::Restore { paths, staged, worktree } =>
-                restore::restore(&working_dir, &paths, worktree, staged),
-            Command::Rm { paths, recursive } =>
-                rm::rm(&working_dir, &paths, recursive),
-            Command::Status => status::status(&self.bin_name, &working_dir),
-            Command::Branch { delete, force_delete, force, branch_name } =>
-                match (branch_name, delete, force_delete, force)
-                {
-                    (Some(branch_name), true, false, false) =>
-                        branch::delete(&working_dir, &branch_name),
-                    (Some(branch_name), false, true, false) =>
-                        branch::force_delete(&working_dir, &branch_name),
-                    (Some(branch_name), true, false, true) =>
-                        branch::force_delete(&working_dir, &branch_name),
-                    (Some(branch_name), false, false, false) =>
-                        branch::branch(&working_dir, &branch_name),
-                    (None, false, false, false) =>
-                        branch::branches(&working_dir),
-                    _ => unreachable!()
-                },
-            Command::Commit { message } =>
-                commit::commit(&working_dir, &message),
-            Command::Merge { commit_ish } =>
-                merge::merge(&working_dir, &commit_ish),
-            Command::Rebase { upstream } =>
-                rebase::rebase(&working_dir, &upstream),
-            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
-                reset::reset(
-                    &working_dir,
-                    reset_mode(soft, mixed, hard, merge, keep),
-                    commit.as_deref()
-                ),
-            Command::Switch { create, branch_name } => match create
-            {
-                true => switch::create(&working_dir, &branch_name),
-                false => switch::switch(&working_dir, &branch_name)
-            },
-            Command::Tag { delete, tag_name } => match (tag_name, delete)
-            {
-                (Some(tag_name), true) => tag::delete(&working_dir, &tag_name),
-                (Some(tag_name), false) => tag::create(&working_dir, &tag_name),
-                (None, false) => tag::tag(&working_dir),
-                _ => unreachable!()
-            },
-            Command::Fetch { repository, refspecs } =>
-                fetch::fetch(&working_dir, repository.as_deref(), &refspecs),
-            Command::Pull { repository, refspecs } =>
-                pull::pull(&working_dir, repository.as_deref(), &refspecs),
-            Command::Push { repository, refspecs } =>
-                push::push(&working_dir, repository.as_deref(), &refspecs),
-        }
+        // Run command in working directory
+        self.command.run(&self.bin_name, &working_dir)
     }
 
     fn get_working_dir(&self) -> Result<PathBuf>
     {
-        match &self.working_dir
+        // Parse working directory from argument
+        if let Some(working_dir) = &self.working_dir
         {
-            // Parse working directory from argument
-            Some(working_dir) =>
-            {
-                // Get absolute path
-                let absolute_path =
-                    working_dir.canonicalize().with_context(|| {
-                        format!(
-                            "fatal: cannot change to '{}'",
-                            working_dir.display()
-                        )
-                    })?;
-
-                // Ensure the path is a directory
-                if !absolute_path.is_dir()
-                {
-                    bail!(
-                        "fatal: cannot change to '{}': Not a directory",
+            // Get absolute path
+            let absolute_path =
+                working_dir.canonicalize().with_context(|| {
+                    format!(
+                        "fatal: cannot change to '{}'",
                         working_dir.display()
-                    );
-                }
+                    )
+                })?;
 
-                Ok(absolute_path)
+            // Ensure the path is a directory
+            if !absolute_path.is_dir()
+            {
+                bail!(
+                    "fatal: cannot change to '{}': Not a directory",
+                    working_dir.display()
+                );
             }
 
-            // If none provided, use current working directory
-            None => env::current_dir()
-                .context("fatal: failed to get current directory")
+            return Ok(absolute_path);
         }
+
+        // If none provided, use current working directory
+        env::current_dir().context("fatal: failed to get current directory")
     }
 }
 
@@ -423,156 +109,12 @@ fn display_bin_name(bin_name: &str) -> String
     }
 }
 
-fn reset_mode(
-    soft: bool,
-    mixed: bool,
-    hard: bool,
-    merge: bool,
-    keep: bool
-) -> Option<ResetMode>
-{
-    match (soft, mixed, hard, merge, keep)
-    {
-        (true, false, false, false, false) => Some(ResetMode::Soft),
-        (false, true, false, false, false) => Some(ResetMode::Mixed),
-        (false, false, true, false, false) => Some(ResetMode::Hard),
-        (false, false, false, true, false) => Some(ResetMode::Merge),
-        (false, false, false, false, true) => Some(ResetMode::Keep),
-        (false, false, false, false, false) => None,
-        _ => unreachable!()
-    }
-}
-
-fn print_results(results: Vec<GitCommandResult>) -> Result<()>
-{
-    let mut successes = Vec::new();
-    let mut failures = Vec::new();
-    let mut errors = Vec::new();
-
-    for result in results
-    {
-        match result
-        {
-            Ok(RepoOutcome::Success(Some(message))) => successes.push(message),
-            Ok(RepoOutcome::Success(None)) =>
-            {}
-            Ok(RepoOutcome::Failure(message)) => failures.push(message),
-            Err(error) => errors.push(error)
-        }
-    }
-
-    for message in
-        grouped_messages(successes, SuccessRepositoryFormat::NamesUntilLimit)
-    {
-        println!("{message}");
-    }
-
-    let mut rendered_errors =
-        grouped_messages(failures, SuccessRepositoryFormat::NamesWithCount);
-    rendered_errors.extend(errors.into_iter().map(|error| error.to_string()));
-
-    if !rendered_errors.is_empty()
-    {
-        bail!(rendered_errors.join("\n"));
-    }
-
-    Ok(())
-}
-
-const REPOSITORY_NAME_LIMIT: usize = 5;
-
-enum SuccessRepositoryFormat
-{
-    NamesUntilLimit,
-    NamesWithCount
-}
-
-fn grouped_messages(
-    messages: Vec<RepoMessage>,
-    format: SuccessRepositoryFormat
-) -> Vec<String>
-{
-    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
-
-    for repo_message in messages
-    {
-        if let Some((_, repos)) = groups
-            .iter_mut()
-            .find(|(message, _)| message == &repo_message.message)
-        {
-            repos.push(repo_message.repo);
-        }
-        else
-        {
-            groups.push((repo_message.message, vec![repo_message.repo]));
-        }
-    }
-
-    groups
-        .into_iter()
-        .map(|(message, repos)| {
-            format!("{message} {}", repository_suffix(&repos, &format))
-        })
-        .collect()
-}
-
-fn repository_suffix(
-    repos: &[String],
-    format: &SuccessRepositoryFormat
-) -> String
-{
-    if repos.len() == 1
-    {
-        return format!("({})", repos[0]);
-    }
-
-    match format
-    {
-        SuccessRepositoryFormat::NamesUntilLimit
-            if repos.len() > REPOSITORY_NAME_LIMIT =>
-        {
-            format!("({} repos)", repos.len())
-        }
-        SuccessRepositoryFormat::NamesUntilLimit =>
-            format!("({})", repos.join(", ")),
-        SuccessRepositoryFormat::NamesWithCount
-            if repos.len() > REPOSITORY_NAME_LIMIT =>
-        {
-            format!(
-                "({} repos: {}, ...)",
-                repos.len(),
-                repos[..REPOSITORY_NAME_LIMIT].join(", ")
-            )
-        }
-        SuccessRepositoryFormat::NamesWithCount =>
-            format!("({})", repos.join(", ")),
-    }
-}
-
 #[cfg(test)]
 mod tests
 {
     use super::*;
+    use clap::error::ErrorKind;
     use std::fs;
-    use std::path::Path;
-
-    #[test]
-    fn parses_working_dir_argument()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "init"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-    }
 
     #[test]
     fn captures_invoked_command_name()
@@ -605,1274 +147,141 @@ mod tests
     }
 
     #[test]
-    fn parses_init_directory_argument()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "init", "project"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Init { directory } =>
-            {
-                assert_eq!(directory.as_deref(), Some(Path::new("project")));
-            }
-            _ => panic!("expected init command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_init_directory_argument()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "init",
-            "project"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Init { directory } =>
-            {
-                assert_eq!(directory.as_deref(), Some(Path::new("project")));
-            }
-            _ => panic!("expected init command")
-        }
-    }
-
-    #[test]
-    fn parses_clone_repository_argument()
-    {
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "clone",
-            "https://example.com/repo.git"
-        ]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Clone { repository, directory } =>
-            {
-                assert_eq!(repository, "https://example.com/repo.git");
-                assert_eq!(directory, None);
-            }
-            _ => panic!("expected clone command")
-        }
-    }
-
-    #[test]
-    fn parses_clone_repository_and_directory_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "clone",
-            "https://example.com/repo.git",
-            "copy"
-        ]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Clone { repository, directory } =>
-            {
-                assert_eq!(repository, "https://example.com/repo.git");
-                assert_eq!(directory.as_deref(), Some(Path::new("copy")));
-            }
-            _ => panic!("expected clone command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_clone_arguments()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "clone",
-            "https://example.com/repo.git",
-            "copy"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Clone { repository, directory } =>
-            {
-                assert_eq!(repository, "https://example.com/repo.git");
-                assert_eq!(directory.as_deref(), Some(Path::new("copy")));
-            }
-            _ => panic!("expected clone command")
-        }
-    }
-
-    #[test]
-    fn init_uses_canonicalized_working_dir_argument()
+    fn resolves_working_dir_argument_to_canonical_directory()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let nested = tmp.path().join("nested");
         fs::create_dir(&nested).unwrap();
-        let non_canonical = nested.join("..").join("nested");
+        let cli = Cli {
+            bin_name: "git vmr".to_owned(),
+            working_dir: Some(nested.join("..").join("nested")),
+            version: (),
+            command: Command::Status
+        };
 
         // Act
-        Cli::parse_from([
-            "git-vmr",
-            "-C",
-            non_canonical.to_str().unwrap(),
-            "init"
-        ])
-        .run()
-        .unwrap();
+        let working_dir = cli.get_working_dir().unwrap();
 
         // Assert
-        assert!(nested.canonicalize().unwrap().join(".gitvmr/config").exists());
+        assert_eq!(working_dir, nested.canonicalize().unwrap());
     }
 
     #[test]
-    fn errors_on_nonexistent_working_dir_path()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let missing = tmp.path().join("missing");
-
-        // Act
-        let err = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            missing.to_str().unwrap(),
-            "init"
-        ])
-        .run()
-        .unwrap_err();
-
-        // Assert
-        let msg = format!("{err:#}");
-        assert!(msg.contains("cannot change to"), "unexpected error: {msg}");
-        assert!(!tmp.path().join(".gitvmr").exists());
-    }
-
-    #[test]
-    fn errors_on_file_as_working_dir_path()
+    fn rejects_working_dir_argument_that_is_not_a_directory()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("file");
         fs::write(&file, "").unwrap();
-
-        // Act
-        let err =
-            Cli::parse_from(["git-vmr", "-C", file.to_str().unwrap(), "init"])
-                .run()
-                .unwrap_err();
-
-        // Assert
-        let msg = format!("{err:#}");
-        assert!(msg.contains("Not a directory"), "unexpected error: {msg}");
-        assert!(!file.join(".gitvmr").exists());
-    }
-
-    #[test]
-    fn parses_branch_without_branch_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "branch"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Branch { delete, force_delete, force, branch_name } =>
-            {
-                assert!(!delete);
-                assert!(!force_delete);
-                assert!(!force);
-                assert_eq!(branch_name, None);
-            }
-            _ => panic!("expected branch command")
-        }
-    }
-
-    #[test]
-    fn parses_tag_without_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "tag"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Tag { delete, tag_name } =>
-            {
-                assert!(!delete);
-                assert_eq!(tag_name, None);
-            }
-            _ => panic!("expected tag command")
-        }
-    }
-
-    #[test]
-    fn parses_tag_with_tag_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "tag", "v1.0.0"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Tag { delete, tag_name } =>
-            {
-                assert!(!delete);
-                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
-            }
-            _ => panic!("expected tag command")
-        }
-    }
-
-    #[test]
-    fn parses_tag_delete_with_tag_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "tag", "-d", "v1.0.0"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Tag { delete, tag_name } =>
-            {
-                assert!(delete);
-                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
-            }
-            _ => panic!("expected tag command")
-        }
-    }
-
-    #[test]
-    fn parses_tag_long_delete_with_tag_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "tag", "--delete", "v1.0.0"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Tag { delete, tag_name } =>
-            {
-                assert!(delete);
-                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
-            }
-            _ => panic!("expected tag command")
-        }
-    }
-
-    #[test]
-    fn tag_delete_requires_tag_name()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "tag", "-d"])
-        {
-            Ok(_) => panic!("expected tag parse to fail"),
-            Err(err) => err
+        let cli = Cli {
+            bin_name: "git vmr".to_owned(),
+            working_dir: Some(file.clone()),
+            version: (),
+            command: Command::Status
         };
 
+        // Act
+        let err = cli.get_working_dir().unwrap_err();
+
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "fatal: cannot change to '{}': Not a directory",
+                file.display()
+            )
+        );
     }
 
     #[test]
-    fn rejects_tag_extra_operand()
+    fn reports_missing_working_dir_argument_path()
     {
-        // Act
-        let err =
-            match Cli::try_parse_from(["git-vmr", "tag", "v1.0.0", "HEAD~1"])
-            {
-                Ok(_) => panic!("expected tag parse to fail"),
-                Err(err) => err
-            };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-    }
-
-    #[test]
-    fn rejects_tag_annotate_flag()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "tag", "-a", "v1.0.0"])
-        {
-            Ok(_) => panic!("expected tag parse to fail"),
-            Err(err) => err
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let missing = tmp.path().join("missing");
+        let cli = Cli {
+            bin_name: "git vmr".to_owned(),
+            working_dir: Some(missing.clone()),
+            version: (),
+            command: Command::Status
         };
 
+        // Act
+        let err = cli.get_working_dir().unwrap_err();
+
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(
+            err.to_string(),
+            format!("fatal: cannot change to '{}'", missing.display())
+        );
     }
 
     #[test]
-    fn rejects_tag_force_flag()
+    fn uses_current_dir_when_working_dir_argument_is_missing()
     {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "tag", "-f", "v1.0.0"])
-        {
-            Ok(_) => panic!("expected tag parse to fail"),
-            Err(err) => err
+        // Arrange
+        let cli = Cli {
+            bin_name: "git vmr".to_owned(),
+            working_dir: None,
+            version: (),
+            command: Command::Status
         };
 
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-    }
-
-    #[test]
-    fn rejects_tag_multi_delete()
-    {
         // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr", "tag", "-d", "v1.0.0", "v1.1.0"
-        ])
-        {
-            Ok(_) => panic!("expected tag parse to fail"),
-            Err(err) => err
-        };
+        let working_dir = cli.get_working_dir().unwrap();
 
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(working_dir, env::current_dir().unwrap());
     }
 
     #[test]
-    fn rejects_tag_filter_flag()
-    {
-        // Act
-        let err =
-            match Cli::try_parse_from(["git-vmr", "tag", "--contains", "HEAD"])
-            {
-                Ok(_) => panic!("expected tag parse to fail"),
-                Err(err) => err
-            };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-    }
-
-    #[test]
-    fn parses_branch_with_branch_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "branch", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Branch { delete, force_delete, force, branch_name } =>
-            {
-                assert!(!delete);
-                assert!(!force_delete);
-                assert!(!force);
-                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
-            }
-            _ => panic!("expected branch command")
-        }
-    }
-
-    #[test]
-    fn parses_branch_delete_with_branch_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "branch", "-d", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Branch { delete, force_delete, force, branch_name } =>
-            {
-                assert!(delete);
-                assert!(!force_delete);
-                assert!(!force);
-                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
-            }
-            _ => panic!("expected branch command")
-        }
-    }
-
-    #[test]
-    fn parses_branch_force_delete_with_branch_name()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "branch", "-D", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Branch { delete, force_delete, force, branch_name } =>
-            {
-                assert!(!delete);
-                assert!(force_delete);
-                assert!(!force);
-                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
-            }
-            _ => panic!("expected branch command")
-        }
-    }
-
-    #[test]
-    fn branch_delete_requires_branch_name()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "branch", "-d"])
-        {
-            Ok(_) => panic!("expected parse error"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn branch_delete_flags_conflict()
-    {
-        // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr",
-            "branch",
-            "-d",
-            "-D",
-            "feature/auth"
-        ])
-        {
-            Ok(_) => panic!("expected parse error"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
-    }
-
-    #[test]
-    fn branch_force_requires_delete()
-    {
-        // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr",
-            "branch",
-            "-f",
-            "feature/auth"
-        ])
-        {
-            Ok(_) => panic!("expected parse error"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn parses_commit_with_short_message()
-    {
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "commit",
-            "-m",
-            "Implement new feature"
-        ]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Commit { message } =>
-            {
-                assert_eq!(message, "Implement new feature");
-            }
-            _ => panic!("expected commit command")
-        }
-    }
-
-    #[test]
-    fn parses_commit_with_long_message()
-    {
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "commit",
-            "--message",
-            "Implement new feature"
-        ]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Commit { message } =>
-            {
-                assert_eq!(message, "Implement new feature");
-            }
-            _ => panic!("expected commit command")
-        }
-    }
-
-    #[test]
-    fn rejects_commit_without_message()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "commit"])
-        {
-            Ok(_) => panic!("expected commit parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn parses_fetch_without_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "fetch"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Fetch { repository, refspecs } =>
-            {
-                assert_eq!(repository, None);
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected fetch command")
-        }
-    }
-
-    #[test]
-    fn parses_fetch_with_repository_argument()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "fetch", "origin"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Fetch { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected fetch command")
-        }
-    }
-
-    #[test]
-    fn parses_fetch_with_repository_and_single_refspec()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "fetch", "origin", "main"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Fetch { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected fetch command")
-        }
-    }
-
-    #[test]
-    fn parses_fetch_with_repository_and_multiple_refspecs()
-    {
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "fetch",
-            "origin",
-            "main",
-            "release:release"
-        ]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Fetch { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main", "release:release"]);
-            }
-            _ => panic!("expected fetch command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_fetch_arguments()
+    fn parses_working_dir_argument_before_subcommand()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        let cli = Cli::parse_from([
+        let cli = Cli::try_parse_from([
             "git-vmr",
             "-C",
             tmp.path().to_str().unwrap(),
-            "fetch",
-            "origin",
-            "main"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Fetch { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected fetch command")
-        }
-    }
-
-    #[test]
-    fn parses_pull_without_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "pull"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Pull { repository, refspecs } =>
-            {
-                assert_eq!(repository, None);
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected pull command")
-        }
-    }
-
-    #[test]
-    fn parses_pull_with_repository_argument()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "pull", "origin"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Pull { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected pull command")
-        }
-    }
-
-    #[test]
-    fn parses_pull_with_repository_and_single_refspec()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "pull", "origin", "main"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Pull { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected pull command")
-        }
-    }
-
-    #[test]
-    fn parses_pull_with_repository_and_multiple_refspecs()
-    {
-        // Act
-        let cli =
-            Cli::parse_from(["git-vmr", "pull", "origin", "main", "release"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Pull { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main", "release"]);
-            }
-            _ => panic!("expected pull command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_pull_arguments()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "pull",
-            "origin",
-            "main"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Pull { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected pull command")
-        }
-    }
-
-    #[test]
-    fn parses_push_without_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "push"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Push { repository, refspecs } =>
-            {
-                assert_eq!(repository, None);
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected push command")
-        }
-    }
-
-    #[test]
-    fn parses_push_with_repository_argument()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "push", "origin"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Push { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert!(refspecs.is_empty());
-            }
-            _ => panic!("expected push command")
-        }
-    }
-
-    #[test]
-    fn parses_push_with_repository_and_single_refspec()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "push", "origin", "main"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Push { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected push command")
-        }
-    }
-
-    #[test]
-    fn parses_push_with_repository_and_multiple_refspecs()
-    {
-        // Act
-        let cli =
-            Cli::parse_from(["git-vmr", "push", "origin", "main", "release"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Push { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main", "release"]);
-            }
-            _ => panic!("expected push command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_push_arguments()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "push",
-            "origin",
-            "main"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Push { repository, refspecs } =>
-            {
-                assert_eq!(repository.as_deref(), Some("origin"));
-                assert_eq!(refspecs, ["main"]);
-            }
-            _ => panic!("expected push command")
-        }
-    }
-
-    #[test]
-    fn parses_merge_with_commit_ish()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "merge", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Merge { commit_ish } =>
-            {
-                assert_eq!(commit_ish, "feature/auth");
-            }
-            _ => panic!("expected merge command")
-        }
-    }
-
-    #[test]
-    fn rejects_merge_without_commit_ish()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "merge"])
-        {
-            Ok(_) => panic!("expected merge parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn parses_rebase_with_upstream()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "rebase", "origin/main"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Rebase { upstream } =>
-            {
-                assert_eq!(upstream, "origin/main");
-            }
-            _ => panic!("expected rebase command")
-        }
-    }
-
-    #[test]
-    fn rejects_rebase_without_upstream()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "rebase"])
-        {
-            Ok(_) => panic!("expected rebase parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn parses_reset_without_arguments()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "reset"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
-            {
-                assert!(!soft);
-                assert!(!mixed);
-                assert!(!hard);
-                assert!(!merge);
-                assert!(!keep);
-                assert_eq!(commit, None);
-            }
-            _ => panic!("expected reset command")
-        }
-    }
-
-    #[test]
-    fn parses_reset_modes()
-    {
-        for (flag, expected) in [
-            ("--soft", ResetMode::Soft),
-            ("--mixed", ResetMode::Mixed),
-            ("--hard", ResetMode::Hard),
-            ("--merge", ResetMode::Merge),
-            ("--keep", ResetMode::Keep)
-        ]
-        {
-            // Act
-            let cli = Cli::parse_from(["git-vmr", "reset", flag]);
-
-            // Assert
-            match cli.command
-            {
-                Command::Reset { soft, mixed, hard, merge, keep, commit } =>
-                {
-                    assert_eq!(
-                        reset_mode(soft, mixed, hard, merge, keep),
-                        Some(expected)
-                    );
-                    assert_eq!(commit, None);
-                }
-                _ => panic!("expected reset command")
-            }
-        }
-    }
-
-    #[test]
-    fn parses_reset_mode_with_commit()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "reset", "--hard", "HEAD~1"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
-            {
-                assert_eq!(
-                    reset_mode(soft, mixed, hard, merge, keep),
-                    Some(ResetMode::Hard)
-                );
-                assert_eq!(commit.as_deref(), Some("HEAD~1"));
-            }
-            _ => panic!("expected reset command")
-        }
-    }
-
-    #[test]
-    fn parses_working_dir_with_reset_arguments()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let cli = Cli::parse_from([
-            "git-vmr",
-            "-C",
-            tmp.path().to_str().unwrap(),
-            "reset",
-            "--soft",
-            "HEAD~1"
-        ]);
-
-        // Assert
-        assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
-        match cli.command
-        {
-            Command::Reset { soft, mixed, hard, merge, keep, commit } =>
-            {
-                assert_eq!(
-                    reset_mode(soft, mixed, hard, merge, keep),
-                    Some(ResetMode::Soft)
-                );
-                assert_eq!(commit.as_deref(), Some("HEAD~1"));
-            }
-            _ => panic!("expected reset command")
-        }
-    }
-
-    #[test]
-    fn reset_modes_conflict()
-    {
-        // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr", "reset", "--soft", "--hard", "HEAD~1"
+            "status"
         ])
-        {
-            Ok(_) => panic!("expected reset parse to fail"),
-            Err(err) => err
-        };
+        .unwrap();
 
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert_eq!(cli.working_dir, Some(tmp.path().to_path_buf()));
+        assert!(matches!(cli.command, Command::Status));
     }
 
     #[test]
-    fn rejects_reset_extra_arguments()
+    fn long_version_flag_displays_version()
     {
         // Act
-        let err =
-            match Cli::try_parse_from(["git-vmr", "reset", "HEAD~1", "extra"])
-            {
-                Ok(_) => panic!("expected reset parse to fail"),
-                Err(err) => err
-            };
+        let err = Cli::try_parse_from(["git-vmr", "--version"]).err().unwrap();
 
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(err.kind(), ErrorKind::DisplayVersion);
     }
 
     #[test]
-    fn rejects_reset_pathspec_separator()
+    fn short_version_flag_displays_version()
     {
         // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr",
-            "reset",
-            "HEAD",
-            "--",
-            "backend/file.txt"
-        ])
-        {
-            Ok(_) => panic!("expected reset parse to fail"),
-            Err(err) => err
-        };
+        let err = Cli::try_parse_from(["git-vmr", "-v"]).err().unwrap();
 
         // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+        assert_eq!(err.kind(), ErrorKind::DisplayVersion);
     }
 
     #[test]
-    fn parses_switch_with_branch_name()
+    fn default_short_version_flag_is_disabled()
     {
         // Act
-        let cli = Cli::parse_from(["git-vmr", "switch", "feature/auth"]);
+        let err = Cli::try_parse_from(["git-vmr", "-V"]).err().unwrap();
 
         // Assert
-        match cli.command
-        {
-            Command::Switch { create, branch_name } =>
-            {
-                assert!(!create);
-                assert_eq!(branch_name, "feature/auth");
-            }
-            _ => panic!("expected switch command")
-        }
-    }
-
-    #[test]
-    fn parses_switch_with_create_long()
-    {
-        // Act
-        let cli =
-            Cli::parse_from(["git-vmr", "switch", "--create", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Switch { create, branch_name } =>
-            {
-                assert!(create);
-                assert_eq!(branch_name, "feature/auth");
-            }
-            _ => panic!("expected switch command")
-        }
-    }
-
-    #[test]
-    fn parses_switch_with_create_short()
-    {
-        // Act
-        let cli = Cli::parse_from(["git-vmr", "switch", "-c", "feature/auth"]);
-
-        // Assert
-        match cli.command
-        {
-            Command::Switch { create, branch_name } =>
-            {
-                assert!(create);
-                assert_eq!(branch_name, "feature/auth");
-            }
-            _ => panic!("expected switch command")
-        }
-    }
-
-    #[test]
-    fn rejects_switch_without_branch_name()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "switch"])
-        {
-            Ok(_) => panic!("expected switch parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn rejects_switch_create_without_branch_name()
-    {
-        // Act
-        let err = match Cli::try_parse_from(["git-vmr", "switch", "--create"])
-        {
-            Ok(_) => panic!("expected switch parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn rejects_switch_create_start_point()
-    {
-        // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr",
-            "switch",
-            "--create",
-            "feature/auth",
-            "main"
-        ])
-        {
-            Ok(_) => panic!("expected switch parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-    }
-
-    #[test]
-    fn rejects_switch_create_short_start_point()
-    {
-        // Act
-        let err = match Cli::try_parse_from([
-            "git-vmr",
-            "switch",
-            "-c",
-            "feature/auth",
-            "main"
-        ])
-        {
-            Ok(_) => panic!("expected switch parse to fail"),
-            Err(err) => err
-        };
-
-        // Assert
-        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
-    }
-
-    fn repo_message(repo: &str, message: &str) -> RepoMessage
-    {
-        RepoMessage { repo: repo.to_owned(), message: message.to_owned() }
-    }
-
-    #[test]
-    fn grouped_success_rendering_includes_single_repository_name()
-    {
-        let messages = grouped_messages(
-            vec![repo_message("backend", "Already up to date.")],
-            SuccessRepositoryFormat::NamesUntilLimit
-        );
-
-        assert_eq!(messages, vec!["Already up to date. (backend)"]);
-    }
-
-    #[test]
-    fn grouped_success_rendering_combines_small_repository_sets()
-    {
-        let messages = grouped_messages(
-            vec![
-                repo_message("backend", "Already up to date."),
-                repo_message("frontend", "Already up to date."),
-                repo_message("tools", "Updating abc123..def456"),
-            ],
-            SuccessRepositoryFormat::NamesUntilLimit
-        );
-
-        assert_eq!(messages, vec![
-            "Already up to date. (backend, frontend)",
-            "Updating abc123..def456 (tools)"
-        ]);
-    }
-
-    #[test]
-    fn grouped_success_rendering_uses_count_for_large_repository_sets()
-    {
-        let messages = grouped_messages(
-            (1..=6)
-                .map(|index| {
-                    repo_message(
-                        &format!("repo-{index}"),
-                        "Already up to date."
-                    )
-                })
-                .collect(),
-            SuccessRepositoryFormat::NamesUntilLimit
-        );
-
-        assert_eq!(messages, vec!["Already up to date. (6 repos)"]);
-    }
-
-    #[test]
-    fn grouped_failure_rendering_keeps_large_repository_context()
-    {
-        let messages = grouped_messages(
-            (1..=6)
-                .map(|index| {
-                    repo_message(&format!("repo-{index}"), "remote rejected")
-                })
-                .collect(),
-            SuccessRepositoryFormat::NamesWithCount
-        );
-
-        assert_eq!(messages, vec![
-            "remote rejected (6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)"
-        ]);
-    }
-
-    #[test]
-    fn grouped_failure_rendering_preserves_error_prefix()
-    {
-        let messages = grouped_messages(
-            vec![repo_message(
-                "backend",
-                "error: branch 'feature/auth' not found"
-            )],
-            SuccessRepositoryFormat::NamesWithCount
-        );
-
-        assert_eq!(messages, vec![
-            "error: branch 'feature/auth' not found (backend)"
-        ]);
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
     }
 }

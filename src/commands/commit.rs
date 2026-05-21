@@ -1,5 +1,5 @@
+use crate::git;
 use crate::vmr::Vmr;
-use crate::{cli, git};
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use std::path::Path;
@@ -36,5 +36,5 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }
