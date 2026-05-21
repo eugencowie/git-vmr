@@ -15,11 +15,26 @@ mod rm;
 mod status;
 mod switch;
 mod tag;
+mod worktree;
 
 use crate::git::ResetMode;
 use anyhow::Result;
 use clap::Subcommand;
 use std::path::{Path, PathBuf};
+
+#[derive(Subcommand)]
+pub enum WorktreeCommand
+{
+    /// Create a worktree at [path] and checkout [commit-ish] into it
+    Add
+    {
+        #[arg(value_name = "path")]
+        path: PathBuf,
+
+        #[arg(value_name = "commit-ish")]
+        commit_ish: Option<String>
+    }
+}
 
 #[derive(Subcommand)]
 pub enum Command
@@ -251,6 +266,13 @@ pub enum Command
         /// Specify what destination ref to update with what source object
         #[arg(value_name = "refspec")]
         refspecs: Vec<String>
+    },
+
+    /// Manage multiple working trees
+    Worktree
+    {
+        #[command(subcommand)]
+        command: WorktreeCommand
     }
 }
 
@@ -333,6 +355,12 @@ impl Command
 
             Command::Push { repository, refspecs } =>
                 push::push(working_dir, repository.as_deref(), &refspecs),
+
+            Command::Worktree { command } => match command
+            {
+                WorktreeCommand::Add { path, commit_ish } =>
+                    worktree::add(working_dir, &path, commit_ish.as_deref()),
+            }
         }
     }
 }

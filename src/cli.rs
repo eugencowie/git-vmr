@@ -256,6 +256,82 @@ mod tests
     }
 
     #[test]
+    fn parses_worktree_add_target_path()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "worktree", "add", "../wt"])
+            .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Add {
+                    path,
+                    commit_ish: None
+                }
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_add_optional_commit_ish()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "add", "../wt", "main"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Add {
+                    path,
+                    commit_ish: Some(commit_ish)
+                }
+            } if &path == "../wt" && commit_ish == "main"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_add_without_target_path()
+    {
+        // Act
+        let err =
+            Cli::try_parse_from(["git-vmr", "worktree", "add"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_add_extra_operands()
+    {
+        // Act
+        let err = Cli::try_parse_from([
+            "git-vmr", "worktree", "add", "../wt", "main", "extra"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_unsupported_worktree_subcommands()
+    {
+        // Act
+        let err =
+            Cli::try_parse_from(["git-vmr", "worktree", "list"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::InvalidSubcommand);
+    }
+
+    #[test]
     fn long_version_flag_displays_version()
     {
         // Act
