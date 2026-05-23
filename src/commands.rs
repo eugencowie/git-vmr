@@ -19,7 +19,7 @@ mod worktree;
 
 use crate::git::ResetMode;
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{ArgAction, Subcommand};
 use std::path::{Path, PathBuf};
 
 #[derive(Subcommand)]
@@ -38,6 +38,19 @@ pub enum WorktreeCommand
 
         #[arg(value_name = "commit-ish")]
         commit_ish: Option<String>
+    },
+
+    /// Remove a worktree
+    Remove
+    {
+        /// By default, remove refuses to remove an unclean worktree unless
+        /// --force is used. To remove a locked worktree, specify --force twice
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf
     }
 }
 
@@ -370,6 +383,8 @@ impl Command
                         branch.as_deref(),
                         commit_ish.as_deref()
                     ),
+                WorktreeCommand::Remove { force, path } =>
+                    worktree::remove(working_dir, &path, force),
             }
         }
     }

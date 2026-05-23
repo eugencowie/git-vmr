@@ -44,6 +44,53 @@ pub fn worktree_add(
     )
 }
 
+pub fn worktree_remove(
+    repo_name: &str,
+    repo_path: &Path,
+    target: &Path,
+    force: u8
+) -> GitCommandResult
+{
+    let mut args = vec![OsString::from("worktree"), OsString::from("remove")];
+
+    for _ in 0..force
+    {
+        args.push(OsString::from("-f"));
+    }
+
+    args.push(target.as_os_str().to_owned());
+
+    let output = git_output(repo_path, args)?;
+
+    command_result(
+        repo_name,
+        &output,
+        |output| {
+            let message = first_non_empty_line_with_fallback(
+                &output.stdout,
+                &output.stderr,
+                "git worktree remove succeeded"
+            );
+
+            if message == "git worktree remove succeeded"
+            {
+                None
+            }
+            else
+            {
+                Some(message)
+            }
+        },
+        |output| {
+            first_non_empty_line_with_fallback(
+                &output.stderr,
+                &output.stdout,
+                "git worktree remove failed"
+            )
+        }
+    )
+}
+
 fn failure_line(output: &crate::git::GitOutput) -> String
 {
     let stderr = String::from_utf8_lossy(&output.stderr);

@@ -53,3 +53,61 @@ pub fn add(
 
     git::print_results(results)
 }
+
+pub fn remove(working_dir: &Path, path: &Path, force: u8) -> Result<()>
+{
+    let vmr = Vmr::find(working_dir)?;
+    let repos = vmr.repos()?;
+    let target = resolve_path(working_dir, path).clean();
+
+    let results = repos
+        .par_iter()
+        .map(|repo| {
+            git::worktree_remove(
+                &repo.name,
+                &repo.path,
+                &target.join(&repo.name),
+                force
+            )
+        })
+        .collect::<Vec<_>>();
+
+    git::print_results(results)?;
+
+    let marker = target.join(".gitvmr");
+    if marker.exists()
+    {
+        if marker.is_dir()
+        {
+            fs::remove_dir(&marker).with_context(|| {
+                format!(
+                    "fatal: failed to remove VMR marker '{}'",
+                    marker.display()
+                )
+            })?;
+        }
+        else
+        {
+            fs::remove_file(&marker).with_context(|| {
+                format!(
+                    "fatal: failed to remove VMR marker '{}'",
+                    marker.display()
+                )
+            })?;
+        }
+    }
+
+    match fs::remove_dir(&target)
+    {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty =>
+            Ok(()),
+        Err(error) => Err(error).with_context(|| {
+            format!(
+                "fatal: failed to remove empty worktree directory '{}'",
+                target.display()
+            )
+        })
+    }
+}
