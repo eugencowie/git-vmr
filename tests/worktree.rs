@@ -66,6 +66,17 @@ fn current_branch(path: &Path) -> String
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn head_short(path: &Path) -> String
+{
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--short=8", "HEAD"])
+        .current_dir(path)
+        .output()
+        .expect("failed to run git");
+    assert!(output.status.success());
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
 fn init_vmr_with_repos(tmp: &Path, repos: &[&str]) -> std::path::PathBuf
 {
     let vmr = tmp.join("vmr");
@@ -89,6 +100,139 @@ fn add_worktrees(vmr: &Path)
         .args(["worktree", "add", "../wt"])
         .assert()
         .success();
+}
+
+#[test]
+fn worktree_list_lists_main_aggregate_for_multiple_child_repositories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    let head = head_short(&vmr.join("backend"));
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(format!(
+                "{} {} [master]",
+                vmr.display(),
+                head
+            ))
+            .and(predicate::str::contains("backend").not())
+            .and(predicate::str::contains("frontend").not())
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn worktree_list_lists_linked_aggregate_and_skips_non_git_children()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    fs::create_dir(vmr.join("docs")).expect("failed to create docs dir");
+    add_worktrees(&vmr);
+    let wt = tmp.path().join("wt");
+    let head = head_short(&wt.join("backend"));
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(format!("{} {} [wt]", wt.display(), head))
+                .and(predicate::str::contains("docs").not())
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn worktree_list_omits_unmarked_and_arbitrary_child_worktrees()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+
+    git(&vmr.join("backend"), ["worktree", "add", "../../scratch/backend"]);
+    git(&vmr.join("backend"), ["worktree", "add", "../../backend-only"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("scratch")
+                .not()
+                .and(predicate::str::contains("backend-only").not())
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn worktree_list_reports_mixed_detached_partial_and_sorted_output()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["alpha", "tools", "zeta"]);
+    fs::create_dir(tmp.path().join("alpha-wt"))
+        .expect("failed to create alpha wt dir");
+    fs::write(tmp.path().join("alpha-wt/.gitvmr"), "")
+        .expect("failed to write marker");
+    fs::create_dir(tmp.path().join("zeta-wt"))
+        .expect("failed to create zeta wt dir");
+    fs::write(tmp.path().join("zeta-wt/.gitvmr"), "")
+        .expect("failed to write marker");
+
+    git(&vmr.join("zeta"), ["worktree", "add", "../../zeta-wt/zeta"]);
+    git(&vmr.join("alpha"), ["worktree", "add", "../../zeta-wt/alpha"]);
+    git(&vmr.join("tools"), ["worktree", "add", "../../alpha-wt/tools"]);
+    git(&tmp.path().join("zeta-wt/alpha"), ["checkout", "-b", "alpha-topic"]);
+    git(&tmp.path().join("zeta-wt/zeta"), ["checkout", "--detach"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(format!(
+                "{}",
+                tmp.path().join("alpha-wt").display()
+            ))
+            .and(predicate::str::contains("[alpha-topic] (alpha)"))
+            .and(predicate::str::contains("(detached HEAD) (zeta)"))
+            .and(predicate::str::contains("[tools] (tools)"))
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn worktree_list_uses_child_working_dir_and_global_c()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+
+    git_vmr()
+        .current_dir(vmr.join("frontend"))
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("{}", vmr.display())))
+        .stderr(predicate::str::is_empty());
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args([
+            "-C",
+            vmr.join("frontend").to_str().unwrap(),
+            "worktree",
+            "list"
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("{}", vmr.display())))
+        .stderr(predicate::str::is_empty());
 }
 
 #[test]

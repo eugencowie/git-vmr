@@ -40,6 +40,9 @@ pub enum WorktreeCommand
         commit_ish: Option<String>
     },
 
+    /// List details of each worktree
+    List,
+
     /// Move a worktree to a new location
     Move
     {
@@ -400,6 +403,7 @@ impl Command
                         branch.as_deref(),
                         commit_ish.as_deref()
                     ),
+                WorktreeCommand::List => worktree::list(working_dir),
                 WorktreeCommand::Move { force, path, new_path } =>
                     worktree::move_worktree(
                         working_dir,

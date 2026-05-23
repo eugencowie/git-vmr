@@ -409,6 +409,46 @@ mod tests
     }
 
     #[test]
+    fn parses_worktree_list()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "worktree", "list"]).unwrap();
+
+        // Assert
+        assert!(matches!(cli.command, Command::Worktree {
+            command: crate::commands::WorktreeCommand::List
+        }));
+    }
+
+    #[test]
+    fn rejects_worktree_list_extra_operands()
+    {
+        // Act
+        let err = Cli::try_parse_from(["git-vmr", "worktree", "list", "extra"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_list_options()
+    {
+        for option in ["--porcelain", "-z", "-v"]
+        {
+            // Act
+            let err =
+                Cli::try_parse_from(["git-vmr", "worktree", "list", option])
+                    .err()
+                    .unwrap();
+
+            // Assert
+            assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+        }
+    }
+
+    #[test]
     fn parses_worktree_remove_target_path()
     {
         // Act
@@ -647,10 +687,10 @@ mod tests
     fn rejects_unsupported_worktree_subcommands()
     {
         // Act
-        Cli::try_parse_from(["git-vmr", "worktree", "remove", "../wt"])
+        Cli::try_parse_from(["git-vmr", "worktree", "list"]).unwrap();
+        let err = Cli::try_parse_from(["git-vmr", "worktree", "lock", "../wt"])
+            .err()
             .unwrap();
-        let err =
-            Cli::try_parse_from(["git-vmr", "worktree", "list"]).err().unwrap();
 
         // Assert
         assert_eq!(err.kind(), ErrorKind::InvalidSubcommand);

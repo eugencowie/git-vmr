@@ -38,7 +38,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 pub use switch::{create, switch};
 pub use tag::{delete_tag, tag, tags};
-pub use worktree::{worktree_add, worktree_move, worktree_remove};
+pub use worktree::{
+    ChildWorktreeState, worktree_add, worktree_list, worktree_move,
+    worktree_remove
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Head
