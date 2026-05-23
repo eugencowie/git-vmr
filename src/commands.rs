@@ -40,6 +40,23 @@ pub enum WorktreeCommand
         commit_ish: Option<String>
     },
 
+    /// Move a worktree to a new location
+    Move
+    {
+        /// Move a worktree even when Git would otherwise refuse. Specify twice
+        /// for cases that require two force flags.
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf,
+
+        /// New location for the worktree
+        #[arg(value_name = "new-path")]
+        new_path: PathBuf
+    },
+
     /// Remove a worktree
     Remove
     {
@@ -382,6 +399,13 @@ impl Command
                         &path,
                         branch.as_deref(),
                         commit_ish.as_deref()
+                    ),
+                WorktreeCommand::Move { force, path, new_path } =>
+                    worktree::move_worktree(
+                        working_dir,
+                        &path,
+                        &new_path,
+                        force
                     ),
                 WorktreeCommand::Remove { force, path } =>
                     worktree::remove(working_dir, &path, force),

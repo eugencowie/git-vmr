@@ -667,3 +667,227 @@ fn worktree_remove_reports_failures_in_repository_name_order()
                 .and(predicate::str::starts_with("fatal:"))
         );
 }
+
+#[test]
+fn worktree_move_moves_child_worktrees()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
+    assert!(tmp.path().join("moved/backend").exists());
+    assert!(tmp.path().join("moved/frontend").exists());
+}
+
+#[test]
+fn worktree_move_skips_non_git_child_directories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    fs::create_dir(vmr.join("docs")).expect("failed to create docs dir");
+    add_worktrees(&vmr);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert!(tmp.path().join("moved/backend").exists());
+    assert!(!tmp.path().join("moved/docs").exists());
+}
+
+#[test]
+fn worktree_move_locked_child_fails_without_force_and_reports_repository()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    git(&vmr.join("backend"), ["worktree", "lock", "../../wt/backend"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("fatal:")
+                .and(predicate::str::contains("(backend)"))
+        );
+
+    assert!(tmp.path().join("wt/backend").exists());
+}
+
+#[test]
+fn worktree_move_dirty_child_is_delegated_to_git()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    fs::write(tmp.path().join("wt/backend/README.md"), "dirty\n")
+        .expect("failed to dirty worktree");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .success();
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(tmp.path().join("moved/backend").exists());
+}
+
+#[test]
+fn worktree_move_force_moves_dirty_child()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    fs::write(tmp.path().join("wt/backend/README.md"), "dirty\n")
+        .expect("failed to dirty worktree");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "--force", "../wt", "../moved"])
+        .assert()
+        .success();
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(tmp.path().join("moved/backend").exists());
+}
+
+#[test]
+fn worktree_move_best_effort_keeps_successful_moves()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr =
+        init_vmr_with_repos(tmp.path(), &["backend", "frontend", "tools"]);
+    add_worktrees(&vmr);
+    git(&vmr.join("backend"), ["worktree", "lock", "../../wt/backend"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains("(backend)"));
+
+    assert!(tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
+    assert!(!tmp.path().join("wt/tools").exists());
+    assert!(tmp.path().join("moved/frontend").exists());
+    assert!(tmp.path().join("moved/tools").exists());
+}
+
+#[test]
+fn worktree_move_success_cleans_source_marker_and_empty_aggregate_directory()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .success();
+
+    assert!(!tmp.path().join("wt/.gitvmr").exists());
+    assert!(!tmp.path().join("wt").exists());
+    assert!(tmp.path().join("moved/.gitvmr").exists());
+}
+
+#[test]
+fn worktree_move_partial_failure_keeps_source_and_destination_markers()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+    git(&vmr.join("backend"), ["worktree", "lock", "../../wt/backend"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .failure();
+
+    assert!(tmp.path().join("wt/.gitvmr").exists());
+    assert!(tmp.path().join("moved/.gitvmr").exists());
+    assert!(tmp.path().join("wt/backend").exists());
+    assert!(tmp.path().join("moved/frontend").exists());
+}
+
+#[test]
+fn worktree_move_total_failure_leaves_destination_marker()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .failure();
+
+    assert!(tmp.path().join("moved/.gitvmr").exists());
+}
+
+#[test]
+fn worktree_move_uses_nested_working_dir_and_global_c_for_relative_paths()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+
+    git_vmr()
+        .current_dir(vmr.join("frontend"))
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .success();
+    git_vmr()
+        .current_dir(vmr.join("frontend"))
+        .args(["worktree", "move", "../wt", "../moved"])
+        .assert()
+        .success();
+    assert!(vmr.join("moved/backend").exists());
+    assert!(vmr.join("moved/frontend").exists());
+
+    git_vmr()
+        .arg("-C")
+        .arg(vmr.join("frontend"))
+        .args(["worktree", "move", "../moved", "../moved-c"])
+        .assert()
+        .success();
+    assert!(vmr.join("moved-c/backend").exists());
+    assert!(vmr.join("moved-c/frontend").exists());
+}
+
+#[test]
+fn worktree_move_reports_failures_in_repository_name_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["alpha", "zeta"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "move", "../missing", "../moved"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("(alpha)")
+                .and(predicate::str::contains("(zeta)"))
+                .and(predicate::str::starts_with("fatal:"))
+        );
+}

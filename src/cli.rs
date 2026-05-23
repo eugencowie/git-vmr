@@ -518,6 +518,132 @@ mod tests
     }
 
     #[test]
+    fn parses_worktree_move_paths()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "move", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Move {
+                    force: 0,
+                    path,
+                    new_path
+                }
+            } if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_single_force()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "move", "--force", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Move {
+                    force: 1,
+                    path,
+                    new_path
+                }
+            } if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_repeated_long_force()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "move", "--force", "--force", "../wt",
+            "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Move {
+                    force: 2,
+                    path,
+                    new_path
+                }
+            } if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_repeated_short_force()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "move", "-ff", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Move {
+                    force: 2,
+                    path,
+                    new_path
+                }
+            } if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_move_without_source_path()
+    {
+        // Act
+        let err =
+            Cli::try_parse_from(["git-vmr", "worktree", "move"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_move_without_destination_path()
+    {
+        // Act
+        let err = Cli::try_parse_from(["git-vmr", "worktree", "move", "../wt"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_move_extra_operands()
+    {
+        // Act
+        let err = Cli::try_parse_from([
+            "git-vmr", "worktree", "move", "../wt", "../moved", "extra"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
     fn rejects_unsupported_worktree_subcommands()
     {
         // Act

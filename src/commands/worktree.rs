@@ -111,3 +111,81 @@ pub fn remove(working_dir: &Path, path: &Path, force: u8) -> Result<()>
         })
     }
 }
+
+pub fn move_worktree(
+    working_dir: &Path,
+    path: &Path,
+    new_path: &Path,
+    force: u8
+) -> Result<()>
+{
+    let vmr = Vmr::find(working_dir)?;
+    let repos = vmr.repos()?;
+    let source = resolve_path(working_dir, path).clean();
+    let destination = resolve_path(working_dir, new_path).clean();
+
+    fs::create_dir_all(&destination).with_context(|| {
+        format!(
+            "fatal: failed to create worktree target '{}'",
+            destination.display()
+        )
+    })?;
+    fs::write(destination.join(".gitvmr"), "").with_context(|| {
+        format!(
+            "fatal: failed to create VMR marker in '{}'",
+            destination.display()
+        )
+    })?;
+
+    let results = repos
+        .par_iter()
+        .map(|repo| {
+            git::worktree_move(
+                &repo.name,
+                &repo.path,
+                &source.join(&repo.name),
+                &destination.join(&repo.name),
+                force
+            )
+        })
+        .collect::<Vec<_>>();
+
+    git::print_results(results)?;
+
+    let marker = source.join(".gitvmr");
+    if marker.exists()
+    {
+        if marker.is_dir()
+        {
+            fs::remove_dir(&marker).with_context(|| {
+                format!(
+                    "fatal: failed to remove VMR marker '{}'",
+                    marker.display()
+                )
+            })?;
+        }
+        else
+        {
+            fs::remove_file(&marker).with_context(|| {
+                format!(
+                    "fatal: failed to remove VMR marker '{}'",
+                    marker.display()
+                )
+            })?;
+        }
+    }
+
+    match fs::remove_dir(&source)
+    {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty =>
+            Ok(()),
+        Err(error) => Err(error).with_context(|| {
+            format!(
+                "fatal: failed to remove empty worktree directory '{}'",
+                source.display()
+            )
+        })
+    }
+}

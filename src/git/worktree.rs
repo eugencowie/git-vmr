@@ -91,6 +91,55 @@ pub fn worktree_remove(
     )
 }
 
+pub fn worktree_move(
+    repo_name: &str,
+    repo_path: &Path,
+    source: &Path,
+    destination: &Path,
+    force: u8
+) -> GitCommandResult
+{
+    let mut args = vec![OsString::from("worktree"), OsString::from("move")];
+
+    for _ in 0..force
+    {
+        args.push(OsString::from("-f"));
+    }
+
+    args.push(source.as_os_str().to_owned());
+    args.push(destination.as_os_str().to_owned());
+
+    let output = git_output(repo_path, args)?;
+
+    command_result(
+        repo_name,
+        &output,
+        |output| {
+            let message = first_non_empty_line_with_fallback(
+                &output.stdout,
+                &output.stderr,
+                "git worktree move succeeded"
+            );
+
+            if message == "git worktree move succeeded"
+            {
+                None
+            }
+            else
+            {
+                Some(message)
+            }
+        },
+        |output| {
+            first_non_empty_line_with_fallback(
+                &output.stderr,
+                &output.stdout,
+                "git worktree move failed"
+            )
+        }
+    )
+}
+
 fn failure_line(output: &crate::git::GitOutput) -> String
 {
     let stderr = String::from_utf8_lossy(&output.stderr);
