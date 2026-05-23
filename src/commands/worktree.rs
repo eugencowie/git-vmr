@@ -9,16 +9,18 @@ use std::path::Path;
 pub fn add(
     working_dir: &Path,
     path: &Path,
+    branch: Option<&str>,
     commit_ish: Option<&str>
 ) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
     let repos = vmr.repos()?;
     let target = resolve_path(working_dir, path).clean();
-    let branch = match commit_ish
+    let branch = match (branch, commit_ish)
     {
-        Some(_) => None,
-        None => Some(
+        (Some(branch), _) => Some(branch.to_owned()),
+        (None, Some(_)) => None,
+        (None, None) => Some(
             target
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())

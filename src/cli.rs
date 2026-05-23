@@ -267,6 +267,7 @@ mod tests
             cli.command,
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Add {
+                    branch: None,
                     path,
                     commit_ish: None
                 }
@@ -288,11 +289,98 @@ mod tests
             cli.command,
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Add {
+                    branch: None,
                     path,
                     commit_ish: Some(commit_ish)
                 }
             } if &path == "../wt" && commit_ish == "main"
         ));
+    }
+
+    #[test]
+    fn parses_worktree_add_branch()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "-b",
+            "feature/auth",
+            "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Add {
+                    branch: Some(branch),
+                    path,
+                    commit_ish: None
+                }
+            } if branch == "feature/auth" && &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_add_branch_with_commit_ish()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "-b",
+            "feature/auth",
+            "../wt",
+            "main"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Add {
+                    branch: Some(branch),
+                    path,
+                    commit_ish: Some(commit_ish)
+                }
+            } if branch == "feature/auth" && &path == "../wt" && commit_ish == "main"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_add_branch_without_value()
+    {
+        // Act
+        let err = Cli::try_parse_from(["git-vmr", "worktree", "add", "-b"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn rejects_worktree_add_long_branch_alias()
+    {
+        // Act
+        let err = Cli::try_parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "--branch",
+            "feature/auth",
+            "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
     }
 
     #[test]

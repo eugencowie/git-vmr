@@ -28,6 +28,11 @@ pub enum WorktreeCommand
     /// Create a worktree at [path] and checkout [commit-ish] into it
     Add
     {
+        /// With add, create a new branch named [new-branch] starting at
+        /// [commit-ish], and check out [new-branch] into the new worktree
+        #[arg(short = 'b', value_name = "new-branch")]
+        branch: Option<String>,
+
         #[arg(value_name = "path")]
         path: PathBuf,
 
@@ -358,8 +363,13 @@ impl Command
 
             Command::Worktree { command } => match command
             {
-                WorktreeCommand::Add { path, commit_ish } =>
-                    worktree::add(working_dir, &path, commit_ish.as_deref()),
+                WorktreeCommand::Add { branch, path, commit_ish } =>
+                    worktree::add(
+                        working_dir,
+                        &path,
+                        branch.as_deref(),
+                        commit_ish.as_deref()
+                    ),
             }
         }
     }

@@ -37,6 +37,13 @@ fn commit_file(path: &Path, file: &str)
     git(path, ["commit", "-m", "initial"]);
 }
 
+fn commit_file_with_content(path: &Path, file: &str, content: &str)
+{
+    fs::write(path.join(file), content).expect("failed to write file");
+    git(path, ["add", file]);
+    git(path, ["commit", "-m", file]);
+}
+
 fn branch_exists(path: &Path, branch: &str) -> bool
 {
     std::process::Command::new("git")
@@ -93,6 +100,80 @@ fn worktree_add_creates_child_worktrees_on_inferred_branch()
 }
 
 #[test]
+fn worktree_add_explicit_branch_creates_child_worktrees_on_requested_branch()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir(&vmr).expect("failed to create vmr dir");
+    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    let backend = vmr.join("backend");
+    let frontend = vmr.join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "-b", "feature/auth", "../wt"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(
+                "Preparing worktree (new branch 'feature/auth') (backend, frontend)"
+            )
+            .or(predicate::str::contains(
+                "Preparing worktree (new branch 'feature/auth') (frontend, backend)"
+            ))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&tmp.path().join("wt/backend")), "feature/auth");
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "feature/auth");
+    assert!(!branch_exists(&backend, "wt"));
+    assert!(!branch_exists(&frontend, "wt"));
+}
+
+#[test]
+fn worktree_add_explicit_branch_uses_commit_ish_as_start_point()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir(&vmr).expect("failed to create vmr dir");
+    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    let backend = vmr.join("backend");
+    let frontend = vmr.join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&backend, ["branch", "main"]);
+    git(&frontend, ["branch", "main"]);
+    commit_file_with_content(&backend, "after-main.txt", "backend\n");
+    commit_file_with_content(&frontend, "after-main.txt", "frontend\n");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "-b", "feature/auth", "../wt", "main"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(
+                "Preparing worktree (new branch 'feature/auth') (backend, frontend)"
+            )
+            .or(predicate::str::contains(
+                "Preparing worktree (new branch 'feature/auth') (frontend, backend)"
+            ))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&tmp.path().join("wt/backend")), "feature/auth");
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "feature/auth");
+    assert!(!tmp.path().join("wt/backend/after-main.txt").exists());
+    assert!(!tmp.path().join("wt/frontend/after-main.txt").exists());
+}
+
+#[test]
 fn worktree_add_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -117,6 +198,39 @@ fn worktree_add_skips_non_git_child_directories()
 
     assert!(tmp.path().join("wt/backend").exists());
     assert!(!tmp.path().join("wt/docs").exists());
+}
+
+#[test]
+fn worktree_add_explicit_branch_creation_failures_are_reported_per_repository()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir(&vmr).expect("failed to create vmr dir");
+    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    let backend = vmr.join("backend");
+    let frontend = vmr.join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "README.md");
+    commit_file(&frontend, "README.md");
+    git(&backend, ["branch", "feature/auth"]);
+    git(&frontend, ["branch", "feature/auth"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "-b", "feature/auth", "../wt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains(
+                "fatal: a branch named 'feature/auth' already exists"
+            )
+            .and(predicate::str::contains("(backend, frontend)"))
+        );
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
 }
 
 #[test]
