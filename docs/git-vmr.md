@@ -88,6 +88,7 @@ ancillary user utilities.
 | describe | Give an object a human readable name based on an available ref. | ❌ |
 | diff | Show changes between commits, commit and working tree, etc. | ❌ |
 | [fetch](git-vmr/fetch.md) | Download objects and refs from another repository. | ✅ |
+| [foreach](git-vmr/foreach.md) | Evaluates an arbitrary shell command in each checked out repository. | ✅ |
 | format-patch | Prepare patches for e-mail submission. | ❌ |
 | gc | Cleanup unnecessary files and optimize the local repository. | ❌ |
 | grep | Print lines matching a pattern. | ❌ |

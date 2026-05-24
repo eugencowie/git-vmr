@@ -74,6 +74,12 @@ These are common git-vmr commands used in various situations:
 | [pull](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch | ✅ |
 | [push](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/push.md) | Update remote refs along with associated objects | ✅ |
 
+### Unique commands
+
+| Command | Description | Supported? |
+| ------- | ----------- | ---------- |
+| [foreach](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/foreach.md) | Evaluates an arbitrary shell command in each checked out repository | ✅ |
+
 [docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
 
 ## License
