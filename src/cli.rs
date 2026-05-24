@@ -359,6 +359,54 @@ mod tests
     }
 
     #[test]
+    fn parses_mv_two_or_more_paths()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "mv", "one", "two", "three"])
+            .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Mv {
+                sources,
+                destination
+            } if sources == [PathBuf::from("one"), PathBuf::from("two")]
+                && destination == *"three"
+        ));
+    }
+
+    #[test]
+    fn rejects_mv_without_two_paths_or_with_unsupported_options()
+    {
+        for args in [
+            vec!["git-vmr", "mv"],
+            vec!["git-vmr", "mv", "one"],
+            vec!["git-vmr", "mv", "-r", "one", "two"],
+            vec!["git-vmr", "mv", "--dry-run", "one", "two"],
+            vec!["git-vmr", "mv", "-k", "one", "two"],
+            vec!["git-vmr", "mv", "--force", "one", "two"]
+        ]
+        {
+            // Act
+            let err = Cli::try_parse_from(args).err().unwrap();
+
+            // Assert
+            assert!(
+                matches!(
+                    err.kind(),
+                    ErrorKind::MissingRequiredArgument
+                        | ErrorKind::UnknownArgument
+                        | ErrorKind::InvalidValue
+                        | ErrorKind::TooFewValues
+                ),
+                "unexpected error kind: {:?}",
+                err.kind()
+            );
+        }
+    }
+
+    #[test]
     fn parses_worktree_add_target_path()
     {
         // Act

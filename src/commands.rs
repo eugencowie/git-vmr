@@ -124,9 +124,9 @@ pub enum Command
     /// Move or rename a file, a directory, or a symlink
     Mv
     {
-        /// File to move
-        #[arg(value_name = "source")]
-        source: PathBuf,
+        /// Files to move
+        #[arg(required = true, num_args = 1.., value_name = "source")]
+        sources: Vec<PathBuf>,
 
         /// Destination path
         #[arg(value_name = "destination")]
@@ -362,8 +362,8 @@ impl Command
             Command::Add { paths, all, force, chmod } =>
                 add::add(working_dir, &paths, all, force, chmod),
 
-            Command::Mv { source, destination } =>
-                mv::mv(working_dir, &source, &destination),
+            Command::Mv { sources, destination } =>
+                mv::mv(working_dir, &sources, &destination),
 
             Command::Restore { paths, staged, worktree } =>
                 restore::restore(working_dir, &paths, worktree, staged),

@@ -25,7 +25,7 @@ pub use commit::commit;
 pub use diff::is_dirty;
 pub use fetch::fetch;
 pub use merge::merge;
-pub use mv::{ensure_tracked, mv};
+pub use mv::{ensure_tracked, mv, mv_to_directory};
 pub use pull::pull;
 pub use push::push;
 pub use rebase::rebase;
