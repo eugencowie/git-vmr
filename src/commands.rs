@@ -156,6 +156,18 @@ pub enum Command
         #[arg(short)]
         recursive: bool,
 
+        /// Override the up-to-date check
+        #[arg(short, long)]
+        force: bool,
+
+        /// Don't actually remove any files
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+
+        /// Unstage and remove paths only from the index
+        #[arg(long)]
+        cached: bool,
+
         /// Files to remove
         #[arg(required = true, num_args = 1.., value_name = "pathspec")]
         paths: Vec<PathBuf>
@@ -368,8 +380,8 @@ impl Command
             Command::Restore { paths, staged, worktree } =>
                 restore::restore(working_dir, &paths, worktree, staged),
 
-            Command::Rm { paths, recursive } =>
-                rm::rm(working_dir, &paths, recursive),
+            Command::Rm { paths, recursive, force, dry_run, cached } =>
+                rm::rm(working_dir, &paths, recursive, force, dry_run, cached),
 
             Command::Status => status::status(bin_name, working_dir),
 

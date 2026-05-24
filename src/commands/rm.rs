@@ -5,8 +5,14 @@ use path_clean::PathClean;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
-pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
--> Result<()>
+pub fn rm(
+    working_dir: &Path,
+    paths: &[PathBuf],
+    recursive: bool,
+    force: bool,
+    dry_run: bool,
+    cached: bool
+) -> Result<()>
 {
     // Find VMR root
     let vmr = Vmr::find(working_dir)?;
@@ -25,7 +31,15 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     let results = routed
         .par_iter()
         .map(|(repo_path, repo_paths)| {
-            git::rm(&repo_path.name, &repo_path.path, repo_paths, recursive)
+            git::rm(
+                &repo_path.name,
+                &repo_path.path,
+                repo_paths,
+                recursive,
+                force,
+                dry_run,
+                cached
+            )
         })
         .collect::<Vec<_>>();
 

@@ -359,6 +359,60 @@ mod tests
     }
 
     #[test]
+    fn parses_rm_short_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "rm",
+            "-r",
+            "-f",
+            "-n",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Rm {
+                recursive: true,
+                force: true,
+                dry_run: true,
+                cached: false,
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_rm_long_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "rm",
+            "--force",
+            "--dry-run",
+            "--cached",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Rm {
+                recursive: false,
+                force: true,
+                dry_run: true,
+                cached: true,
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
     fn parses_mv_two_or_more_paths()
     {
         // Act
