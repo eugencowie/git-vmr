@@ -57,6 +57,11 @@ fn staged_names(repo: &Path) -> String
     git_output(repo, ["diff", "--cached", "--name-only"])
 }
 
+fn staged_status(repo: &Path) -> String
+{
+    git_output(repo, ["diff", "--cached", "--name-status"])
+}
+
 #[test]
 fn add_stages_file_from_vmr_root()
 {
@@ -246,4 +251,198 @@ fn add_rejects_invalid_paths_before_staging_any_repo()
     }
 
     assert_eq!(staged_names(&backend), "");
+}
+
+fn assert_add_all_stages_every_repo(flag: &str)
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "old.rs");
+    commit_file(&frontend, "app.rs");
+    fs::write(backend.join("new.rs"), "new\n").expect("failed to write file");
+    fs::write(backend.join("old.rs"), "changed\n")
+        .expect("failed to write file");
+    fs::remove_file(frontend.join("app.rs")).expect("failed to delete file");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", flag])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    let backend_diff = staged_status(&backend);
+    assert!(
+        backend_diff.contains("A\tnew.rs"),
+        "unexpected diff: {backend_diff}"
+    );
+    assert!(
+        backend_diff.contains("M\told.rs"),
+        "unexpected diff: {backend_diff}"
+    );
+    assert_eq!(staged_status(&frontend), "D\tapp.rs\n");
+}
+
+#[test]
+fn add_all_short_stages_every_repo_without_pathspecs()
+{
+    assert_add_all_stages_every_repo("-A");
+}
+
+#[test]
+fn add_all_long_stages_every_repo_without_pathspecs()
+{
+    assert_add_all_stages_every_repo("--all");
+}
+
+#[test]
+fn add_all_without_pathspecs_stages_every_repo_from_child()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "old.rs");
+    commit_file(&frontend, "app.rs");
+    fs::write(backend.join("old.rs"), "changed\n")
+        .expect("failed to write file");
+    fs::write(frontend.join("new.rs"), "new\n").expect("failed to write file");
+
+    git_vmr().current_dir(&frontend).args(["add", "-A"]).assert().success();
+
+    assert_eq!(staged_status(&backend), "M\told.rs\n");
+    assert_eq!(staged_status(&frontend), "A\tnew.rs\n");
+}
+
+#[test]
+fn add_all_with_pathspecs_preserves_routed_scoping()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&backend, "old.rs");
+    commit_file(&frontend, "app.rs");
+    fs::write(backend.join("old.rs"), "changed\n")
+        .expect("failed to write file");
+    fs::write(backend.join("other.rs"), "other\n")
+        .expect("failed to write file");
+    fs::write(frontend.join("app.rs"), "changed\n")
+        .expect("failed to write file");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "-A", "backend/old.rs", "frontend/app.rs"])
+        .assert()
+        .success();
+
+    assert_eq!(staged_names(&backend), "old.rs\n");
+    assert_eq!(staged_names(&frontend), "app.rs\n");
+}
+
+fn assert_force_stages_ignored_file(flag: &str)
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    fs::write(backend.join(".gitignore"), "*.log\n")
+        .expect("failed to write gitignore");
+    fs::write(backend.join("generated.log"), "ignored\n")
+        .expect("failed to write ignored file");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", flag, "backend/generated.log"])
+        .assert()
+        .success();
+
+    assert_eq!(staged_names(&backend), "generated.log\n");
+}
+
+#[test]
+fn add_force_short_stages_ignored_file()
+{
+    assert_force_stages_ignored_file("-f");
+}
+
+#[test]
+fn add_force_long_stages_ignored_file()
+{
+    assert_force_stages_ignored_file("--force");
+}
+
+#[test]
+fn add_chmod_updates_executable_bit_in_index()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "script.sh");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "--chmod=+x", "backend/script.sh"])
+        .assert()
+        .success();
+    assert_eq!(
+        git_output(&backend, ["diff", "--cached", "--summary"]),
+        " mode change 100644 => 100755 script.sh\n"
+    );
+
+    git(&backend, ["commit", "-m", "chmod"]);
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "--chmod=-x", "backend/script.sh"])
+        .assert()
+        .success();
+    assert_eq!(
+        git_output(&backend, ["diff", "--cached", "--summary"]),
+        " mode change 100755 => 100644 script.sh\n"
+    );
+}
+
+#[test]
+fn add_flags_reject_invalid_paths_before_staging_any_repo()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr"))
+        .expect("failed to create marker");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "src.rs");
+
+    for args in [
+        vec!["add", "--force", ".gitvmr/config"],
+        vec!["add", "-A", "backend/src.rs", "docs/readme.md"],
+        vec!["add", "--chmod=+x", "../outside.sh"]
+    ]
+    {
+        fs::write(backend.join("src.rs"), "changed\n")
+            .expect("failed to write file");
+        git_vmr()
+            .current_dir(tmp.path())
+            .args(args)
+            .assert()
+            .failure()
+            .stdout(predicate::str::is_empty());
+        assert_eq!(staged_names(&backend), "");
+    }
 }

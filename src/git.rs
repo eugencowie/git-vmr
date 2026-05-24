@@ -17,7 +17,7 @@ mod switch;
 mod tag;
 mod worktree;
 
-pub use add::{add, add_path};
+pub use add::{ChmodMode, add, add_path};
 use anyhow::{Context, Result, bail};
 pub use branch::{branch, branches, delete_branch};
 pub use clone::clone;

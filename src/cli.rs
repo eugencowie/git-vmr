@@ -256,6 +256,109 @@ mod tests
     }
 
     #[test]
+    fn parses_add_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "-A",
+            "-f",
+            "--chmod=+x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: true,
+                chmod: Some(crate::git::ChmodMode::Executable),
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_long_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "--all",
+            "--force",
+            "--chmod=-x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: true,
+                chmod: Some(crate::git::ChmodMode::NotExecutable),
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_all_without_pathspecs()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "add", "-A"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: false,
+                chmod: None,
+                paths
+            } if paths.is_empty()
+        ));
+    }
+
+    #[test]
+    fn rejects_add_without_pathspecs_or_all()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "add"])
+        {
+            Ok(_) => panic!("expected add without pathspecs or all to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_add_invalid_chmod()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "--chmod=bad",
+            "backend/src.rs"
+        ])
+        {
+            Ok(_) => panic!("expected invalid chmod to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
     fn parses_worktree_add_target_path()
     {
         // Act
