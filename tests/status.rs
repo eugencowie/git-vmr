@@ -119,7 +119,7 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
         .success()
         .stdout(
             predicate::str::contains(
-                "On branch master\nnothing to commit, working tree clean"
+                "On branch master\n\nnothing to commit, working tree clean\n\n"
             )
             .and(predicate::str::contains(
                 "On branch master (new-repo)\n\nNo commits yet\n\n"

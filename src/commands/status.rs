@@ -243,7 +243,7 @@ fn render_group(
     }
     else if repos.iter().all(|(_, status)| !status.initial)
     {
-        output.push_str("nothing to commit, working tree clean\n");
+        output.push_str("\nnothing to commit, working tree clean\n\n");
     }
 }
 
@@ -329,7 +329,7 @@ mod tests
     use std::path::PathBuf;
     use std::process::Command;
 
-    const COMMAND_NAME: &str = "git-vmr";
+    const BIN_NAME: &str = "git-vmr";
 
     #[test]
     fn renders_single_branch_without_repo_list()
@@ -342,7 +342,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch "));
@@ -359,11 +359,13 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), repo_status("main"))];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch main"));
-        assert!(output.contains("nothing to commit, working tree clean"));
+        assert!(output.contains(
+            "On branch main\n\nnothing to commit, working tree clean\n\n"
+        ));
     }
 
     #[test]
@@ -377,7 +379,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("main"));
@@ -401,7 +403,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch develop\n"));
@@ -426,7 +428,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "tools"), status)];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("HEAD detached at "));
@@ -445,7 +447,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "new-repo"), status)];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("master"));
@@ -466,16 +468,41 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
 
         // Assert
         assert!(output.contains(
-            "On branch master\nnothing to commit, working tree clean"
+            "On branch master\n\nnothing to commit, working tree clean\n\n"
         ));
         assert!(
             output.contains("On branch master \u{1b}[90m(new-repo)\u{1b}[0m\n\nNo commits yet\n\n")
         );
         assert!(!output.contains("On branch master (committed, new-repo)"));
+    }
+
+    #[test]
+    fn renders_blank_lines_between_clean_branch_groups()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let statuses = vec![
+            (
+                repo(tmp.path(), "backend"),
+                repo_status("create-project-structure")
+            ),
+            (repo(tmp.path(), "frontend"), repo_status("develop")),
+        ];
+
+        // Act
+        let output = render_status(&statuses, BIN_NAME, tmp.path());
+
+        // Assert
+        assert!(output.contains(
+            "On branch create-project-structure \u{1b}[90m(backend)\u{1b}[0m\n\n\
+             nothing to commit, working tree clean\n\n\
+             On branch develop \u{1b}[90m(frontend)\u{1b}[0m\n\n\
+             nothing to commit, working tree clean\n\n"
+        ));
     }
 
     #[test]
@@ -491,7 +518,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), status)];
 
         // Act
-        let output = render_status(&statuses, COMMAND_NAME, &working_dir);
+        let output = render_status(&statuses, BIN_NAME, &working_dir);
 
         // Assert
         assert!(output.contains("../backend/src/main.rs"));
@@ -548,7 +575,7 @@ mod tests
         init_git_repo(&tmp.path().join("backend"));
 
         // Act
-        let result = status(COMMAND_NAME, tmp.path());
+        let result = status(BIN_NAME, tmp.path());
 
         // Assert
         assert!(result.is_ok());
