@@ -62,6 +62,7 @@ pub enum WorktreeCommand
     },
 
     /// Remove a worktree
+    #[command(visible_alias = "rm")]
     Remove
     {
         /// By default, remove refuses to remove an unclean worktree unless

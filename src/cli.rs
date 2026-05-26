@@ -756,6 +756,27 @@ mod tests
     }
 
     #[test]
+    fn parses_worktree_remove_rm_alias_target_path()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "worktree", "rm", "../wt"])
+            .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: Some(crate::commands::WorktreeCommand::Remove {
+                    force: 0,
+                    delete: false,
+                    force_delete: false,
+                    path
+                })
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
     fn parses_worktree_remove_single_force()
     {
         // Act
@@ -899,6 +920,29 @@ mod tests
         // Act
         let cli = Cli::try_parse_from([
             "git-vmr", "worktree", "remove", "--force", "-D", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: Some(crate::commands::WorktreeCommand::Remove {
+                    force: 1,
+                    delete: false,
+                    force_delete: true,
+                    path
+                })
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_rm_alias_force_and_force_delete()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "rm", "--force", "-D", "../wt"
         ])
         .unwrap();
 

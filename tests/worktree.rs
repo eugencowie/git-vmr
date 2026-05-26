@@ -655,6 +655,24 @@ fn worktree_remove_removes_child_worktrees()
 }
 
 #[test]
+fn worktree_remove_rm_alias_removes_child_worktrees()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "rm", "../wt"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
+}
+
+#[test]
 fn worktree_remove_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
