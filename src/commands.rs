@@ -70,8 +70,12 @@ pub enum WorktreeCommand
         force: u8,
 
         /// Delete the branch
-        #[arg(short, long)]
+        #[arg(short, long, conflicts_with = "force_delete")]
         delete: bool,
+
+        /// Force-delete the branch
+        #[arg(short = 'D')]
+        force_delete: bool,
 
         /// Worktrees can be identified by path, either relative or absolute
         #[arg(value_name = "worktree")]
@@ -459,8 +463,18 @@ impl Command
                         &new_path,
                         force
                     ),
-                WorktreeCommand::Remove { force, delete, path } =>
-                    worktree::remove(working_dir, &path, force, delete),
+                WorktreeCommand::Remove {
+                    force,
+                    delete,
+                    force_delete,
+                    path
+                } => worktree::remove(
+                    working_dir,
+                    &path,
+                    force,
+                    delete,
+                    force_delete
+                )
             },
 
             Command::Foreach { quiet, command } =>

@@ -738,6 +738,7 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: false,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -760,6 +761,7 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 1,
                     delete: false,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -782,6 +784,7 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 2,
                     delete: false,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -804,6 +807,7 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 2,
                     delete: false,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -826,6 +830,7 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: true,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -848,10 +853,89 @@ mod tests
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: true,
+                    force_delete: false,
                     path
                 }
             } if &path == "../wt"
         ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_force_delete()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "remove", "-D", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Remove {
+                    force: 0,
+                    delete: false,
+                    force_delete: true,
+                    path
+                }
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_force_and_force_delete()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "remove", "--force", "-D", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Remove {
+                    force: 1,
+                    delete: false,
+                    force_delete: true,
+                    path
+                }
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_remove_conflicting_delete_modes()
+    {
+        // Act
+        let err = Cli::try_parse_from([
+            "git-vmr", "worktree", "remove", "-d", "-D", "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn rejects_worktree_remove_long_force_delete()
+    {
+        // Act
+        let err = Cli::try_parse_from([
+            "git-vmr",
+            "worktree",
+            "remove",
+            "--force-delete",
+            "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
     }
 
     #[test]

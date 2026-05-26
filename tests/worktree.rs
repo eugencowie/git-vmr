@@ -812,6 +812,86 @@ fn worktree_remove_delete_uses_actual_child_worktree_branch()
 }
 
 #[test]
+fn worktree_remove_force_delete_deletes_unmerged_branch()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    commit_file_with_content(
+        &tmp.path().join("wt/backend"),
+        "topic.txt",
+        "topic\n"
+    );
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "remove", "-D", "../wt"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Deleted branch wt"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!branch_exists(&vmr.join("backend"), "wt"));
+}
+
+#[test]
+fn worktree_remove_force_and_force_delete_removes_dirty_worktree_and_unmerged_branch()
+
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    commit_file_with_content(
+        &tmp.path().join("wt/backend"),
+        "topic.txt",
+        "topic\n"
+    );
+    fs::write(tmp.path().join("wt/backend/dirty.txt"), "dirty\n")
+        .expect("failed to dirty worktree");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "remove", "--force", "-D", "../wt"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Deleted branch wt"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!branch_exists(&vmr.join("backend"), "wt"));
+}
+
+#[test]
+fn worktree_remove_force_delete_uses_actual_child_worktree_branch()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "-b", "feature/auth", "../wt"])
+        .assert()
+        .success();
+    commit_file_with_content(
+        &tmp.path().join("wt/backend"),
+        "topic.txt",
+        "topic\n"
+    );
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "remove", "-D", "../wt"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Deleted branch feature/auth"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(!branch_exists(&vmr.join("backend"), "feature/auth"));
+    assert!(!branch_exists(&vmr.join("backend"), "wt"));
+}
+
+#[test]
 fn worktree_remove_delete_skips_detached_child_worktree()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -822,6 +902,26 @@ fn worktree_remove_delete_skips_detached_child_worktree()
     git_vmr()
         .current_dir(&vmr)
         .args(["worktree", "remove", "--delete", "../wt"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Deleted branch").not())
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(branch_exists(&vmr.join("backend"), "wt"));
+}
+
+#[test]
+fn worktree_remove_force_delete_skips_detached_child_worktree()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    add_worktrees(&vmr);
+    git(&tmp.path().join("wt/backend"), ["checkout", "--detach"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "remove", "-D", "../wt"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Deleted branch").not())
@@ -843,6 +943,29 @@ fn worktree_remove_delete_skips_branch_for_failed_child_removal()
     git_vmr()
         .current_dir(&vmr)
         .args(["worktree", "remove", "--delete", "../wt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Deleted branch wt (frontend)"))
+        .stderr(predicate::str::contains("(backend)"));
+
+    assert!(tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
+    assert!(branch_exists(&vmr.join("backend"), "wt"));
+    assert!(!branch_exists(&vmr.join("frontend"), "wt"));
+}
+
+#[test]
+fn worktree_remove_force_delete_skips_branch_for_failed_child_removal()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+    fs::write(tmp.path().join("wt/backend/README.md"), "dirty\n")
+        .expect("failed to dirty worktree");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "remove", "-D", "../wt"])
         .assert()
         .failure()
         .stdout(predicate::str::contains("Deleted branch wt (frontend)"))

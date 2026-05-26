@@ -229,7 +229,8 @@ pub fn remove(
     working_dir: &Path,
     path: &Path,
     force: u8,
-    delete: bool
+    delete: bool,
+    force_delete: bool
 ) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
@@ -240,7 +241,7 @@ pub fn remove(
         .par_iter()
         .map(|repo| {
             let child_target = target.join(&repo.name).clean();
-            let branch = if delete
+            let branch = if delete || force_delete
             {
                 child_worktree_branch(&repo.name, &repo.path, &child_target)?
             }
@@ -292,12 +293,12 @@ pub fn remove(
         }
     }
 
-    if delete
+    if delete || force_delete
     {
         let branch_deletions = deletion_targets
             .par_iter()
             .map(|(repo_name, repo_path, branch)| {
-                git::delete_branch(repo_name, repo_path, branch, false)
+                git::delete_branch(repo_name, repo_path, branch, force_delete)
             })
             .collect::<Vec<_>>();
         results.extend(branch_deletions);
