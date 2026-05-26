@@ -169,11 +169,11 @@ fn render_group(
 
     if lines.len() == 1
     {
-        println!("{} {}", root.display(), lines[0]);
+        println!("{} {}", git::git_style_path(root), lines[0]);
     }
     else
     {
-        println!("{}", root.display());
+        println!("{}", git::git_style_path(root));
         for line in lines
         {
             println!("  {line}");

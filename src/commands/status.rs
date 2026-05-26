@@ -279,7 +279,7 @@ fn render_paths(
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);
-            rendered.push((display_git_path(&rel), entry.change));
+            rendered.push((git::git_style_path(&rel), entry.change));
         }
     }
 
@@ -314,11 +314,6 @@ fn render_paths(
     }
 
     true
-}
-
-fn display_git_path(path: &Path) -> String
-{
-    path.display().to_string().replace('\\', "/")
 }
 
 #[cfg(test)]
@@ -532,7 +527,7 @@ mod tests
         let path = Path::new("frontend\\docs");
 
         // Act
-        let output = display_git_path(path);
+        let output = git::git_style_path(path);
 
         // Assert
         assert_eq!(output, "frontend/docs");
