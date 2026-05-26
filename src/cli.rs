@@ -737,6 +737,7 @@ mod tests
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 0,
+                    delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -758,6 +759,7 @@ mod tests
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 1,
+                    delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -779,6 +781,7 @@ mod tests
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 2,
+                    delete: false,
                     path
                 }
             } if &path == "../wt"
@@ -800,6 +803,51 @@ mod tests
             Command::Worktree {
                 command: crate::commands::WorktreeCommand::Remove {
                     force: 2,
+                    delete: false,
+                    path
+                }
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_short_delete()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "remove", "-d", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Remove {
+                    force: 0,
+                    delete: true,
+                    path
+                }
+            } if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_long_delete()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "worktree", "remove", "--delete", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Worktree {
+                command: crate::commands::WorktreeCommand::Remove {
+                    force: 0,
+                    delete: true,
                     path
                 }
             } if &path == "../wt"

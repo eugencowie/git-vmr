@@ -69,6 +69,10 @@ pub enum WorktreeCommand
         #[arg(short, long, action = ArgAction::Count)]
         force: u8,
 
+        /// Delete the branch
+        #[arg(short, long)]
+        delete: bool,
+
         /// Worktrees can be identified by path, either relative or absolute
         #[arg(value_name = "worktree")]
         path: PathBuf
@@ -455,8 +459,8 @@ impl Command
                         &new_path,
                         force
                     ),
-                WorktreeCommand::Remove { force, path } =>
-                    worktree::remove(working_dir, &path, force),
+                WorktreeCommand::Remove { force, delete, path } =>
+                    worktree::remove(working_dir, &path, force, delete),
             },
 
             Command::Foreach { quiet, command } =>
