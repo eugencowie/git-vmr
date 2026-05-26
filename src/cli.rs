@@ -471,11 +471,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Add {
+                command: Some(crate::commands::WorktreeCommand::Add {
                     branch: None,
                     path,
                     commit_ish: None
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -493,11 +493,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Add {
+                command: Some(crate::commands::WorktreeCommand::Add {
                     branch: None,
                     path,
                     commit_ish: Some(commit_ish)
-                }
+                })
             } if &path == "../wt" && commit_ish == "main"
         ));
     }
@@ -520,11 +520,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Add {
+                command: Some(crate::commands::WorktreeCommand::Add {
                     branch: Some(branch),
                     path,
                     commit_ish: None
-                }
+                })
             } if branch == "feature/auth" && &path == "../wt"
         ));
     }
@@ -548,11 +548,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Add {
+                command: Some(crate::commands::WorktreeCommand::Add {
                     branch: Some(branch),
                     path,
                     commit_ish: Some(commit_ish)
-                }
+                })
             } if branch == "feature/auth" && &path == "../wt" && commit_ish == "main"
         ));
     }
@@ -691,8 +691,18 @@ mod tests
 
         // Assert
         assert!(matches!(cli.command, Command::Worktree {
-            command: crate::commands::WorktreeCommand::List
+            command: Some(crate::commands::WorktreeCommand::List)
         }));
+    }
+
+    #[test]
+    fn parses_worktree_without_subcommand_as_default_list()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "worktree"]).unwrap();
+
+        // Assert
+        assert!(matches!(cli.command, Command::Worktree { command: None }));
     }
 
     #[test]
@@ -735,12 +745,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: false,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -758,12 +768,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 1,
                     delete: false,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -781,12 +791,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 2,
                     delete: false,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -804,12 +814,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 2,
                     delete: false,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -827,12 +837,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: true,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -850,12 +860,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: true,
                     force_delete: false,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -873,12 +883,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 0,
                     delete: false,
                     force_delete: true,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -896,12 +906,12 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Remove {
+                command: Some(crate::commands::WorktreeCommand::Remove {
                     force: 1,
                     delete: false,
                     force_delete: true,
                     path
-                }
+                })
             } if &path == "../wt"
         ));
     }
@@ -977,11 +987,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Move {
+                command: Some(crate::commands::WorktreeCommand::Move {
                     force: 0,
                     path,
                     new_path
-                }
+                })
             } if &path == "../wt" && &new_path == "../moved"
         ));
     }
@@ -999,11 +1009,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Move {
+                command: Some(crate::commands::WorktreeCommand::Move {
                     force: 1,
                     path,
                     new_path
-                }
+                })
             } if &path == "../wt" && &new_path == "../moved"
         ));
     }
@@ -1022,11 +1032,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Move {
+                command: Some(crate::commands::WorktreeCommand::Move {
                     force: 2,
                     path,
                     new_path
-                }
+                })
             } if &path == "../wt" && &new_path == "../moved"
         ));
     }
@@ -1044,11 +1054,11 @@ mod tests
         assert!(matches!(
             cli.command,
             Command::Worktree {
-                command: crate::commands::WorktreeCommand::Move {
+                command: Some(crate::commands::WorktreeCommand::Move {
                     force: 2,
                     path,
                     new_path
-                }
+                })
             } if &path == "../wt" && &new_path == "../moved"
         ));
     }

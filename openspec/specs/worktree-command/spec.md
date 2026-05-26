@@ -204,6 +204,14 @@ The `git vmr worktree list` command SHALL discover the VMR root from the effecti
 - **AND** the command SHALL NOT fail because of `docs`
 - **AND** the command SHALL NOT report `docs` as a repository participant
 
+### Requirement: Bare worktree command defaults to list
+The `git vmr worktree` command with no nested subcommand SHALL behave the same as `git vmr worktree list`.
+
+#### Scenario: Bare worktree command lists aggregate worktrees
+- **WHEN** user runs `git vmr worktree`
+- **THEN** the command SHALL perform the same worktree listing behavior as `git vmr worktree list`
+- **AND** stdout, stderr, and exit status SHALL match `git vmr worktree list`
+
 ### Requirement: Worktree list renders Git-style path separators
 The `git vmr worktree list` command SHALL render aggregate worktree paths with Git-style `/` separators, regardless of the separator style used by the underlying platform path display or Git worktree list input.
 
