@@ -144,6 +144,11 @@ fn render_status(
         );
     }
 
+    if output.ends_with("\n\n")
+    {
+        output.pop();
+    }
+
     output
 }
 
@@ -359,7 +364,7 @@ mod tests
         // Assert
         assert!(output.contains("On branch main"));
         assert!(output.contains(
-            "On branch main\n\nnothing to commit, working tree clean\n\n"
+            "On branch main\n\nnothing to commit, working tree clean\n"
         ));
     }
 
@@ -447,7 +452,7 @@ mod tests
         // Assert
         assert!(output.contains("master"));
         assert!(output.contains("\u{1b}[90m(new-repo)\u{1b}[0m"));
-        assert!(output.contains("\nNo commits yet\n\n"));
+        assert!(output.contains("\nNo commits yet\n"));
     }
 
     #[test]
@@ -469,9 +474,9 @@ mod tests
         assert!(output.contains(
             "On branch master\n\nnothing to commit, working tree clean\n\n"
         ));
-        assert!(
-            output.contains("On branch master \u{1b}[90m(new-repo)\u{1b}[0m\n\nNo commits yet\n\n")
-        );
+        assert!(output.contains(
+            "On branch master \u{1b}[90m(new-repo)\u{1b}[0m\n\nNo commits yet\n"
+        ));
         assert!(!output.contains("On branch master (committed, new-repo)"));
     }
 
@@ -496,7 +501,7 @@ mod tests
             "On branch create-project-structure \u{1b}[90m(backend)\u{1b}[0m\n\n\
              nothing to commit, working tree clean\n\n\
              On branch develop \u{1b}[90m(frontend)\u{1b}[0m\n\n\
-             nothing to commit, working tree clean\n\n"
+             nothing to commit, working tree clean\n"
         ));
     }
 
