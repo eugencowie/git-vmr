@@ -1,5 +1,6 @@
 [tools]
 actionlint = "latest"
+cargo-dist = "latest"
 gh = "latest"
 git-cliff = "latest"
 node = "latest"
@@ -13,6 +14,7 @@ lint = "cargo clippy --all-targets"
 test = "cargo test"
 changelog = "git cliff --bump"
 release = "release-plz update"
+dist = "dist plan"
 
 [tasks.ci]
 depends = ["format --check", "lint", "test"]

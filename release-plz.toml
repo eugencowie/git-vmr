@@ -1,7 +1,7 @@
 [workspace]
 allow_dirty = true
 changelog_update = false
-git_release_name = "{{ version }}"
+git_release_enable = false
 pr_name = "chore(release): Release {{ version }}"
 pr_branch_prefix = "release/"
 pr_labels = ["chore"]
