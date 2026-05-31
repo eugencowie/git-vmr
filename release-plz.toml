@@ -1,0 +1,7 @@
+[workspace]
+git_release_name = "{{ version }}"
+pr_name = "chore(release): Release {{ version }}"
+pr_branch_prefix = "release/"
+pr_labels = ["chore"]
+release_always = false
+semver_check = false
