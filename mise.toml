@@ -1,5 +1,6 @@
 [tools]
 actionlint = "latest"
+git-cliff = "latest"
 node = "latest"
 "npm:@fission-ai/openspec" = "latest"
 rust = "nightly"
@@ -8,6 +9,7 @@ rust = "nightly"
 format = "cargo +nightly fmt"
 lint = "cargo clippy --all-targets"
 test = "cargo test"
+changelog = "git cliff --bump"
 
 [tasks.ci]
 depends = ["format --check", "lint", "test"]
