@@ -44,6 +44,13 @@ jobs:
     steps:
       - *checkout
       - *install-rust
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --bump
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:

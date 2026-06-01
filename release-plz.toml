@@ -1,4 +1,6 @@
 [workspace]
+allow_dirty = true
+changelog_update = false
 git_release_name = "{{ version }}"
 pr_name = "chore(release): Release {{ version }}"
 pr_branch_prefix = "release/"

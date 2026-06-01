@@ -7,8 +7,10 @@ will be cut from `develop`.
 
 Three tools divide the release concerns:
 
-- release-plz prepares version and changelog pull requests and publishes
-  approved crate releases.
+- release-plz prepares version pull requests and publishes approved crate
+  releases.
+- git-cliff generates the changelog from merged conventional commits and adds it
+  to release pull requests.
 - dist, formerly cargo-dist, builds binary artifacts and installers and attaches
   them to GitHub Releases.
 - Oranda builds the project site and presents release installation options.
@@ -45,8 +47,11 @@ the generated tag to dispatch the dist workflow.
 ### Use release-plz for release preparation and publication
 
 Add release-plz configuration and a GitHub Actions workflow with separate
-release pull request and release jobs. The release pull request job updates the
-version and `CHANGELOG.md`; the release job runs after changes land on `develop`
+release pull request and release jobs. Disable release-plz's package-scoped
+changelog generation. Before release-plz opens or updates a release pull
+request, generate `CHANGELOG.md` from the merged `develop` history with
+standalone git-cliff. Configure release-plz to include that dirty generated file
+in its pull request update. The release job runs after changes land on `develop`
 and publishes only when release-plz identifies an approved release.
 
 Configure `release_always = false` so ordinary merges do not publish a release.
@@ -129,6 +134,9 @@ useful validation or regeneration commands.
 - [Generated dist workflow output can drift from committed configuration] ->
   Document the regeneration command and validate that regenerated output is
   clean during implementation.
+- [Changelog generation dirties the release-plz checkout] -> Enable
+  release-plz's `allow_dirty` option so the generated changelog is included in
+  the release pull request update.
 - [Oranda version age can introduce maintenance constraints] -> Pin the version
   and keep Pages deployment independent from package publication.
 - [Unsupported platforms require manual installation from source] -> Document

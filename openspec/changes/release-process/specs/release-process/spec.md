@@ -2,13 +2,16 @@
 
 ### Requirement: Reviewable release preparation
 The repository SHALL use release-plz to prepare release pull requests against
-`develop` that update the crate version and changelog, and SHALL publish a
-release only after the corresponding release pull request has been merged.
+`develop` that update the crate version, SHALL use standalone git-cliff to add a
+changelog generated from merged conventional commits to those pull requests,
+and SHALL publish a release only after the corresponding release pull request
+has been merged.
 
 #### Scenario: Prepare a release pull request
 - **WHEN** releasable changes have been merged into `develop`
 - **THEN** automation opens or updates a release pull request containing the
-  proposed crate version and changelog changes
+  proposed crate version and a git-cliff changelog generated from merged
+  conventional commits
 
 #### Scenario: Keep an ordinary merge unpublished
 - **WHEN** a non-release pull request is merged into `develop`
