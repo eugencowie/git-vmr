@@ -29,11 +29,9 @@ all = "deny"
 
 [workspace.metadata.git-cliff.changelog]
 output = "CHANGELOG.md"
-header = """
-# Changelog
-
-"""
+header = "# Changelog"
 body = """
+
 {% if version %}\
     ## {{ version | trim_start_matches(pat="v") }}
 {% else %}\
