@@ -1,6 +1,6 @@
 [package]
 name = "git-vmr"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["Eugén Cowie"]
 edition = "2024"
 description = "Multi-repo flexibility with monorepo ergonomics"
