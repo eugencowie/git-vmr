@@ -35,7 +35,7 @@ header = """
 """
 body = """
 {% if version %}\
-    ## {{ version | trim_start_matches(pat="v") }} ({{ timestamp | date(format="%Y-%m-%d") }})
+    ## {{ version | trim_start_matches(pat="v") }}
 {% else %}\
     ## Unreleased
 {% endif %}\
@@ -66,6 +66,9 @@ commit_parsers = [
     { body = ".*security", group = "<!-- 8 -->🛡️ Security" },
     { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
     { message = ".*", group = "<!-- 10 -->💼 Other" },
+]
+commit_preprocessors = [
+    { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/eugencowie/git-vmr/pull/${1}))" },
 ]
 
 [profile.dist]
