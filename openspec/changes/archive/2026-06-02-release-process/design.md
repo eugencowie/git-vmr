@@ -75,9 +75,10 @@ surface.
 ### Use a release credential that triggers downstream workflows
 
 Provide the release-plz workflow with a fine-grained personal access token or
-GitHub App token that can create release pull requests, tags, and GitHub
-Releases and can trigger the dist workflow from the generated tag. Keep the
-credential narrowly scoped to this repository.
+GitHub App token that can create release pull requests and tags and can trigger
+the dist workflow from the generated tag. The dist workflow creates the GitHub
+Release after building its artifacts. Keep the release-plz credential narrowly
+scoped to this repository.
 
 Alternative considered: use only GitHub's default workflow token and invoke
 dist from inside the release-plz workflow. This would couple the workflows and
