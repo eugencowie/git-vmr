@@ -1,0 +1,9 @@
+{
+  "build": {
+    "dist_dir": "target/public/",
+    "path_prefix": "git-vmr"
+  },
+  "styles": {
+    "theme": "axodark"
+  }
+}
