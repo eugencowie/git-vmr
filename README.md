@@ -1,5 +1,7 @@
 # git-vmr: multi-repo flexibility with monorepo ergonomics
 
+> *This project follows the [ai-disclosure convention](https://github.com/ggfevans/ai-disclosure): see [AI_DISCLOSURE.md](https://github.com/eugencowie/git-vmr/blob/develop/AI_DISCLOSURE.md)*.
+
 git-vmr is a Git CLI wrapper for interacting with multiple repositories as a single unified workspace, combining the flexibility of independent repositories with the ergonomics of a monorepo.
 
 ## License
