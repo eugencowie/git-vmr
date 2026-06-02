@@ -1,4 +1,5 @@
 mod init;
+mod status;
 
 use anyhow::{Context, Result, bail};
 use clap::{ArgAction, Parser, Subcommand};
@@ -9,7 +10,10 @@ use std::path::PathBuf;
 enum Command
 {
     /// Create an empty virtual monorepo or reinitialize an existing one
-    Init
+    Init,
+
+    /// Show the virtual monorepo status
+    Status
 }
 
 #[derive(Parser)]
@@ -39,7 +43,8 @@ impl Cli
         // Run command
         match self.command
         {
-            Command::Init => init::init(&working_dir)
+            Command::Init => init::init(&working_dir),
+            Command::Status => status::status(&working_dir)
         }
     }
 
