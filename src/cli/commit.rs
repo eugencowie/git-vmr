@@ -1,6 +1,7 @@
 use crate::cli::AggregateError;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
+use rayon::prelude::*;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,14 +39,22 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     let mut successes = Vec::new();
     let mut failures = Vec::new();
 
-    for (repo_name, repo_path) in repos
+    for result in repos
+        .par_iter()
+        .map(|(repo_name, repo_path)| {
+            commit_repo(repo_name, repo_path, message)
+        })
+        .collect::<Result<Vec<_>>>()?
     {
-        match commit_repo(&repo_name, &repo_path, message)?
+        match result
         {
             Ok(success) => successes.push(success),
             Err(failure) => failures.push(failure)
         }
     }
+
+    successes.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
+    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
 
     for success in successes
     {

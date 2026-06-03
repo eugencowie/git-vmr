@@ -1,6 +1,7 @@
 use crate::cli::AggregateError;
 use crate::config::vmr;
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -33,14 +34,22 @@ pub fn merge(working_dir: &Path, commit_ish: &str) -> Result<()>
     let mut successes = Vec::new();
     let mut failures = Vec::new();
 
-    for (repo_name, repo_path) in repos
+    for result in repos
+        .par_iter()
+        .map(|(repo_name, repo_path)| {
+            merge_repo(repo_name, repo_path, commit_ish)
+        })
+        .collect::<Result<Vec<_>>>()?
     {
-        match merge_repo(&repo_name, &repo_path, commit_ish)?
+        match result
         {
             Ok(success) => successes.push(success),
             Err(failure) => failures.push(failure)
         }
     }
+
+    successes.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
+    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
 
     for success in successes
     {

@@ -1,7 +1,15 @@
+use crate::cli::AggregateError;
 use crate::config::vmr;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+struct RestoreFailure
+{
+    repo_name: String,
+    message: String
+}
 
 pub fn restore(
     working_dir: &Path,
@@ -13,12 +21,35 @@ pub fn restore(
     // Find VMR root and route all requested paths before mutating any
     // repository
     let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?;
+    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?
+        .into_iter()
+        .collect::<Vec<_>>();
 
     // Restore paths in each child repository
-    for (repo_path, repo_paths) in routed
+    let mut failures = routed
+        .par_iter()
+        .filter_map(|(repo_path, repo_paths)| {
+            git_restore(repo_path, repo_paths, worktree, staged).transpose()
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
+
+    if !failures.is_empty()
     {
-        git_restore(&repo_path, &repo_paths, worktree, staged)?;
+        return Err(AggregateError::new(
+            failures
+                .into_iter()
+                .map(|failure| {
+                    anyhow::anyhow!(
+                        "{} ({})",
+                        failure.message,
+                        failure.repo_name
+                    )
+                })
+                .collect()
+        )
+        .into());
     }
 
     Ok(())
@@ -29,7 +60,7 @@ fn git_restore(
     paths: &[PathBuf],
     worktree: bool,
     staged: bool
-) -> Result<()>
+) -> Result<Option<RestoreFailure>>
 {
     // Build git restore command for the owning child repository
     let mut command = Command::new("git");
@@ -53,12 +84,24 @@ fn git_restore(
     // Convert git failure into anyhow error
     if !output.status.success()
     {
-        bail!(
-            "git restore failed for '{}': {}",
-            repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        return Ok(Some(RestoreFailure {
+            repo_name: repo_name(repo_path)?,
+            message: format!(
+                "git restore failed for '{}': {}",
+                repo_path.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+        }));
     }
 
-    Ok(())
+    Ok(None)
+}
+
+fn repo_name(repo_path: &Path) -> Result<String>
+{
+    Ok(repo_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("repository path has no valid UTF-8 file name")?
+        .to_owned())
 }

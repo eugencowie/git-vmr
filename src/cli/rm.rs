@@ -1,8 +1,16 @@
+use crate::cli::AggregateError;
 use crate::config::vmr;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+struct RmFailure
+{
+    repo_name: String,
+    message: String
+}
 
 pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
 -> Result<()>
@@ -17,12 +25,35 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     }
 
     // Route requested paths before removing anything
-    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?;
+    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?
+        .into_iter()
+        .collect::<Vec<_>>();
 
     // Remove paths in each child repository
-    for (repo_path, repo_paths) in routed
+    let mut failures = routed
+        .par_iter()
+        .filter_map(|(repo_path, repo_paths)| {
+            git_rm(repo_path, repo_paths, recursive).transpose()
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    failures.sort_by(|a, b| a.repo_name.cmp(&b.repo_name));
+
+    if !failures.is_empty()
     {
-        git_rm(&repo_path, &repo_paths, recursive)?;
+        return Err(AggregateError::new(
+            failures
+                .into_iter()
+                .map(|failure| {
+                    anyhow::anyhow!(
+                        "{} ({})",
+                        failure.message,
+                        failure.repo_name
+                    )
+                })
+                .collect()
+        )
+        .into());
     }
 
     Ok(())
@@ -40,7 +71,11 @@ fn targets_vmr_root(
         .any(|path| vmr::resolve_path(working_dir, path).clean() == vmr_root)
 }
 
-fn git_rm(repo_path: &Path, paths: &[PathBuf], recursive: bool) -> Result<()>
+fn git_rm(
+    repo_path: &Path,
+    paths: &[PathBuf],
+    recursive: bool
+) -> Result<Option<RmFailure>>
 {
     // Build git rm command for the owning child repository
     let mut command = Command::new("git");
@@ -59,12 +94,24 @@ fn git_rm(repo_path: &Path, paths: &[PathBuf], recursive: bool) -> Result<()>
     // Convert git failure into anyhow error
     if !output.status.success()
     {
-        bail!(
-            "git rm failed for '{}': {}",
-            repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        return Ok(Some(RmFailure {
+            repo_name: repo_name(repo_path)?,
+            message: format!(
+                "git rm failed for '{}': {}",
+                repo_path.display(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+        }));
     }
 
-    Ok(())
+    Ok(None)
+}
+
+fn repo_name(repo_path: &Path) -> Result<String>
+{
+    Ok(repo_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("repository path has no valid UTF-8 file name")?
+        .to_owned())
 }
