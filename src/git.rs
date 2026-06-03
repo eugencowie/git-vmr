@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
@@ -10,135 +10,113 @@ pub struct GitOutput
     pub stderr: Vec<u8>
 }
 
-pub struct GitFailure
-{
-    pub repo_name: String,
-    pub message: String
-}
-
-pub struct GitSuccess
-{
-    pub repo_name: String,
-    pub stdout: String
-}
+pub type GitCommandResult = Result<Option<String>>;
 
 pub fn add(
     repo_name: &str,
     repo_path: &Path,
     paths: &[PathBuf]
-) -> Result<Option<GitFailure>>
+) -> GitCommandResult
 {
     let output = git_path_output(repo_path, ["add", "--"], paths)?;
 
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: format!(
-            "git add failed for '{}': {}",
-            repo_path.display(),
-            stderr(&output)
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |_| None,
+        |output| {
+            format!(
+                "git add failed for '{}': {}",
+                repo_path.display(),
+                stderr(output)
+            )
+        }
+    )
 }
 
 pub fn branch(
     repo_name: &str,
     repo_path: &Path,
     branch_name: &str
-) -> Result<Option<GitFailure>>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["branch", branch_name])?;
 
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: first_non_empty_line_strip_fatal(
-            &output.stderr,
-            "git branch failed"
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |_| None,
+        |output| {
+            first_non_empty_line_strip_fatal(
+                &output.stderr,
+                "git branch failed"
+            )
+        }
+    )
 }
 
 pub fn commit(
     repo_name: &str,
     repo_path: &Path,
     message: &str
-) -> Result<std::result::Result<GitSuccess, GitFailure>>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["commit", "-m", message])?;
 
-    if output.status.success()
-    {
-        return Ok(Ok(GitSuccess {
-            repo_name: repo_name.to_owned(),
-            stdout: first_non_empty_line(
-                &output.stdout,
-                "git commit succeeded"
-            )
-        }));
-    }
-
-    Ok(Err(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: first_non_empty_line(&output.stderr, "git commit failed")
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |output| {
+            Some(first_non_empty_line(&output.stdout, "git commit succeeded"))
+        },
+        |output| first_non_empty_line(&output.stderr, "git commit failed")
+    )
 }
 
 pub fn merge(
     repo_name: &str,
     repo_path: &Path,
     commit_ish: &str
-) -> Result<std::result::Result<GitSuccess, GitFailure>>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["merge", commit_ish])?;
 
-    if output.status.success()
-    {
-        return Ok(Ok(GitSuccess {
-            repo_name: repo_name.to_owned(),
-            stdout: first_non_empty_line(&output.stdout, "git merge succeeded")
-        }));
-    }
-
-    Ok(Err(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: first_non_empty_line_with_fallback(
-            &output.stderr,
-            &output.stdout,
-            "git merge failed"
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |output| {
+            Some(first_non_empty_line(&output.stdout, "git merge succeeded"))
+        },
+        |output| {
+            first_non_empty_line_with_fallback(
+                &output.stderr,
+                &output.stdout,
+                "git merge failed"
+            )
+        }
+    )
 }
 
 pub fn rebase(
     repo_name: &str,
     repo_path: &Path,
     upstream: &str
-) -> Result<Option<GitFailure>>
+) -> GitCommandResult
 {
     let output = git_output(repo_path, ["rebase", upstream])?;
 
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: first_non_empty_line_with_fallback_strip_fatal(
-            &output.stderr,
-            &output.stdout,
-            "git rebase failed"
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |_| None,
+        |output| {
+            first_non_empty_line_with_fallback_strip_fatal(
+                &output.stderr,
+                &output.stdout,
+                "git rebase failed"
+            )
+        }
+    )
 }
 
 pub fn restore(
@@ -147,7 +125,7 @@ pub fn restore(
     paths: &[PathBuf],
     worktree: bool,
     staged: bool
-) -> Result<Option<GitFailure>>
+) -> GitCommandResult
 {
     let mut args = vec![OsString::from("restore")];
 
@@ -165,19 +143,18 @@ pub fn restore(
     args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
     let output = git_output(repo_path, args)?;
 
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: format!(
-            "git restore failed for '{}': {}",
-            repo_path.display(),
-            stderr(&output)
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |_| None,
+        |output| {
+            format!(
+                "git restore failed for '{}': {}",
+                repo_path.display(),
+                stderr(output)
+            )
+        }
+    )
 }
 
 pub fn rm(
@@ -185,7 +162,7 @@ pub fn rm(
     repo_path: &Path,
     paths: &[PathBuf],
     recursive: bool
-) -> Result<Option<GitFailure>>
+) -> GitCommandResult
 {
     let mut args = vec![OsString::from("rm")];
 
@@ -198,19 +175,18 @@ pub fn rm(
     args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
     let output = git_output(repo_path, args)?;
 
-    if output.status.success()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(GitFailure {
-        repo_name: repo_name.to_owned(),
-        message: format!(
-            "git rm failed for '{}': {}",
-            repo_path.display(),
-            stderr(&output)
-        )
-    }))
+    command_result(
+        repo_name,
+        &output,
+        |_| None,
+        |output| {
+            format!(
+                "git rm failed for '{}': {}",
+                repo_path.display(),
+                stderr(output)
+            )
+        }
+    )
 }
 
 pub fn mv(repo_path: &Path, source: &Path, destination: &Path) -> Result<()>
@@ -263,6 +239,24 @@ pub fn add_path(repo_path: &Path, path: &Path) -> Result<()>
     }
 
     Ok(())
+}
+
+fn command_result(
+    repo_name: &str,
+    output: &GitOutput,
+    success_message: impl FnOnce(&GitOutput) -> Option<String>,
+    failure_message: impl FnOnce(&GitOutput) -> String
+) -> GitCommandResult
+{
+    if output.status.success()
+    {
+        Ok(success_message(output)
+            .map(|message| format!("{message} ({repo_name})")))
+    }
+    else
+    {
+        Err(anyhow!("{} ({})", failure_message(output), repo_name))
+    }
 }
 
 pub fn git_output<I, S>(repo_path: &Path, args: I) -> Result<GitOutput>

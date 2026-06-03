@@ -9,6 +9,7 @@ mod restore;
 mod rm;
 mod status;
 
+use crate::git::GitCommandResult;
 use anyhow::{Context, Result, bail};
 use clap::{ArgAction, Parser, Subcommand};
 use std::env;
@@ -42,6 +43,35 @@ impl std::fmt::Display for AggregateError
 }
 
 impl std::error::Error for AggregateError {}
+
+fn print_results(results: Vec<GitCommandResult>) -> Result<()>
+{
+    let mut messages = Vec::new();
+    let mut errors = Vec::new();
+
+    for result in results
+    {
+        match result
+        {
+            Ok(Some(message)) => messages.push(message),
+            Ok(None) =>
+            {}
+            Err(error) => errors.push(error)
+        }
+    }
+
+    for message in messages
+    {
+        println!("{message}");
+    }
+
+    if !errors.is_empty()
+    {
+        return Err(AggregateError::new(errors).into());
+    }
+
+    Ok(())
+}
 
 #[derive(Subcommand)]
 enum Command
@@ -177,8 +207,11 @@ impl Cli
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
             Command::Status => status::status(&working_dir),
-            Command::Branch { branch_name } =>
-                branch::branch(&working_dir, branch_name.as_deref()),
+            Command::Branch { branch_name } => match branch_name
+            {
+                Some(branch_name) => branch::branch(&working_dir, &branch_name),
+                None => branch::branches(&working_dir)
+            },
             Command::Commit { message } =>
                 commit::commit(&working_dir, &message),
             Command::Merge { commit_ish } =>

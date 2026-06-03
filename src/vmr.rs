@@ -2,7 +2,7 @@ mod repo;
 
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
-pub use repo::Repo;
+pub use repo::{Head, Repo, RepoBranches};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -23,11 +23,13 @@ impl Vmr
     pub fn find(working_dir: &Path) -> Result<Vmr>
     {
         // Search working directory and ancestors
-        for parent in working_dir.ancestors()
+        for dir in working_dir.ancestors()
         {
-            if parent.join(".gitvmr").exists()
+            // Check for existence as marker can be directory or file (e.g.
+            // worktree)
+            if dir.join(".gitvmr").exists()
             {
-                return Ok(Vmr::new(parent));
+                return Ok(Vmr::new(dir));
             }
         }
 
@@ -41,6 +43,7 @@ impl Vmr
     {
         let mut repos = Vec::new();
 
+        // Scan immediate child directories
         for repo_path in fs::read_dir(&self.path)
             .with_context(|| {
                 format!("failed to read VMR root '{}'", self.path.display())
@@ -53,12 +56,14 @@ impl Vmr
             .map(|entry| entry.path())
             .collect::<Vec<_>>()
         {
-            if let Some(repo) = Repo::find(repo_path)?
+            // Add children that are Git repositories
+            if let Some(repo) = Repo::find(repo_path)
             {
                 repos.push(repo);
             }
         }
 
+        // Keep repository order deterministic
         repos.sort_by(|a, b| a.name.cmp(&b.name));
 
         Ok(repos)
@@ -157,7 +162,7 @@ impl Vmr
 
         // Require explicit paths to be owned by child Git repositories
         let repo_path = self.path.join(repo_name);
-        let repo = Repo::find(repo_path)?.with_context(|| {
+        let repo = Repo::find(repo_path).with_context(|| {
             format!(
                 "'{}' is not owned by a child Git repository",
                 path.display()
