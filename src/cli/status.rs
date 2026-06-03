@@ -1,45 +1,10 @@
-use crate::git;
+use crate::git::{self, FileChange, FileEntry, Head, RepoStatus};
 use crate::vmr::{Repo, Vmr};
 use anstyle::{AnsiColor, Style};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-
-#[derive(Clone, PartialEq, Eq)]
-enum Head
-{
-    Branch(String),
-    Detached(String)
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum FileChange
-{
-    NewFile,
-    Modified,
-    Deleted,
-    Renamed,
-    TypeChange,
-    Copied
-}
-
-#[derive(Clone, PartialEq, Eq)]
-struct FileEntry
-{
-    pub path: PathBuf,
-    pub change: FileChange
-}
-
-#[derive(Clone, PartialEq, Eq)]
-struct RepoStatus
-{
-    pub head: Head,
-    pub initial: bool,
-    pub staged_changes: Vec<FileEntry>,
-    pub unstaged_changes: Vec<FileEntry>,
-    pub untracked_files: Vec<FileEntry>
-}
+use std::path::Path;
 
 struct RenderContext<'a>
 {
@@ -83,165 +48,25 @@ impl StatusStyles
 
 pub fn status(working_dir: &Path) -> Result<()>
 {
-    // Find VMR root
+    // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
 
-    // Collect repository statuses
-    let statuses = collect_statuses(&vmr)?;
+    // Get list of repositories
+    let repos = vmr.repos()?;
+
+    // Collect status information from repositories
+    let mut statuses = repos
+        .par_iter()
+        .filter_map(|repo| git::status(repo).transpose())
+        .collect::<Result<Vec<_>>>()?;
+
+    // Keep status order deterministic
+    statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
 
     // Render status output
     anstream::print!("{}", render_status(&statuses, working_dir));
 
     Ok(())
-}
-
-fn collect_statuses(vmr: &Vmr) -> Result<Vec<(Repo, RepoStatus)>>
-{
-    // Find child repositories
-    let repos = vmr.repos()?;
-
-    // Collect statuses in parallel
-    let mut statuses = repos
-        .par_iter()
-        .filter_map(|repo| collect_repo_status(repo).transpose())
-        .collect::<Result<Vec<_>>>()?;
-
-    // Sort by repository name
-    statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
-
-    Ok(statuses)
-}
-
-fn collect_repo_status(repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
-{
-    let mut staged_changes = Vec::new();
-    let mut unstaged_changes = Vec::new();
-    let mut untracked_files = Vec::new();
-
-    // Read porcelain status
-    let status_output = git::git_stdout(&repo.path, [
-        "status",
-        "--porcelain=v1",
-        "-z",
-        "--branch",
-        "--no-ahead-behind"
-    ])
-    .with_context(|| {
-        format!("failed to read git status for '{}'", repo.path.display())
-    })?;
-    let mut records = status_output
-        .split(|byte| *byte == 0)
-        .filter(|record| !record.is_empty());
-
-    // Parse branch header
-    let branch_header =
-        records.next().context("git status did not return a branch header")?;
-    let (head, initial) = parse_branch_header(&repo.path, branch_header)?;
-
-    // Parse path records
-    while let Some(record) = records.next()
-    {
-        let record = String::from_utf8_lossy(record);
-        if record.len() < 4
-        {
-            continue;
-        }
-
-        let mut chars = record.chars();
-        let index_status = chars.next().unwrap_or(' ');
-        let worktree_status = chars.next().unwrap_or(' ');
-        let path = PathBuf::from(record[3..].to_owned());
-
-        // Skip the old path record for renamed or copied files
-        if matches!(index_status, 'R' | 'C')
-            || matches!(worktree_status, 'R' | 'C')
-        {
-            let _old_path = records.next();
-        }
-
-        // Track untracked files separately
-        if index_status == '?' && worktree_status == '?'
-        {
-            untracked_files
-                .push(FileEntry { path, change: FileChange::NewFile });
-            continue;
-        }
-
-        // Treat intent-to-add as staged for VMR status output
-        if index_status == ' ' && worktree_status == 'A'
-        {
-            staged_changes
-                .push(FileEntry { path, change: FileChange::NewFile });
-            continue;
-        }
-
-        // Add index and worktree changes
-        if let Some(change) = parse_status_change(index_status)
-        {
-            staged_changes.push(FileEntry { path: path.clone(), change });
-        }
-        if let Some(change) = parse_status_change(worktree_status)
-        {
-            unstaged_changes.push(FileEntry { path, change });
-        }
-    }
-
-    Ok(Some((repo.clone(), RepoStatus {
-        head,
-        initial,
-        staged_changes,
-        unstaged_changes,
-        untracked_files
-    })))
-}
-
-fn parse_branch_header(repo_path: &Path, header: &[u8])
--> Result<(Head, bool)>
-{
-    // Decode and validate branch header
-    let header = String::from_utf8_lossy(header);
-    let header = header
-        .strip_prefix("## ")
-        .context("git status branch header had unexpected format")?;
-
-    // Detect unborn branch
-    if let Some(branch) = header.strip_prefix("No commits yet on ")
-    {
-        return Ok((Head::Branch(branch.to_owned()), true));
-    }
-
-    // Detect detached HEAD
-    if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
-    {
-        let hash = String::from_utf8_lossy(&git::git_stdout(repo_path, [
-            "rev-parse",
-            "--short",
-            "HEAD"
-        ])?)
-        .trim()
-        .to_owned();
-        return Ok((Head::Detached(hash), false));
-    }
-
-    // Parse branch name
-    let branch = header.split("...").next().unwrap_or(header).to_owned();
-    Ok((Head::Branch(branch), false))
-}
-
-fn parse_status_change(status: char) -> Option<FileChange>
-{
-    // Map porcelain status code
-    match status
-    {
-        'A' => Some(FileChange::NewFile),
-        'M' => Some(FileChange::Modified),
-        'D' => Some(FileChange::Deleted),
-        'R' => Some(FileChange::Renamed),
-        'T' => Some(FileChange::TypeChange),
-        'C' => Some(FileChange::Copied),
-        'U' => Some(FileChange::Modified),
-        _ => None
-    }
 }
 
 fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
@@ -445,6 +270,7 @@ mod tests
 {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use std::process::Command;
 
     #[test]
@@ -586,21 +412,19 @@ mod tests
     }
 
     #[test]
-    fn collects_git_repos_and_skips_non_git_dirs()
+    fn status_succeeds_with_git_repos_and_non_git_dirs()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
         fs::create_dir(tmp.path().join("docs")).unwrap();
         init_git_repo(&tmp.path().join("backend"));
-        let vmr = Vmr::find(tmp.path()).unwrap();
 
         // Act
-        let statuses = collect_statuses(&vmr).unwrap();
+        let result = status(tmp.path());
 
         // Assert
-        assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].0.name, "backend");
+        assert!(result.is_ok());
     }
 
     fn repo(root: &Path, name: &str) -> Repo

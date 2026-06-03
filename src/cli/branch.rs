@@ -1,6 +1,6 @@
 use crate::cli::print_results;
-use crate::git;
-use crate::vmr::{Head, RepoBranches, Vmr};
+use crate::git::{self, Head, RepoBranches};
+use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,7 +35,7 @@ pub fn branches(working_dir: &Path) -> Result<()>
     // Collect branch information from repositories
     let mut branches = repos
         .par_iter()
-        .filter_map(|repo| repo.branches().transpose())
+        .filter_map(|repo| git::branches(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Keep branch order deterministic

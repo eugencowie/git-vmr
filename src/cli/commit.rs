@@ -15,7 +15,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     // Filter repositories without staged changes
     let dirty_repos = repos
         .par_iter()
-        .filter_map(|repo| match repo.is_dirty()
+        .filter_map(|repo| match git::is_dirty(&repo.path)
         {
             Ok(true) => Some(Ok(repo)),
             Ok(false) => None,
