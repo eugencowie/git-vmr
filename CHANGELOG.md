@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+### 🚀 Features
+
+- Add `add`, `mv`, `restore`, `rm` commands for managing the working tree ([#11](https://github.com/eugencowie/git-vmr/pull/11))
+
+### ⚙️ Miscellaneous Tasks
+
+- Rewrite homepage install commands ([#13](https://github.com/eugencowie/git-vmr/pull/13))
+
 ## 0.2.0
 
 ### 🚀 Features
