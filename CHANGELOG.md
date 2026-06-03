@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0
+
+### 🚀 Features
+
+- Add destination argument to `init` command ([#14](https://github.com/eugencowie/git-vmr/pull/14))
+- Add `branch` command to create and list branches ([#16](https://github.com/eugencowie/git-vmr/pull/16))
+- Add `commit` command to create commits for staged changes ([#17](https://github.com/eugencowie/git-vmr/pull/17))
+- Add `merge` command to merge changes ([#18](https://github.com/eugencowie/git-vmr/pull/18))
+- Add `rebase` command to apply commits on top of another tip ([#19](https://github.com/eugencowie/git-vmr/pull/19))
+
+### 🚜 Refactor
+
+- Centralise git command execution ([#21](https://github.com/eugencowie/git-vmr/pull/21))
+- Centralise repository discovery ([#22](https://github.com/eugencowie/git-vmr/pull/22))
+- Standardise git command result handling ([#23](https://github.com/eugencowie/git-vmr/pull/23))
+- Restructure git command organisation ([#24](https://github.com/eugencowie/git-vmr/pull/24))
+
+### ⚡ Performance
+
+- Run commands in parallel ([#20](https://github.com/eugencowie/git-vmr/pull/20))
+
 ## 0.3.0
 
 ### 🚀 Features
