@@ -1,193 +1,187 @@
+mod repo;
+
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
+pub use repo::Repo;
 use std::collections::BTreeMap;
-use std::ffi::OsStr;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-pub fn find_vmr_root(start: &Path) -> Result<PathBuf>
+#[derive(Debug)]
+pub struct Vmr
 {
-    // Search start directory and ancestors
-    for parent in start.ancestors()
-    {
-        if parent.join(".gitvmr").exists()
-        {
-            return Ok(parent.to_path_buf());
-        }
-    }
-
-    // Report missing VMR root
-    bail!("not a virtual monorepo (or any of the parent directories): .gitvmr")
+    pub path: PathBuf
 }
 
-pub fn find_vmr_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
+impl Vmr
 {
-    let mut repos = Vec::new();
-
-    for repo_path in child_dirs(vmr_root)?
+    pub fn new(path: &Path) -> Vmr
     {
-        if !repo_path.join(".git").exists()
+        Vmr { path: path.to_owned() }
+    }
+
+    pub fn find(working_dir: &Path) -> Result<Vmr>
+    {
+        // Search working directory and ancestors
+        for parent in working_dir.ancestors()
         {
-            continue;
+            if parent.join(".gitvmr").exists()
+            {
+                return Ok(Vmr::new(parent));
+            }
         }
 
-        let repo_name = repo_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("repository path has no valid UTF-8 file name")?
-            .to_owned();
-
-        repos.push((repo_name, repo_path));
-    }
-
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-    Ok(repos)
-}
-
-pub fn child_dirs(vmr_root: &Path) -> Result<Vec<PathBuf>>
-{
-    Ok(fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter(|entry| entry.file_name() != ".gitvmr")
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>())
-}
-
-pub fn route_paths(
-    working_dir: &Path,
-    vmr_root: &Path,
-    paths: &[PathBuf]
-) -> Result<BTreeMap<PathBuf, Vec<PathBuf>>>
-{
-    let mut grouped: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
-
-    // Resolve and route every path before mutating any repository
-    for path in paths
-    {
-        let normalized = resolve_path(working_dir, path).clean();
-        let routed = route_path(vmr_root, &normalized)
-            .with_context(|| format!("failed to route '{}'", path.display()))?;
-
-        for (repo_path, repo_relative_path) in routed
-        {
-            grouped.entry(repo_path).or_default().push(repo_relative_path);
-        }
-    }
-
-    Ok(grouped)
-}
-
-pub fn route_single_path(
-    working_dir: &Path,
-    vmr_root: &Path,
-    path: &Path
-) -> Result<(PathBuf, PathBuf)>
-{
-    // Resolve one operand without allowing aggregate VMR root expansion
-    let normalized = resolve_path(working_dir, path).clean();
-
-    if normalized == vmr_root
-    {
-        bail!("'{}' resolves to the VMR root aggregate", path.display());
-    }
-
-    // Reuse normal child repository ownership checks
-    route_path(vmr_root, &normalized)
-        .with_context(|| format!("failed to route '{}'", path.display()))?
-        .into_iter()
-        .next()
-        .context("path did not route to a child repository")
-}
-
-pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
-{
-    // Interpret relative paths against effective working directory
-    if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
-}
-
-pub fn route_path(
-    vmr_root: &Path,
-    path: &Path
-) -> Result<Vec<(PathBuf, PathBuf)>>
-{
-    // Expand the aggregate VMR root view across child repositories
-    if path == vmr_root
-    {
-        return expand_vmr_root(vmr_root);
-    }
-
-    // Ensure path stays inside the VMR root
-    let relative = path.strip_prefix(vmr_root).with_context(|| {
-        format!(
-            "'{}' is outside virtual monorepo '{}'",
-            path.display(),
-            vmr_root.display()
-        )
-    })?;
-
-    // Use first path component as owning child repository
-    let mut components = relative.components();
-    let repo_name = match components.next()
-    {
-        Some(Component::Normal(name)) => name,
-        _ => bail!("'{}' is not owned by a child repository", path.display())
-    };
-
-    // Reject VMR metadata paths
-    if repo_name == OsStr::new(".gitvmr")
-    {
+        // Report missing VMR root
         bail!(
-            "cannot route virtual monorepo metadata path '{}'",
-            path.display()
+            "not a virtual monorepo (or any of the parent directories): .gitvmr"
         );
     }
 
-    // Require explicit paths to be owned by child Git repositories
-    let repo_path = vmr_root.join(repo_name);
-    if !repo_path.join(".git").exists()
+    pub fn repos(&self) -> Result<Vec<Repo>>
     {
-        bail!("'{}' is not owned by a child Git repository", path.display());
+        let mut repos = Vec::new();
+
+        for repo_path in fs::read_dir(&self.path)
+            .with_context(|| {
+                format!("failed to read VMR root '{}'", self.path.display())
+            })?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+            })
+            .filter(|entry| entry.file_name() != ".gitvmr")
+            .map(|entry| entry.path())
+            .collect::<Vec<_>>()
+        {
+            if let Some(repo) = Repo::find(repo_path)?
+            {
+                repos.push(repo);
+            }
+        }
+
+        repos.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(repos)
     }
 
-    // Build path relative to owning repository
-    let mut repo_relative_path = PathBuf::new();
-    for component in components
+    pub fn route_paths(
+        &self,
+        working_dir: &Path,
+        paths: &[PathBuf]
+    ) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
     {
-        repo_relative_path.push(component.as_os_str());
-    }
-    if repo_relative_path.as_os_str().is_empty()
-    {
-        repo_relative_path.push(".");
+        let mut grouped: BTreeMap<Repo, Vec<PathBuf>> = BTreeMap::new();
+
+        // Resolve and route every path before mutating any repository
+        for path in paths
+        {
+            let normalized = resolve_path(working_dir, path).clean();
+            let routed = self.route_path(&normalized).with_context(|| {
+                format!("failed to route '{}'", path.display())
+            })?;
+
+            for (repo_path, repo_relative_path) in routed
+            {
+                grouped.entry(repo_path).or_default().push(repo_relative_path);
+            }
+        }
+
+        Ok(grouped)
     }
 
-    Ok(vec![(repo_path, repo_relative_path)])
+    pub fn route_single_path(
+        &self,
+        working_dir: &Path,
+        path: &Path
+    ) -> Result<(Repo, PathBuf)>
+    {
+        // Resolve one operand without allowing aggregate VMR root expansion
+        let normalized = resolve_path(working_dir, path).clean();
+
+        if normalized == self.path
+        {
+            bail!("'{}' resolves to the VMR root aggregate", path.display());
+        }
+
+        // Reuse normal child repository ownership checks
+        self.route_path(&normalized)
+            .with_context(|| format!("failed to route '{}'", path.display()))?
+            .into_iter()
+            .next()
+            .context("path did not route to a child repository")
+    }
+
+    fn route_path(&self, path: &Path) -> Result<Vec<(Repo, PathBuf)>>
+    {
+        // Expand the aggregate VMR root view across child repositories
+        if path == self.path
+        {
+            let mut repos = Vec::new();
+
+            for repo in self.repos()?
+            {
+                repos.push((repo, PathBuf::from(".")));
+            }
+
+            // Keep repository order deterministic
+            repos.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
+            return Ok(repos);
+        }
+
+        // Ensure path stays inside the VMR root
+        let relative = path.strip_prefix(&self.path).with_context(|| {
+            format!(
+                "'{}' is outside virtual monorepo '{}'",
+                path.display(),
+                self.path.display()
+            )
+        })?;
+
+        // Use first path component as owning child repository
+        let mut components = relative.components();
+        let repo_name = match components.next()
+        {
+            Some(Component::Normal(name)) => name,
+            _ =>
+                bail!("'{}' is not owned by a child repository", path.display()),
+        };
+
+        // Reject VMR metadata paths
+        if repo_name == ".gitvmr"
+        {
+            bail!(
+                "cannot route virtual monorepo metadata path '{}'",
+                path.display()
+            );
+        }
+
+        // Require explicit paths to be owned by child Git repositories
+        let repo_path = self.path.join(repo_name);
+        let repo = Repo::find(repo_path)?.with_context(|| {
+            format!(
+                "'{}' is not owned by a child Git repository",
+                path.display()
+            )
+        })?;
+        // Build path relative to owning repository
+        let mut repo_relative_path = PathBuf::new();
+        for component in components
+        {
+            repo_relative_path.push(component.as_os_str());
+        }
+        if repo_relative_path.as_os_str().is_empty()
+        {
+            repo_relative_path.push(".");
+        }
+
+        Ok(vec![(repo, repo_relative_path)])
+    }
 }
 
-fn expand_vmr_root(vmr_root: &Path) -> Result<Vec<(PathBuf, PathBuf)>>
+fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
 {
-    // Collect immediate child Git repositories
-    let mut repos = fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .filter(|path| path.join(".git").exists())
-        .map(|path| (path, PathBuf::from(".")))
-        .collect::<Vec<_>>();
-
-    // Keep repository order deterministic
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
-    Ok(repos)
+    // Interpret relative paths against effective working directory
+    if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
 }
 
 #[cfg(test)]
@@ -204,10 +198,10 @@ mod tests
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
 
         // Act
-        let result = find_vmr_root(tmp.path()).unwrap();
+        let result = Vmr::find(tmp.path()).unwrap();
 
         // Assert
-        assert_eq!(result, tmp.path());
+        assert_eq!(result.path, tmp.path());
     }
 
     #[test]
@@ -220,10 +214,10 @@ mod tests
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
 
         // Act
-        let result = find_vmr_root(&nested).unwrap();
+        let result = Vmr::find(&nested).unwrap();
 
         // Assert
-        assert_eq!(result, tmp.path());
+        assert_eq!(result.path, tmp.path());
     }
 
     #[test]
@@ -233,13 +227,10 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        let err = find_vmr_root(tmp.path()).unwrap_err();
+        let err = Vmr::find(tmp.path()).unwrap_err();
 
         // Assert
-        assert!(
-            format!("{err:#}").contains("not a virtual monorepo"),
-            "unexpected error: {err:#}"
-        );
+        assert!(format!("{err:#}").contains("not a virtual monorepo"));
     }
 
     fn vmr_fixture() -> tempfile::TempDir
@@ -284,14 +275,14 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed =
-            route_path(tmp.path(), &tmp.path().join("backend")).unwrap();
+        let routed = vmr.route_path(&tmp.path().join("backend")).unwrap();
 
         // Assert
         assert_eq!(routed, vec![(
-            tmp.path().join("backend"),
+            repo(tmp.path(), "backend"),
             PathBuf::from(".")
         )]);
     }
@@ -301,15 +292,15 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
         let routed =
-            route_path(tmp.path(), &tmp.path().join("backend/src/main.rs"))
-                .unwrap();
+            vmr.route_path(&tmp.path().join("backend/src/main.rs")).unwrap();
 
         // Assert
         assert_eq!(routed, vec![(
-            tmp.path().join("backend"),
+            repo(tmp.path(), "backend"),
             PathBuf::from("src/main.rs")
         )]);
     }
@@ -319,14 +310,38 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed = route_path(tmp.path(), tmp.path()).unwrap();
+        let routed = vmr.route_path(tmp.path()).unwrap();
 
         // Assert
         assert_eq!(routed, vec![
-            (tmp.path().join("backend"), PathBuf::from(".")),
-            (tmp.path().join("frontend"), PathBuf::from("."))
+            (repo(tmp.path(), "backend"), PathBuf::from(".")),
+            (repo(tmp.path(), "frontend"), PathBuf::from("."))
+        ]);
+    }
+
+    #[test]
+    fn vmr_repos_skips_non_git_dirs_and_sorts_by_name()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir(tmp.path().join("zeta")).unwrap();
+        fs::create_dir(tmp.path().join("zeta/.git")).unwrap();
+        fs::create_dir(tmp.path().join("docs")).unwrap();
+        fs::create_dir(tmp.path().join("alpha")).unwrap();
+        fs::create_dir(tmp.path().join("alpha/.git")).unwrap();
+        let vmr = Vmr::find(tmp.path()).unwrap();
+
+        // Act
+        let repos = vmr.repos().unwrap();
+
+        // Assert
+        assert_eq!(repos, vec![
+            repo(tmp.path(), "alpha"),
+            repo(tmp.path(), "zeta")
         ]);
     }
 
@@ -335,11 +350,12 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let err =
-            route_path(tmp.path(), &tmp.path().join("../outside.txt").clean())
-                .expect_err("path should fail");
+        let err = vmr
+            .route_path(&tmp.path().join("../outside.txt").clean())
+            .expect_err("path should fail");
 
         // Assert
         assert!(format!("{err:#}").contains("outside virtual monorepo"));
@@ -350,9 +366,11 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let err = route_path(tmp.path(), &tmp.path().join(".gitvmr/config"))
+        let err = vmr
+            .route_path(&tmp.path().join(".gitvmr/config"))
             .expect_err("path should fail");
 
         // Assert
@@ -364,9 +382,11 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let err = route_path(tmp.path(), &tmp.path().join("docs/readme.md"))
+        let err = vmr
+            .route_path(&tmp.path().join("docs/readme.md"))
             .expect_err("path should fail");
 
         // Assert
@@ -378,9 +398,11 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let err = route_path(tmp.path(), &tmp.path().join("README.md"))
+        let err = vmr
+            .route_path(&tmp.path().join("README.md"))
             .expect_err("path should fail");
 
         // Assert
@@ -392,21 +414,23 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed = route_paths(tmp.path(), tmp.path(), &[
-            PathBuf::from("backend/src/main.rs"),
-            PathBuf::from("backend/lib.rs"),
-            PathBuf::from("frontend/app.rs")
-        ])
-        .unwrap();
+        let routed = vmr
+            .route_paths(tmp.path(), &[
+                PathBuf::from("backend/src/main.rs"),
+                PathBuf::from("backend/lib.rs"),
+                PathBuf::from("frontend/app.rs")
+            ])
+            .unwrap();
 
         // Assert
-        assert_eq!(routed.get(&tmp.path().join("backend")).unwrap(), &vec![
+        assert_eq!(routed.get(&repo(tmp.path(), "backend")).unwrap(), &vec![
             PathBuf::from("src/main.rs"),
             PathBuf::from("lib.rs")
         ]);
-        assert_eq!(routed.get(&tmp.path().join("frontend")).unwrap(), &vec![
+        assert_eq!(routed.get(&repo(tmp.path(), "frontend")).unwrap(), &vec![
             PathBuf::from("app.rs")
         ]);
     }
@@ -416,19 +440,17 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed = route_single_path(
-            tmp.path(),
-            tmp.path(),
-            Path::new("backend/src/main.rs")
-        )
-        .expect("path should route");
+        let routed = vmr
+            .route_single_path(tmp.path(), Path::new("backend/src/main.rs"))
+            .expect("path should route");
 
         // Assert
         assert_eq!(
             routed,
-            (tmp.path().join("backend"), PathBuf::from("src/main.rs"))
+            (repo(tmp.path(), "backend"), PathBuf::from("src/main.rs"))
         );
     }
 
@@ -437,12 +459,19 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
+        let vmr = Vmr::new(tmp.path());
 
         // Act
-        let err = route_single_path(tmp.path(), tmp.path(), Path::new("."))
+        let err = vmr
+            .route_single_path(tmp.path(), Path::new("."))
             .expect_err("VMR root should fail");
 
         // Assert
         assert!(format!("{err:#}").contains("VMR root aggregate"));
+    }
+
+    fn repo(root: &Path, name: &str) -> Repo
+    {
+        Repo { name: name.to_owned(), path: root.join(name) }
     }
 }

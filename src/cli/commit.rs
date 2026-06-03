@@ -1,14 +1,14 @@
 use crate::cli::AggregateError;
 use crate::git::{self, git_output};
-use crate::vmr;
+use crate::vmr::{Repo, Vmr};
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn commit(working_dir: &Path, message: &str) -> Result<()>
 {
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let repos = eligible_repos(&vmr_root)?;
+    let vmr = Vmr::find(working_dir)?;
+    let repos = eligible_repos(&vmr)?;
 
     if repos.is_empty()
     {
@@ -20,9 +20,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
 
     for result in repos
         .par_iter()
-        .map(|(repo_name, repo_path)| {
-            git::commit(repo_name, repo_path, message)
-        })
+        .map(|repo| git::commit(&repo.name, &repo.path, message))
         .collect::<Result<Vec<_>>>()?
     {
         match result
@@ -60,30 +58,19 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     Ok(())
 }
 
-fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
+fn eligible_repos(vmr: &Vmr) -> Result<Vec<Repo>>
 {
     let mut repos = Vec::new();
 
-    for repo_path in vmr::child_dirs(vmr_root)?
+    for repo in vmr.repos()?
     {
-        if !repo_path.join(".git").exists()
+        if has_staged_changes(&repo.path)?
         {
-            continue;
-        }
-
-        let repo_name = repo_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("repository path has no valid UTF-8 file name")?
-            .to_owned();
-
-        if has_staged_changes(&repo_path)?
-        {
-            repos.push((repo_name, repo_path));
+            repos.push(repo);
         }
     }
 
-    repos.sort_by(|(a, _), (b, _)| a.cmp(b));
+    repos.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(repos)
 }

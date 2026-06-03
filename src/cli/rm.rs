@@ -1,6 +1,7 @@
 use crate::cli::AggregateError;
-use crate::{git, vmr};
-use anyhow::{Context, Result, bail};
+use crate::git;
+use crate::vmr::Vmr;
+use anyhow::{Result, bail};
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -9,27 +10,23 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
 -> Result<()>
 {
     // Find VMR root
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
+    let vmr = Vmr::find(working_dir)?;
 
     // Require explicit recursive intent for aggregate root removal
-    if !recursive && targets_vmr_root(working_dir, &vmr_root, paths)
+    if !recursive && targets_vmr_root(working_dir, &vmr.path, paths)
     {
         bail!("cannot remove VMR root without -r");
     }
 
     // Route requested paths before removing anything
-    let routed = vmr::route_paths(working_dir, &vmr_root, paths)?
-        .into_iter()
-        .collect::<Vec<_>>();
+    let routed =
+        vmr.route_paths(working_dir, paths)?.into_iter().collect::<Vec<_>>();
 
     // Remove paths in each child repository
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            repo_name(repo_path)
-                .and_then(|repo_name| {
-                    git::rm(&repo_name, repo_path, repo_paths, recursive)
-                })
+            git::rm(&repo_path.name, &repo_path.path, repo_paths, recursive)
                 .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
@@ -63,16 +60,11 @@ fn targets_vmr_root(
 ) -> bool
 {
     // Detect root expansion before routing turns it into child repository paths
-    paths
-        .iter()
-        .any(|path| vmr::resolve_path(working_dir, path).clean() == vmr_root)
+    paths.iter().any(|path| resolve_path(working_dir, path).clean() == vmr_root)
 }
 
-fn repo_name(repo_path: &Path) -> Result<String>
+fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
 {
-    Ok(repo_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("repository path has no valid UTF-8 file name")?
-        .to_owned())
+    // Interpret relative paths against effective working directory
+    if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
 }

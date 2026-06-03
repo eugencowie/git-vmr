@@ -1,22 +1,21 @@
 use crate::cli::AggregateError;
-use crate::{git, vmr};
+use crate::git;
+use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
 pub fn merge(working_dir: &Path, commit_ish: &str) -> Result<()>
 {
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let repos = vmr::find_vmr_repos(&vmr_root)?;
+    let vmr = Vmr::find(working_dir)?;
 
     let mut successes = Vec::new();
     let mut failures = Vec::new();
 
-    for result in repos
+    for result in vmr
+        .repos()?
         .par_iter()
-        .map(|(repo_name, repo_path)| {
-            git::merge(repo_name, repo_path, commit_ish)
-        })
+        .map(|repo| git::merge(&repo.name, &repo.path, commit_ish))
         .collect::<Result<Vec<_>>>()?
     {
         match result

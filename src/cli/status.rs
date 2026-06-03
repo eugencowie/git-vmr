@@ -1,10 +1,9 @@
-use crate::{git, vmr};
+use crate::git;
+use crate::vmr::{Repo, Vmr};
 use anstyle::{AnsiColor, Style};
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -44,9 +43,8 @@ struct RepoStatus
 
 struct RenderContext<'a>
 {
-    repos: &'a [(&'a str, &'a RepoStatus)],
-    working_dir: &'a Path,
-    vmr_root: &'a Path
+    repos: &'a [(&'a Repo, &'a RepoStatus)],
+    working_dir: &'a Path
 }
 
 #[derive(Clone, Copy)]
@@ -86,66 +84,42 @@ impl StatusStyles
 pub fn status(working_dir: &Path) -> Result<()>
 {
     // Find VMR root
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
+    let vmr = Vmr::find(working_dir)?;
 
     // Collect repository statuses
-    let statuses = collect_statuses(&vmr_root)?;
+    let statuses = collect_statuses(&vmr)?;
 
     // Render status output
-    anstream::print!("{}", render_status(&statuses, working_dir, &vmr_root));
+    anstream::print!("{}", render_status(&statuses, working_dir));
 
     Ok(())
 }
 
-fn collect_statuses(vmr_root: &Path) -> Result<Vec<(String, RepoStatus)>>
+fn collect_statuses(vmr: &Vmr) -> Result<Vec<(Repo, RepoStatus)>>
 {
     // Find child repositories
-    let children = fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>();
+    let repos = vmr.repos()?;
 
     // Collect statuses in parallel
-    let mut statuses = children
+    let mut statuses = repos
         .par_iter()
-        .filter_map(|path| collect_repo_status(path).transpose())
+        .filter_map(|repo| collect_repo_status(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Sort by repository name
-    statuses.sort_by(|(a, _), (b, _)| a.cmp(b));
+    statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
 
     Ok(statuses)
 }
 
-fn collect_repo_status(repo_path: &Path)
--> Result<Option<(String, RepoStatus)>>
+fn collect_repo_status(repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
 {
-    // Skip non-git directories
-    if !repo_path.join(".git").exists()
-    {
-        return Ok(None);
-    }
-
-    // Get repository name
-    let repo_name = repo_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .context("repository path has no valid UTF-8 file name")?
-        .to_owned();
-
     let mut staged_changes = Vec::new();
     let mut unstaged_changes = Vec::new();
     let mut untracked_files = Vec::new();
 
     // Read porcelain status
-    let status_output = git::git_stdout(repo_path, [
+    let status_output = git::git_stdout(&repo.path, [
         "status",
         "--porcelain=v1",
         "-z",
@@ -153,7 +127,7 @@ fn collect_repo_status(repo_path: &Path)
         "--no-ahead-behind"
     ])
     .with_context(|| {
-        format!("failed to read git status for '{}'", repo_path.display())
+        format!("failed to read git status for '{}'", repo.path.display())
     })?;
     let mut records = status_output
         .split(|byte| *byte == 0)
@@ -162,7 +136,7 @@ fn collect_repo_status(repo_path: &Path)
     // Parse branch header
     let branch_header =
         records.next().context("git status did not return a branch header")?;
-    let (head, initial) = parse_branch_header(repo_path, branch_header)?;
+    let (head, initial) = parse_branch_header(&repo.path, branch_header)?;
 
     // Parse path records
     while let Some(record) = records.next()
@@ -212,7 +186,7 @@ fn collect_repo_status(repo_path: &Path)
         }
     }
 
-    Ok(Some((repo_name, RepoStatus {
+    Ok(Some((repo.clone(), RepoStatus {
         head,
         initial,
         staged_changes,
@@ -270,11 +244,8 @@ fn parse_status_change(status: char) -> Option<FileChange>
     }
 }
 
-fn render_status(
-    statuses: &[(String, RepoStatus)],
-    working_dir: &Path,
-    vmr_root: &Path
-) -> String
+fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
+-> String
 {
     let mut output = String::new();
     let styles = StatusStyles::new();
@@ -291,7 +262,7 @@ fn render_status(
         .collect::<BTreeSet<_>>()
         .len();
 
-    let mut branch_groups: BTreeMap<(&str, bool), Vec<(&str, &RepoStatus)>> =
+    let mut branch_groups: BTreeMap<(&str, bool), Vec<(&Repo, &RepoStatus)>> =
         BTreeMap::new();
     let mut detached = Vec::new();
 
@@ -304,16 +275,17 @@ fn render_status(
                 .entry((branch, status.initial))
                 .or_default()
                 .push((repo, status)),
-            Head::Detached(hash) =>
-                detached.push((repo.as_str(), hash.as_str(), status)),
+            Head::Detached(hash) => detached.push((repo, hash.as_str(), status))
         }
     }
 
     // Render branch groups
     for ((branch, initial), repos) in branch_groups
     {
-        let repo_names =
-            repos.iter().map(|(repo, _)| *repo).collect::<Vec<_>>();
+        let repo_names = repos
+            .iter()
+            .map(|(repo, _)| repo.name.as_str())
+            .collect::<Vec<_>>();
         if !initial && regular_branch_count == 1 && detached.is_empty()
         {
             output.push_str(&format!("On branch {}\n", branch));
@@ -327,20 +299,15 @@ fn render_status(
             ));
         }
 
-        render_group(&mut output, &repos, working_dir, vmr_root, &styles);
+        render_group(&mut output, &repos, working_dir, &styles);
     }
 
     // Render detached repositories
     for (repo, hash, status) in detached
     {
-        output.push_str(&format!("HEAD detached at {} ({repo})\n", hash));
-        render_group(
-            &mut output,
-            &[(repo, status)],
-            working_dir,
-            vmr_root,
-            &styles
-        );
+        output
+            .push_str(&format!("HEAD detached at {} ({})\n", hash, repo.name));
+        render_group(&mut output, &[(repo, status)], working_dir, &styles);
     }
 
     output
@@ -348,13 +315,12 @@ fn render_status(
 
 fn render_group(
     output: &mut String,
-    repos: &[(&str, &RepoStatus)],
+    repos: &[(&Repo, &RepoStatus)],
     working_dir: &Path,
-    vmr_root: &Path,
     styles: &StatusStyles
 )
 {
-    let context = RenderContext { repos, working_dir, vmr_root };
+    let context = RenderContext { repos, working_dir };
 
     // Render initial commit notice
     let has_initial = repos.iter().any(|(_, status)| status.initial);
@@ -432,9 +398,8 @@ fn render_paths(
     let mut rendered: Vec<(String, FileChange)> = Vec::new();
     for (repo, status) in context.repos
     {
-        let repo_path = context.vmr_root.join(repo);
-        let repo_prefix = pathdiff::diff_paths(&repo_path, context.working_dir)
-            .unwrap_or(repo_path);
+        let repo_prefix = pathdiff::diff_paths(&repo.path, context.working_dir)
+            .unwrap_or(repo.path.clone());
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);
@@ -488,12 +453,12 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let statuses = vec![
-            ("backend".to_owned(), repo_status("main")),
-            ("frontend".to_owned(), repo_status("main")),
+            (repo(tmp.path(), "backend"), repo_status("main")),
+            (repo(tmp.path(), "frontend"), repo_status("main")),
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains("On branch "));
@@ -507,10 +472,10 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        let statuses = vec![("backend".to_owned(), repo_status("main"))];
+        let statuses = vec![(repo(tmp.path(), "backend"), repo_status("main"))];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains("On branch main"));
@@ -523,12 +488,12 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let statuses = vec![
-            ("backend".to_owned(), repo_status("main")),
-            ("frontend".to_owned(), repo_status("feature/auth")),
+            (repo(tmp.path(), "backend"), repo_status("main")),
+            (repo(tmp.path(), "frontend"), repo_status("feature/auth")),
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains("main"));
@@ -544,10 +509,10 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
         let mut status = repo_status("main");
         status.head = Head::Detached("a1b2c3d".to_owned());
-        let statuses = vec![("tools".to_owned(), status)];
+        let statuses = vec![(repo(tmp.path(), "tools"), status)];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains("HEAD detached at "));
@@ -563,10 +528,10 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
         let mut status = repo_status("master");
         status.initial = true;
-        let statuses = vec![("new-repo".to_owned(), status)];
+        let statuses = vec![(repo(tmp.path(), "new-repo"), status)];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains("master"));
@@ -582,12 +547,12 @@ mod tests
         let mut initial = repo_status("master");
         initial.initial = true;
         let statuses = vec![
-            ("committed".to_owned(), repo_status("master")),
-            ("new-repo".to_owned(), initial),
+            (repo(tmp.path(), "committed"), repo_status("master")),
+            (repo(tmp.path(), "new-repo"), initial),
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path(), tmp.path());
+        let output = render_status(&statuses, tmp.path());
 
         // Assert
         assert!(output.contains(
@@ -610,10 +575,10 @@ mod tests
         status
             .unstaged_changes
             .push(file_entry("src/main.rs", FileChange::Modified));
-        let statuses = vec![("backend".to_owned(), status)];
+        let statuses = vec![(repo(tmp.path(), "backend"), status)];
 
         // Act
-        let output = render_status(&statuses, &working_dir, tmp.path());
+        let output = render_status(&statuses, &working_dir);
 
         // Assert
         assert!(output.contains("../backend/src/main.rs"));
@@ -628,13 +593,19 @@ mod tests
         fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
         fs::create_dir(tmp.path().join("docs")).unwrap();
         init_git_repo(&tmp.path().join("backend"));
+        let vmr = Vmr::find(tmp.path()).unwrap();
 
         // Act
-        let statuses = collect_statuses(tmp.path()).unwrap();
+        let statuses = collect_statuses(&vmr).unwrap();
 
         // Assert
         assert_eq!(statuses.len(), 1);
-        assert_eq!(statuses[0].0, "backend");
+        assert_eq!(statuses[0].0.name, "backend");
+    }
+
+    fn repo(root: &Path, name: &str) -> Repo
+    {
+        Repo { name: name.to_owned(), path: root.join(name) }
     }
 
     fn init_git_repo(path: &Path)

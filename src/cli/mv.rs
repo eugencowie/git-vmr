@@ -1,4 +1,5 @@
-use crate::{git, vmr};
+use crate::git;
+use crate::vmr::{Repo, Vmr};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,16 +7,15 @@ use std::path::{Path, PathBuf};
 pub fn mv(working_dir: &Path, source: &Path, destination: &Path) -> Result<()>
 {
     // Find VMR root and route both operands before moving anything
-    let vmr_root = vmr::find_vmr_root(working_dir)?;
-    let source = vmr::route_single_path(working_dir, &vmr_root, source)?;
-    let destination =
-        vmr::route_single_path(working_dir, &vmr_root, destination)?;
+    let vmr = Vmr::find(working_dir)?;
+    let source = vmr.route_single_path(working_dir, source)?;
+    let destination = vmr.route_single_path(working_dir, destination)?;
 
     // Delegate same-repository moves to Git and synthesize cross-repository
     // moves
     if source.0 == destination.0
     {
-        git::mv(&source.0, &source.1, &destination.1)
+        git::mv(&source.0.path, &source.1, &destination.1)
     }
     else
     {
@@ -24,24 +24,25 @@ pub fn mv(working_dir: &Path, source: &Path, destination: &Path) -> Result<()>
 }
 
 fn mv_between_repos(
-    source: (PathBuf, PathBuf),
-    destination: (PathBuf, PathBuf)
+    source: (Repo, PathBuf),
+    destination: (Repo, PathBuf)
 ) -> Result<()>
 {
     let (source_repo, source_relative) = source;
     let (destination_repo, destination_relative) = destination;
 
     // Validate source tracking before changing the filesystem
-    git::ensure_tracked(&source_repo, &source_relative)?;
+    git::ensure_tracked(&source_repo.path, &source_relative)?;
 
     // Resolve destination-directory semantics before moving
-    let source_path = source_repo.join(&source_relative);
+    let source_path = source_repo.path.join(&source_relative);
     let final_destination_relative = final_destination_path(
         &source_relative,
-        &destination_repo,
+        &destination_repo.path,
         &destination_relative
     )?;
-    let destination_path = destination_repo.join(&final_destination_relative);
+    let destination_path =
+        destination_repo.path.join(&final_destination_relative);
 
     // Move the worktree path across child repositories
     fs::rename(&source_path, &destination_path).with_context(|| {
@@ -53,17 +54,17 @@ fn mv_between_repos(
     })?;
 
     // Stage the source deletion and destination addition in their repositories
-    git::add_path(&source_repo, &source_relative).with_context(|| {
+    git::add_path(&source_repo.path, &source_relative).with_context(|| {
         format!(
             "failed to stage source deletion in '{}'",
-            source_repo.display()
+            source_repo.path.display()
         )
     })?;
-    git::add_path(&destination_repo, &final_destination_relative)
+    git::add_path(&destination_repo.path, &final_destination_relative)
         .with_context(|| {
             format!(
                 "failed to stage destination addition in '{}'",
-                destination_repo.display()
+                destination_repo.path.display()
             )
         })?;
 
