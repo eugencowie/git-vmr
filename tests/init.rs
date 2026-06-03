@@ -48,6 +48,88 @@ fn init_with_working_dir_argument_creates_config_in_requested_directory()
 }
 
 #[test]
+fn init_with_existing_directory_argument_creates_config_in_target()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let target = tmp.path().join("project");
+    fs::create_dir(&target).expect("failed to create target dir");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .arg("project")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created .gitvmr in"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(target.join(".gitvmr/config").is_file());
+    assert!(!tmp.path().join(".gitvmr").exists());
+}
+
+#[test]
+fn init_with_missing_directory_argument_creates_target_and_config()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let target = tmp.path().join("project");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .arg("project")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created .gitvmr in"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(target.is_dir());
+    assert!(target.join(".gitvmr/config").is_file());
+}
+
+#[test]
+fn init_directory_argument_is_relative_to_working_dir_argument()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let base = tmp.path().join("base");
+    fs::create_dir(&base).expect("failed to create base dir");
+
+    git_vmr()
+        .arg("-C")
+        .arg(&base)
+        .arg("init")
+        .arg("project")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created .gitvmr in"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(base.join("project/.gitvmr/config").is_file());
+    assert!(!tmp.path().join("project").exists());
+}
+
+#[test]
+fn init_errors_when_directory_argument_is_file()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let file = tmp.path().join("file");
+    fs::write(&file, "").expect("failed to write file");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .arg("file")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("fatal: cannot initialize")
+                .and(predicate::str::contains("Not a directory"))
+        );
+
+    assert!(!file.join(".gitvmr/config").exists());
+}
+
+#[test]
 fn init_reports_reinitialized_without_overwriting_existing_config()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
