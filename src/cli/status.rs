@@ -1,12 +1,11 @@
-use crate::config::vmr;
+use crate::{git, vmr};
 use anstyle::{AnsiColor, Style};
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Clone, PartialEq, Eq)]
 enum Head
@@ -146,7 +145,7 @@ fn collect_repo_status(repo_path: &Path)
     let mut untracked_files = Vec::new();
 
     // Read porcelain status
-    let status_output = git_output(repo_path, &[
+    let status_output = git::git_stdout(repo_path, [
         "status",
         "--porcelain=v1",
         "-z",
@@ -222,33 +221,6 @@ fn collect_repo_status(repo_path: &Path)
     })))
 }
 
-fn git_output(repo_path: &Path, args: &[&str]) -> Result<Vec<u8>>
-{
-    // Run git command
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
-        .output()
-        .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
-        })?;
-
-    // Convert git failure into anyhow error
-    if !output.status.success()
-    {
-        bail!(
-            "git {} failed for '{}': {}",
-            args.join(" "),
-            repo_path.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    Ok(output.stdout)
-}
-
 fn parse_branch_header(repo_path: &Path, header: &[u8])
 -> Result<(Head, bool)>
 {
@@ -267,7 +239,7 @@ fn parse_branch_header(repo_path: &Path, header: &[u8])
     // Detect detached HEAD
     if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
     {
-        let hash = String::from_utf8_lossy(&git_output(repo_path, &[
+        let hash = String::from_utf8_lossy(&git::git_stdout(repo_path, [
             "rev-parse",
             "--short",
             "HEAD"

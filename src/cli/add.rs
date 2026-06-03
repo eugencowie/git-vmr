@@ -1,15 +1,8 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
+use crate::{git, vmr};
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-struct AddFailure
-{
-    repo_name: String,
-    message: String
-}
 
 pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
 {
@@ -23,7 +16,11 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            git_add(repo_path, repo_paths).transpose()
+            repo_name(repo_path)
+                .and_then(|repo_name| {
+                    git::add(&repo_name, repo_path, repo_paths)
+                })
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -47,37 +44,6 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
     }
 
     Ok(())
-}
-
-fn git_add(repo_path: &Path, paths: &[PathBuf]) -> Result<Option<AddFailure>>
-{
-    // Run git add in the owning child repository
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .arg("add")
-        .arg("--")
-        .args(paths)
-        .output()
-        .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
-        })?;
-
-    // Convert git failure into anyhow error
-    if !output.status.success()
-    {
-        return Ok(Some(AddFailure {
-            repo_name: repo_name(repo_path)?,
-            message: format!(
-                "git add failed for '{}': {}",
-                repo_path.display(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-        }));
-    }
-
-    Ok(None)
 }
 
 fn repo_name(repo_path: &Path) -> Result<String>

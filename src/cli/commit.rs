@@ -1,30 +1,9 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
+use crate::git::{self, git_output};
+use crate::vmr;
 use anyhow::{Context, Result, bail};
 use rayon::prelude::*;
-use std::ffi::OsStr;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
-
-struct CommitSuccess
-{
-    repo_name: String,
-    stdout: String
-}
-
-struct CommitFailure
-{
-    repo_name: String,
-    stderr: String
-}
-
-struct GitOutput
-{
-    status: ExitStatus,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>
-}
 
 pub fn commit(working_dir: &Path, message: &str) -> Result<()>
 {
@@ -42,7 +21,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     for result in repos
         .par_iter()
         .map(|(repo_name, repo_path)| {
-            commit_repo(repo_name, repo_path, message)
+            git::commit(repo_name, repo_path, message)
         })
         .collect::<Result<Vec<_>>>()?
     {
@@ -69,7 +48,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
                 .map(|failure| {
                     anyhow::anyhow!(
                         "{} ({})",
-                        failure.stderr,
+                        failure.message,
                         failure.repo_name
                     )
                 })
@@ -85,7 +64,7 @@ fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
 {
     let mut repos = Vec::new();
 
-    for repo_path in child_dirs(vmr_root)?
+    for repo_path in vmr::child_dirs(vmr_root)?
     {
         if !repo_path.join(".git").exists()
         {
@@ -109,24 +88,9 @@ fn eligible_repos(vmr_root: &Path) -> Result<Vec<(String, PathBuf)>>
     Ok(repos)
 }
 
-fn child_dirs(vmr_root: &Path) -> Result<Vec<PathBuf>>
-{
-    Ok(fs::read_dir(vmr_root)
-        .with_context(|| {
-            format!("failed to read VMR root '{}'", vmr_root.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.file_type().map(|ty| ty.is_dir()).unwrap_or(false)
-        })
-        .filter(|entry| entry.file_name() != OsStr::new(".gitvmr"))
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>())
-}
-
 fn has_staged_changes(repo_path: &Path) -> Result<bool>
 {
-    let output = git_output(repo_path, &["diff", "--cached", "--quiet"])
+    let output = git_output(repo_path, ["diff", "--cached", "--quiet"])
         .with_context(|| {
             format!(
                 "failed to inspect staged changes for '{}'",
@@ -144,57 +108,4 @@ fn has_staged_changes(repo_path: &Path) -> Result<bool>
             String::from_utf8_lossy(&output.stderr).trim()
         )
     }
-}
-
-fn commit_repo(
-    repo_name: &str,
-    repo_path: &Path,
-    message: &str
-) -> Result<std::result::Result<CommitSuccess, CommitFailure>>
-{
-    let output = git_output(repo_path, &["commit", "-m", message])?;
-
-    if output.status.success()
-    {
-        return Ok(Ok(CommitSuccess {
-            repo_name: repo_name.to_owned(),
-            stdout: first_non_empty_line(
-                &output.stdout,
-                "git commit succeeded"
-            )
-        }));
-    }
-
-    Ok(Err(CommitFailure {
-        repo_name: repo_name.to_owned(),
-        stderr: first_non_empty_line(&output.stderr, "git commit failed")
-    }))
-}
-
-fn git_output(repo_path: &Path, args: &[&str]) -> Result<GitOutput>
-{
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .args(args)
-        .output()
-        .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
-        })?;
-
-    Ok(GitOutput {
-        status: output.status,
-        stdout: output.stdout,
-        stderr: output.stderr
-    })
-}
-
-fn first_non_empty_line(bytes: &[u8], fallback: &str) -> String
-{
-    let text = String::from_utf8_lossy(bytes);
-    text.lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or(fallback)
-        .to_owned()
 }

@@ -1,16 +1,9 @@
 use crate::cli::AggregateError;
-use crate::config::vmr;
+use crate::{git, vmr};
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-struct RmFailure
-{
-    repo_name: String,
-    message: String
-}
 
 pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
 -> Result<()>
@@ -33,7 +26,11 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     let mut failures = routed
         .par_iter()
         .filter_map(|(repo_path, repo_paths)| {
-            git_rm(repo_path, repo_paths, recursive).transpose()
+            repo_name(repo_path)
+                .and_then(|repo_name| {
+                    git::rm(&repo_name, repo_path, repo_paths, recursive)
+                })
+                .transpose()
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -69,42 +66,6 @@ fn targets_vmr_root(
     paths
         .iter()
         .any(|path| vmr::resolve_path(working_dir, path).clean() == vmr_root)
-}
-
-fn git_rm(
-    repo_path: &Path,
-    paths: &[PathBuf],
-    recursive: bool
-) -> Result<Option<RmFailure>>
-{
-    // Build git rm command for the owning child repository
-    let mut command = Command::new("git");
-    command.arg("--no-optional-locks").arg("-C").arg(repo_path).arg("rm");
-
-    if recursive
-    {
-        command.arg("-r");
-    }
-
-    // Run git rm with literal routed paths
-    let output = command.arg("--").args(paths).output().with_context(|| {
-        format!("failed to invoke git for '{}'", repo_path.display())
-    })?;
-
-    // Convert git failure into anyhow error
-    if !output.status.success()
-    {
-        return Ok(Some(RmFailure {
-            repo_name: repo_name(repo_path)?,
-            message: format!(
-                "git rm failed for '{}': {}",
-                repo_path.display(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-        }));
-    }
-
-    Ok(None)
 }
 
 fn repo_name(repo_path: &Path) -> Result<String>

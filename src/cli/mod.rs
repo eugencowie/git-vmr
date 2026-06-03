@@ -15,19 +15,19 @@ use std::env;
 use std::path::PathBuf;
 
 #[derive(Debug)]
-pub(crate) struct AggregateError
+pub struct AggregateError
 {
     errors: Vec<anyhow::Error>
 }
 
 impl AggregateError
 {
-    pub(crate) fn new(errors: Vec<anyhow::Error>) -> Self
+    pub fn new(errors: Vec<anyhow::Error>) -> Self
     {
         Self { errors }
     }
 
-    pub(crate) fn errors(&self) -> &[anyhow::Error]
+    pub fn errors(&self) -> &[anyhow::Error]
     {
         &self.errors
     }
