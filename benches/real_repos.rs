@@ -293,6 +293,31 @@ fn status_real_repos(c: &mut Criterion)
     );
 }
 
+fn branch_real_repos(c: &mut Criterion)
+{
+    let fixture_root =
+        fixture_root().expect("failed to determine benchmark fixture root");
+    validate_manifest().expect("benchmark repository manifest is invalid");
+    prepare_fixture(&fixture_root)
+        .expect("failed to prepare branch benchmark fixture");
+    validate_fixture(&fixture_root)
+        .expect("branch benchmark fixture is invalid");
+
+    let binary = git_vmr_binary().expect("failed to locate git-vmr binary");
+    run_branch(&binary, &fixture_root, "warmup")
+        .expect("branch benchmark warmup failed");
+
+    c.bench_function(
+        "branch_real_repos_warm_cache_full_command_wall_time",
+        |b| {
+            b.iter(|| {
+                run_branch(&binary, &fixture_root, "measured")
+                    .expect("branch benchmark command failed")
+            });
+        }
+    );
+}
+
 fn fixture_root() -> io::Result<PathBuf>
 {
     match env::var_os(FIXTURE_ENV_VAR)
@@ -750,11 +775,43 @@ fn run_status(
     }
 }
 
+fn run_branch(
+    binary: &Path,
+    fixture_root: &Path,
+    phase: &str
+) -> Result<(), String>
+{
+    let output = Command::new(binary)
+        .arg("-C")
+        .arg(fixture_root)
+        .arg("branch")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|err| {
+            format!("failed to start {phase} branch command: {err}")
+        })?;
+
+    if output.status.success()
+    {
+        Ok(())
+    }
+    else
+    {
+        Err(format!(
+            "{phase} branch command failed with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default()
         .sample_size(10)
         .warm_up_time(Duration::from_secs(1));
-    targets = status_real_repos
+    targets = status_real_repos, branch_real_repos
 }
 criterion_main!(benches);

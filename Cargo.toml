@@ -90,5 +90,5 @@ source-tarball = false
 bin-aliases.git-vmr = ["vv"]
 
 [[bench]]
-name = "status_real_repos"
+name = "real_repos"
 harness = false
