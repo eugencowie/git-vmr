@@ -17,8 +17,11 @@ test = "cargo test"
 changelog = "git cliff --bump"
 release = "release-plz update"
 dist = "dist plan"
-site = "oranda build"
-"site:dev" = "oranda dev"
+site = ["oranda build", "node .github/scripts/rewrite-install-commands.mjs"]
+
+[tasks.serve]
+depends = ["site"]
+run = "oranda serve"
 
 [tasks.ci]
 depends = ["format --check", "lint", "test"]

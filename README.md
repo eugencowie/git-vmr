@@ -4,6 +4,24 @@
 
 git-vmr is a Git CLI wrapper for interacting with multiple repositories as a single unified workspace, combining the flexibility of independent repositories with the ergonomics of a monorepo.
 
+<div class="oranda-hide">
+
+## Install
+
+On macOS and Linux:
+
+```sh
+curl https://eugencowie.github.io/git-vmr/install.sh | sh
+```
+
+On Windows in PowerShell:
+
+```powershell
+irm https://eugencowie.github.io/git-vmr/install.ps1 | iex
+```
+
+</div>
+
 ## License
 
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; version 2.

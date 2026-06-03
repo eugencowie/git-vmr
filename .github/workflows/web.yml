@@ -74,6 +74,9 @@ jobs:
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-installer.sh | sh
           oranda build
 
+      - name: Rewrite homepage install commands
+        run: node .github/scripts/rewrite-install-commands.mjs
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
