@@ -1,9 +1,9 @@
 [package]
 name = "git-vmr"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Eugén Cowie"]
 edition = "2024"
-description = "Multi-repo flexibility with monorepo ergonomics"
+description = "Git CLI wrapper for interacting with multiple repositories as a single unified workspace"
 homepage = "https://eugencowie.github.io/git-vmr"
 repository = "https://github.com/eugencowie/git-vmr"
 license = "GPL-2.0-only"
