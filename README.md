@@ -63,7 +63,7 @@ These are common git-vmr commands used in various situations:
 | [merge](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/merge.md) | Join two or more development histories together | ✅ |
 | [rebase](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/rebase.md) | Reapply commits on top of another base tip | ✅ |
 | reset   | Set `HEAD` or the index to a known state | ❌ |
-| switch  | Switch branches | ❌ |
+| [switch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/switch.md) | Switch branches | ✅ |
 | [tag](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/tag.md) | Create, list, delete or verify tags | ✅ |
 
 ### Collaborate
