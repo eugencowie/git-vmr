@@ -3,7 +3,6 @@ mod config;
 mod git;
 mod vmr;
 
-use clap::Parser;
 use cli::{AggregateError, Cli};
 use std::process::ExitCode;
 
