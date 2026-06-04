@@ -249,7 +249,7 @@ fn render_paths(
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);
-            rendered.push((rel.display().to_string(), entry.change));
+            rendered.push((display_git_path(&rel), entry.change));
         }
     }
 
@@ -284,6 +284,11 @@ fn render_paths(
     }
 
     true
+}
+
+fn display_git_path(path: &Path) -> String
+{
+    path.display().to_string().replace('\\', "/")
 }
 
 #[cfg(test)]
@@ -432,6 +437,19 @@ mod tests
         // Assert
         assert!(output.contains("../backend/src/main.rs"));
         assert!(output.contains("\u{1b}[31m"));
+    }
+
+    #[test]
+    fn renders_paths_with_git_style_separators()
+    {
+        // Arrange
+        let path = Path::new("frontend\\docs");
+
+        // Act
+        let output = display_git_path(path);
+
+        // Assert
+        assert_eq!(output, "frontend/docs");
     }
 
     #[test]
