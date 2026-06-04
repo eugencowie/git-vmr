@@ -11,8 +11,9 @@ mod status;
 
 use crate::git::GitCommandResult;
 use anyhow::{Context, Result, bail};
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use std::env;
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -174,6 +175,9 @@ enum Command
 #[command(name = "git-vmr", version, disable_version_flag = true)]
 pub struct Cli
 {
+    #[arg(skip)]
+    bin_name: String,
+
     /// Run as if git-vmr was started in <path> instead of the current working
     /// directory
     #[arg(short = 'C', value_name = "path")]
@@ -189,6 +193,39 @@ pub struct Cli
 
 impl Cli
 {
+    pub fn parse() -> Self
+    {
+        Self::parse_from(env::args_os())
+    }
+
+    pub fn parse_from<I, T>(itr: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone
+    {
+        Self::try_parse_from(itr).unwrap_or_else(|err| err.exit())
+    }
+
+    pub fn try_parse_from<I, T>(
+        itr: I
+    ) -> std::result::Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone
+    {
+        let mut command = Self::command();
+        let mut matches = command.try_get_matches_from_mut(itr)?;
+        let bin_name = command
+            .get_bin_name()
+            .unwrap_or_else(|| command.get_name())
+            .to_owned();
+
+        let mut cli = Self::from_arg_matches_mut(&mut matches)?;
+        cli.bin_name = display_bin_name(&bin_name);
+
+        Ok(cli)
+    }
+
     pub fn run(self) -> Result<()>
     {
         // Get working directory
@@ -206,7 +243,7 @@ impl Cli
                 restore::restore(&working_dir, &paths, worktree, staged),
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
-            Command::Status => status::status(&working_dir),
+            Command::Status => status::status(&self.bin_name, &working_dir),
             Command::Branch { branch_name } => match branch_name
             {
                 Some(branch_name) => branch::branch(&working_dir, &branch_name),
@@ -253,11 +290,19 @@ impl Cli
     }
 }
 
+fn display_bin_name(bin_name: &str) -> String
+{
+    match bin_name
+    {
+        "git-vmr" => "git vmr".to_owned(),
+        _ => bin_name.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests
 {
     use super::*;
-    use clap::Parser;
     use std::fs;
     use std::path::Path;
 
@@ -277,6 +322,36 @@ mod tests
 
         // Assert
         assert_eq!(cli.working_dir.as_deref(), Some(tmp.path()));
+    }
+
+    #[test]
+    fn captures_invoked_command_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["vv", "status"]);
+
+        // Assert
+        assert_eq!(cli.bin_name, "vv");
+    }
+
+    #[test]
+    fn maps_canonical_binary_name_to_git_subcommand()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "status"]);
+
+        // Assert
+        assert_eq!(cli.bin_name, "git vmr");
+    }
+
+    #[test]
+    fn captures_invoked_command_file_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["/usr/local/bin/vv", "status"]);
+
+        // Assert
+        assert_eq!(cli.bin_name, "vv");
     }
 
     #[test]

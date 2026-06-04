@@ -9,6 +9,7 @@ use std::path::Path;
 struct RenderContext<'a>
 {
     repos: &'a [(&'a Repo, &'a RepoStatus)],
+    bin_name: &'a str,
     working_dir: &'a Path
 }
 
@@ -46,7 +47,7 @@ impl StatusStyles
     }
 }
 
-pub fn status(working_dir: &Path) -> Result<()>
+pub fn status(bin_name: &str, working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -64,13 +65,16 @@ pub fn status(working_dir: &Path) -> Result<()>
     statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
 
     // Render status output
-    anstream::print!("{}", render_status(&statuses, working_dir));
+    anstream::print!("{}", render_status(&statuses, bin_name, working_dir));
 
     Ok(())
 }
 
-fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
--> String
+fn render_status(
+    statuses: &[(Repo, RepoStatus)],
+    bin_name: &str,
+    working_dir: &Path
+) -> String
 {
     let mut output = String::new();
     let styles = StatusStyles::new();
@@ -124,7 +128,7 @@ fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
             ));
         }
 
-        render_group(&mut output, &repos, working_dir, &styles);
+        render_group(&mut output, &repos, bin_name, working_dir, &styles);
     }
 
     // Render detached repositories
@@ -132,7 +136,13 @@ fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
     {
         output
             .push_str(&format!("HEAD detached at {} ({})\n", hash, repo.name));
-        render_group(&mut output, &[(repo, status)], working_dir, &styles);
+        render_group(
+            &mut output,
+            &[(repo, status)],
+            bin_name,
+            working_dir,
+            &styles
+        );
     }
 
     output
@@ -141,11 +151,12 @@ fn render_status(statuses: &[(Repo, RepoStatus)], working_dir: &Path)
 fn render_group(
     output: &mut String,
     repos: &[(&Repo, &RepoStatus)],
+    bin_name: &str,
     working_dir: &Path,
     styles: &StatusStyles
 )
 {
-    let context = RenderContext { repos, working_dir };
+    let context = RenderContext { repos, bin_name, working_dir };
 
     // Render initial commit notice
     let has_initial = repos.iter().any(|(_, status)| status.initial);
@@ -158,7 +169,10 @@ fn render_group(
     let has_staged = render_paths(
         output,
         "Changes to be committed:",
-        &["  (use \"git vmr restore --staged <file>...\" to unstage)"],
+        &[format!(
+            "  (use \"{} restore --staged <file>...\" to unstage)",
+            context.bin_name
+        )],
         &context,
         |status| &status.staged_changes,
         styles.staged
@@ -167,8 +181,14 @@ fn render_group(
         output,
         "Changes not staged for commit:",
         &[
-            "  (use \"git vmr add <file>...\" to update what will be committed)",
-            "  (use \"git vmr restore <file>...\" to discard changes in working directory)"
+            format!(
+                "  (use \"{} add <file>...\" to update what will be committed)",
+                context.bin_name
+            ),
+            format!(
+                "  (use \"{} restore <file>...\" to discard changes in working directory)",
+                context.bin_name
+            )
         ],
         &context,
         |status| &status.unstaged_changes,
@@ -177,9 +197,10 @@ fn render_group(
     let has_untracked = render_paths(
         output,
         "Untracked files:",
-        &[
-            "  (use \"git vmr add <file>...\" to include in what will be committed)"
-        ],
+        &[format!(
+            "  (use \"{} add <file>...\" to include in what will be committed)",
+            context.bin_name
+        )],
         &context,
         |status| &status.untracked_files,
         styles.changed
@@ -213,7 +234,7 @@ fn file_change_label(change: FileChange) -> &'static str
 fn render_paths(
     output: &mut String,
     heading: &str,
-    hints: &[&str],
+    hints: &[String],
     context: &RenderContext,
     paths: fn(&RepoStatus) -> &Vec<FileEntry>,
     style: StatusStyle
@@ -273,6 +294,8 @@ mod tests
     use std::path::PathBuf;
     use std::process::Command;
 
+    const COMMAND_NAME: &str = "git-vmr";
+
     #[test]
     fn renders_single_branch_without_repo_list()
     {
@@ -284,7 +307,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch "));
@@ -301,7 +324,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), repo_status("main"))];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch main"));
@@ -319,7 +342,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("main"));
@@ -338,7 +361,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "tools"), status)];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("HEAD detached at "));
@@ -357,7 +380,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "new-repo"), status)];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("master"));
@@ -378,7 +401,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, tmp.path());
+        let output = render_status(&statuses, COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(output.contains(
@@ -404,11 +427,38 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), status)];
 
         // Act
-        let output = render_status(&statuses, &working_dir);
+        let output = render_status(&statuses, COMMAND_NAME, &working_dir);
 
         // Assert
         assert!(output.contains("../backend/src/main.rs"));
         assert!(output.contains("\u{1b}[31m"));
+    }
+
+    #[test]
+    fn renders_hints_with_invoked_command_name()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let mut status = repo_status("main");
+        status
+            .staged_changes
+            .push(file_entry("staged.rs", FileChange::Modified));
+        status
+            .unstaged_changes
+            .push(file_entry("unstaged.rs", FileChange::Modified));
+        status
+            .untracked_files
+            .push(file_entry("untracked.rs", FileChange::NewFile));
+        let statuses = vec![(repo(tmp.path(), "backend"), status)];
+
+        // Act
+        let output = render_status(&statuses, "vv", tmp.path());
+
+        // Assert
+        assert!(output.contains(r#"(use "vv restore --staged <file>..."#));
+        assert!(output.contains(r#"(use "vv add <file>..."#));
+        assert!(output.contains(r#"(use "vv restore <file>..."#));
+        assert!(!output.contains("git vmr"));
     }
 
     #[test]
@@ -421,7 +471,7 @@ mod tests
         init_git_repo(&tmp.path().join("backend"));
 
         // Act
-        let result = status(tmp.path());
+        let result = status(COMMAND_NAME, tmp.path());
 
         // Assert
         assert!(result.is_ok());
