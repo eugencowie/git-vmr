@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.0
+
+### 🚀 Features
+
+- Add branch deletion arguments ([#29](https://github.com/eugencowie/git-vmr/pull/29))
+
+### 🐛 Bug Fixes
+
+- Show correct binary name in status hints ([#25](https://github.com/eugencowie/git-vmr/pull/25))
+- Fix inconsistent path separators ([#27](https://github.com/eugencowie/git-vmr/pull/27))
+
+### 📚 Documentation
+
+- Document supported commands ([#30](https://github.com/eugencowie/git-vmr/pull/30))
+
+### 🎨 Styling
+
+- Refine branch and status output styling ([#28](https://github.com/eugencowie/git-vmr/pull/28))
+
 ## 0.4.0
 
 ### 🚀 Features
