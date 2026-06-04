@@ -4,6 +4,7 @@
     "path_prefix": "git-vmr"
   },
   "styles": {
-    "theme": "axodark"
+    "theme": "axodark",
+    "additional_css": ["oranda.css"]
   }
 }

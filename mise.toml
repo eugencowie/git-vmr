@@ -7,8 +7,10 @@ gh = "latest"
 git-cliff = "latest"
 node = "latest"
 "npm:@fission-ai/openspec" = "latest"
+pandoc = "latest"
 release-plz = "latest"
 rust = "nightly"
+shellcheck = "latest"
 
 [tasks]
 format = "cargo +nightly fmt"
