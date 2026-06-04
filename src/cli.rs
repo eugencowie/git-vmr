@@ -137,9 +137,38 @@ enum Command
     /// Show the working tree status
     Status,
 
-    /// List or create branches
+    /// List, create, or delete branches
     Branch
     {
+        /// Delete a branch. The branch must be fully merged in its upstream
+        /// branch
+        #[arg(
+            short,
+            long,
+            conflicts_with = "force_delete",
+            requires = "branch_name"
+        )]
+        delete: bool,
+
+        /// Shortcut for `--delete --force`
+        #[arg(
+            short = 'D',
+            conflicts_with = "delete",
+            requires = "branch_name"
+        )]
+        force_delete: bool,
+
+        /// In combination with `-d` (or `--delete`), allow deleting the branch
+        /// irrespective of its merged status, or whether it even points to a
+        /// valid commit
+        #[arg(
+            short,
+            long,
+            conflicts_with = "force_delete",
+            requires_all = ["branch_name", "delete"]
+        )]
+        force: bool,
+
         /// Creates a new branch head named [branch-name] which points to the
         /// current HEAD
         #[arg(value_name = "branch-name")]
@@ -244,11 +273,21 @@ impl Cli
             Command::Rm { paths, recursive } =>
                 rm::rm(&working_dir, &paths, recursive),
             Command::Status => status::status(&self.bin_name, &working_dir),
-            Command::Branch { branch_name } => match branch_name
-            {
-                Some(branch_name) => branch::branch(&working_dir, &branch_name),
-                None => branch::branches(&working_dir)
-            },
+            Command::Branch { delete, force_delete, force, branch_name } =>
+                match (branch_name, delete, force_delete, force)
+                {
+                    (Some(branch_name), true, false, false) =>
+                        branch::delete(&working_dir, &branch_name),
+                    (Some(branch_name), false, true, false) =>
+                        branch::force_delete(&working_dir, &branch_name),
+                    (Some(branch_name), true, false, true) =>
+                        branch::force_delete(&working_dir, &branch_name),
+                    (Some(branch_name), false, false, false) =>
+                        branch::branch(&working_dir, &branch_name),
+                    (None, false, false, false) =>
+                        branch::branches(&working_dir),
+                    _ => unreachable!()
+                },
             Command::Commit { message } =>
                 commit::commit(&working_dir, &message),
             Command::Merge { commit_ish } =>
@@ -473,8 +512,11 @@ mod tests
         // Assert
         match cli.command
         {
-            Command::Branch { branch_name } =>
+            Command::Branch { delete, force_delete, force, branch_name } =>
             {
+                assert!(!delete);
+                assert!(!force_delete);
+                assert!(!force);
                 assert_eq!(branch_name, None);
             }
             _ => panic!("expected branch command")
@@ -490,12 +532,108 @@ mod tests
         // Assert
         match cli.command
         {
-            Command::Branch { branch_name } =>
+            Command::Branch { delete, force_delete, force, branch_name } =>
             {
+                assert!(!delete);
+                assert!(!force_delete);
+                assert!(!force);
                 assert_eq!(branch_name.as_deref(), Some("feature/auth"));
             }
             _ => panic!("expected branch command")
         }
+    }
+
+    #[test]
+    fn parses_branch_delete_with_branch_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "branch", "-d", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Branch { delete, force_delete, force, branch_name } =>
+            {
+                assert!(delete);
+                assert!(!force_delete);
+                assert!(!force);
+                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
+            }
+            _ => panic!("expected branch command")
+        }
+    }
+
+    #[test]
+    fn parses_branch_force_delete_with_branch_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "branch", "-D", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Branch { delete, force_delete, force, branch_name } =>
+            {
+                assert!(!delete);
+                assert!(force_delete);
+                assert!(!force);
+                assert_eq!(branch_name.as_deref(), Some("feature/auth"));
+            }
+            _ => panic!("expected branch command")
+        }
+    }
+
+    #[test]
+    fn branch_delete_requires_branch_name()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "branch", "-d"])
+        {
+            Ok(_) => panic!("expected parse error"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn branch_delete_flags_conflict()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "branch",
+            "-d",
+            "-D",
+            "feature/auth"
+        ])
+        {
+            Ok(_) => panic!("expected parse error"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn branch_force_requires_delete()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "branch",
+            "-f",
+            "feature/auth"
+        ])
+        {
+            Ok(_) => panic!("expected parse error"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
     }
 
     #[test]

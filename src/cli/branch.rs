@@ -57,6 +57,40 @@ pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
     print_results(results)
 }
 
+pub fn delete(working_dir: &Path, branch_name: &str) -> Result<()>
+{
+    delete_branch(working_dir, branch_name, false)
+}
+
+pub fn force_delete(working_dir: &Path, branch_name: &str) -> Result<()>
+{
+    delete_branch(working_dir, branch_name, true)
+}
+
+fn delete_branch(
+    working_dir: &Path,
+    branch_name: &str,
+    force: bool
+) -> Result<()>
+{
+    // Find virtual monorepo
+    let vmr = Vmr::find(working_dir)?;
+
+    // Get list of repositories
+    let repos = vmr.repos()?;
+
+    // Delete branch in each repository
+    let results = repos
+        .par_iter()
+        .map(|repo| {
+            git::delete_branch(&repo.name, &repo.path, branch_name, force)
+        })
+        .collect::<Vec<_>>();
+
+    // Print results
+    print_results(results)
+}
+
 pub fn branches(working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo

@@ -27,6 +27,35 @@ pub fn branch(
     )
 }
 
+pub fn delete_branch(
+    repo_name: &str,
+    repo_path: &Path,
+    branch_name: &str,
+    force: bool
+) -> GitCommandResult
+{
+    let flag = if force { "-D" } else { "-d" };
+    let output = git_output(repo_path, ["branch", flag, branch_name])?;
+
+    command_result(
+        repo_name,
+        &output,
+        |output| {
+            first_non_empty_line_strip_fatal(
+                &output.stdout,
+                "git branch failed"
+            )
+            .into()
+        },
+        |output| {
+            first_non_empty_line_strip_fatal(
+                &output.stderr,
+                "git branch failed"
+            )
+        }
+    )
+}
+
 pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
 {
     let branches_output = git_stdout(&repo.path, [
