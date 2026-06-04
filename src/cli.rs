@@ -9,6 +9,7 @@ mod rebase;
 mod restore;
 mod rm;
 mod status;
+mod tag;
 
 use crate::git::GitCommandResult;
 use anyhow::{Context, Result, bail};
@@ -210,6 +211,18 @@ enum Command
         /// Upstream branch to compare against
         #[arg(required = true, value_name = "upstream")]
         upstream: String
+    },
+
+    /// Create, list, delete or verify tags
+    Tag
+    {
+        /// Delete existing tags with the given names
+        #[arg(short, long, requires = "tag_name")]
+        delete: bool,
+
+        /// The name of the tag to create, delete, or describe
+        #[arg(value_name = "tagname")]
+        tag_name: Option<String>
     }
 }
 
@@ -309,6 +322,13 @@ impl Cli
                 merge::merge(&working_dir, &commit_ish),
             Command::Rebase { upstream } =>
                 rebase::rebase(&working_dir, &upstream),
+            Command::Tag { delete, tag_name } => match (tag_name, delete)
+            {
+                (Some(tag_name), true) => tag::delete(&working_dir, &tag_name),
+                (Some(tag_name), false) => tag::create(&working_dir, &tag_name),
+                (None, false) => tag::tag(&working_dir),
+                _ => unreachable!()
+            }
         }
     }
 
@@ -610,6 +630,166 @@ mod tests
             }
             _ => panic!("expected branch command")
         }
+    }
+
+    #[test]
+    fn parses_tag_without_arguments()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "tag"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Tag { delete, tag_name } =>
+            {
+                assert!(!delete);
+                assert_eq!(tag_name, None);
+            }
+            _ => panic!("expected tag command")
+        }
+    }
+
+    #[test]
+    fn parses_tag_with_tag_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "tag", "v1.0.0"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Tag { delete, tag_name } =>
+            {
+                assert!(!delete);
+                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
+            }
+            _ => panic!("expected tag command")
+        }
+    }
+
+    #[test]
+    fn parses_tag_delete_with_tag_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "tag", "-d", "v1.0.0"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Tag { delete, tag_name } =>
+            {
+                assert!(delete);
+                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
+            }
+            _ => panic!("expected tag command")
+        }
+    }
+
+    #[test]
+    fn parses_tag_long_delete_with_tag_name()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "tag", "--delete", "v1.0.0"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Tag { delete, tag_name } =>
+            {
+                assert!(delete);
+                assert_eq!(tag_name.as_deref(), Some("v1.0.0"));
+            }
+            _ => panic!("expected tag command")
+        }
+    }
+
+    #[test]
+    fn tag_delete_requires_tag_name()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "tag", "-d"])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_tag_extra_operand()
+    {
+        // Act
+        let err =
+            match Cli::try_parse_from(["git-vmr", "tag", "v1.0.0", "HEAD~1"])
+            {
+                Ok(_) => panic!("expected tag parse to fail"),
+                Err(err) => err
+            };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_annotate_flag()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "tag", "-a", "v1.0.0"])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_force_flag()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "tag", "-f", "v1.0.0"])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_multi_delete()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr", "tag", "-d", "v1.0.0", "v1.1.0"
+        ])
+        {
+            Ok(_) => panic!("expected tag parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_tag_filter_flag()
+    {
+        // Act
+        let err =
+            match Cli::try_parse_from(["git-vmr", "tag", "--contains", "HEAD"])
+            {
+                Ok(_) => panic!("expected tag parse to fail"),
+                Err(err) => err
+            };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]

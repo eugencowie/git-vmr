@@ -318,6 +318,27 @@ fn branch_real_repos(c: &mut Criterion)
     );
 }
 
+fn tag_real_repos(c: &mut Criterion)
+{
+    let fixture_root =
+        fixture_root().expect("failed to determine benchmark fixture root");
+    validate_manifest().expect("benchmark repository manifest is invalid");
+    prepare_fixture(&fixture_root)
+        .expect("failed to prepare tag benchmark fixture");
+    validate_fixture(&fixture_root).expect("tag benchmark fixture is invalid");
+
+    let binary = git_vmr_binary().expect("failed to locate git-vmr binary");
+    run_tag(&binary, &fixture_root, "warmup")
+        .expect("tag benchmark warmup failed");
+
+    c.bench_function("tag_real_repos_warm_cache_full_command_wall_time", |b| {
+        b.iter(|| {
+            run_tag(&binary, &fixture_root, "measured")
+                .expect("tag benchmark command failed")
+        });
+    });
+}
+
 fn fixture_root() -> io::Result<PathBuf>
 {
     match env::var_os(FIXTURE_ENV_VAR)
@@ -807,11 +828,41 @@ fn run_branch(
     }
 }
 
+fn run_tag(
+    binary: &Path,
+    fixture_root: &Path,
+    phase: &str
+) -> Result<(), String>
+{
+    let output = Command::new(binary)
+        .arg("-C")
+        .arg(fixture_root)
+        .arg("tag")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|err| format!("failed to start {phase} tag command: {err}"))?;
+
+    if output.status.success()
+    {
+        Ok(())
+    }
+    else
+    {
+        Err(format!(
+            "{phase} tag command failed with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default()
         .sample_size(10)
         .warm_up_time(Duration::from_secs(1));
-    targets = status_real_repos, branch_real_repos
+    targets = status_real_repos, branch_real_repos, tag_real_repos
 }
 criterion_main!(benches);
