@@ -18,7 +18,7 @@ mod switch;
 mod tag;
 mod worktree;
 
-use crate::git::ResetMode;
+use crate::git::{ChmodMode, ResetMode};
 use anyhow::Result;
 use clap::{ArgAction, Subcommand};
 use std::path::{Path, PathBuf};
@@ -102,17 +102,31 @@ pub enum Command
     /// Add file contents to the index
     Add
     {
+        /// Allow adding otherwise ignored files
+        #[arg(short, long)]
+        force: bool,
+
+        /// Update the index not only where the working tree has a file
+        /// matching [pathspec] but also where the index already has an
+        /// entry
+        #[arg(short = 'A', long)]
+        all: bool,
+
+        /// Override the executable bit of added files
+        #[arg(long, value_name = "(+|-)x")]
+        chmod: Option<ChmodMode>,
+
         /// Files to add content from
-        #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+        #[arg(required_unless_present = "all", num_args = 0.., value_name = "pathspec")]
         paths: Vec<PathBuf>
     },
 
     /// Move or rename a file, a directory, or a symlink
     Mv
     {
-        /// File to move
-        #[arg(value_name = "source")]
-        source: PathBuf,
+        /// Files to move
+        #[arg(required = true, num_args = 1.., value_name = "source")]
+        sources: Vec<PathBuf>,
 
         /// Destination path
         #[arg(value_name = "destination")]
@@ -141,6 +155,18 @@ pub enum Command
         /// Allow recursive removal when a leading directory name is given
         #[arg(short)]
         recursive: bool,
+
+        /// Override the up-to-date check
+        #[arg(short, long)]
+        force: bool,
+
+        /// Don't actually remove any files
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+
+        /// Unstage and remove paths only from the index
+        #[arg(long)]
+        cached: bool,
 
         /// Files to remove
         #[arg(required = true, num_args = 1.., value_name = "pathspec")]
@@ -345,16 +371,17 @@ impl Command
             Command::Init { directory } =>
                 init::init(working_dir, directory.as_deref()),
 
-            Command::Add { paths } => add::add(working_dir, &paths),
+            Command::Add { paths, all, force, chmod } =>
+                add::add(working_dir, &paths, all, force, chmod),
 
-            Command::Mv { source, destination } =>
-                mv::mv(working_dir, &source, &destination),
+            Command::Mv { sources, destination } =>
+                mv::mv(working_dir, &sources, &destination),
 
             Command::Restore { paths, staged, worktree } =>
                 restore::restore(working_dir, &paths, worktree, staged),
 
-            Command::Rm { paths, recursive } =>
-                rm::rm(working_dir, &paths, recursive),
+            Command::Rm { paths, recursive, force, dry_run, cached } =>
+                rm::rm(working_dir, &paths, recursive, force, dry_run, cached),
 
             Command::Status => status::status(bin_name, working_dir),
 

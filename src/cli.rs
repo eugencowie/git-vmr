@@ -256,6 +256,211 @@ mod tests
     }
 
     #[test]
+    fn parses_add_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "-A",
+            "-f",
+            "--chmod=+x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: true,
+                chmod: Some(crate::git::ChmodMode::Executable),
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_long_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "--all",
+            "--force",
+            "--chmod=-x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: true,
+                chmod: Some(crate::git::ChmodMode::NotExecutable),
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_all_without_pathspecs()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "add", "-A"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Add {
+                all: true,
+                force: false,
+                chmod: None,
+                paths
+            } if paths.is_empty()
+        ));
+    }
+
+    #[test]
+    fn rejects_add_without_pathspecs_or_all()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "add"])
+        {
+            Ok(_) => panic!("expected add without pathspecs or all to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_add_invalid_chmod()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "add",
+            "--chmod=bad",
+            "backend/src.rs"
+        ])
+        {
+            Ok(_) => panic!("expected invalid chmod to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn parses_rm_short_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "rm",
+            "-r",
+            "-f",
+            "-n",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Rm {
+                recursive: true,
+                force: true,
+                dry_run: true,
+                cached: false,
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_rm_long_flags()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "rm",
+            "--force",
+            "--dry-run",
+            "--cached",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Rm {
+                recursive: false,
+                force: true,
+                dry_run: true,
+                cached: true,
+                paths
+            } if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_mv_two_or_more_paths()
+    {
+        // Act
+        let cli = Cli::try_parse_from(["git-vmr", "mv", "one", "two", "three"])
+            .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Mv {
+                sources,
+                destination
+            } if sources == [PathBuf::from("one"), PathBuf::from("two")]
+                && destination == *"three"
+        ));
+    }
+
+    #[test]
+    fn rejects_mv_without_two_paths_or_with_unsupported_options()
+    {
+        for args in [
+            vec!["git-vmr", "mv"],
+            vec!["git-vmr", "mv", "one"],
+            vec!["git-vmr", "mv", "-r", "one", "two"],
+            vec!["git-vmr", "mv", "--dry-run", "one", "two"],
+            vec!["git-vmr", "mv", "-k", "one", "two"],
+            vec!["git-vmr", "mv", "--force", "one", "two"]
+        ]
+        {
+            // Act
+            let err = Cli::try_parse_from(args).err().unwrap();
+
+            // Assert
+            assert!(
+                matches!(
+                    err.kind(),
+                    ErrorKind::MissingRequiredArgument
+                        | ErrorKind::UnknownArgument
+                        | ErrorKind::InvalidValue
+                        | ErrorKind::TooFewValues
+                ),
+                "unexpected error kind: {:?}",
+                err.kind()
+            );
+        }
+    }
+
+    #[test]
     fn parses_worktree_add_target_path()
     {
         // Act

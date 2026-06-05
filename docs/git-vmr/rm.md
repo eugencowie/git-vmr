@@ -26,11 +26,11 @@ within the sparse-checkout patterns.
 | Option | Description | Supported? |
 | ------ | ----------- | ---------- |
 | *\<pathspec\>*... | Files to remove. A leading directory name (e.g. **dir** to remove **dir/file1** and **dir/file2**) can be given to remove all files in the directory, and recursively all sub-directories, but this requires the **-r** option to be explicitly given. | ✅ |
-| **-f**, **--force** | Override the up-to-date check. | ❌ |
-| **-n**, **--dry-run** | Don’t actually remove any file(s). Instead, just show if they exist in the index and would otherwise be removed by the command. | ❌ |
+| **-f**, **--force** | Override the up-to-date check. | ✅ |
+| **-n**, **--dry-run** | Don’t actually remove any file(s). Instead, just show if they exist in the index and would otherwise be removed by the command. | ✅ |
 | **-r** | Allow recursive removal when a leading directory name is given. | ✅ |
 | **--** | This option can be used to separate command-line options from the list of files, (useful when filenames might be mistaken for command-line options). | ✅ |
-| **--cached** | Use this option to unstage and remove paths only from the index. Working tree files, whether modified or not, will be left alone. | ❌ |
+| **--cached** | Use this option to unstage and remove paths only from the index. Working tree files, whether modified or not, will be left alone. | ✅ |
 | **--ignore-unmatch** | Exit with a zero status even if no files matched. | ❌ |
 | **--sparse** | Allow updating index entries outside of the sparse-checkout cone. Normally, **git** **rm** refuses to update index entries whose paths do not fit within the sparse-checkout cone. See **git-sparse-checkout**(1) for more. | ❌ |
 | **-q**, **--quiet** | **git** **rm** normally outputs one line (in the form of an **rm** command) for each file removed. This option suppresses that output. | ❌ |
