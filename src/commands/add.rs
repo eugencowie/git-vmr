@@ -1,4 +1,3 @@
-use crate::cli::print_results;
 use crate::git;
 use crate::vmr::Vmr;
 use anyhow::Result;
@@ -20,5 +19,5 @@ pub fn add(working_dir: &Path, paths: &[PathBuf]) -> Result<()>
         })
         .collect::<Vec<_>>();
 
-    print_results(results)
+    git::print_results(results)
 }

@@ -1,4 +1,5 @@
 mod cli;
+mod commands;
 mod config;
 mod git;
 mod vmr;
@@ -11,11 +12,8 @@ fn main() -> ExitCode
     // Parse arguments
     let cli = Cli::parse();
 
-    // Run command
-    let result = cli.run();
-
-    // Handle errors
-    if let Err(e) = result
+    // Run command and handle errors
+    if let Err(e) = cli.run()
     {
         eprintln!("{e:#}");
         return ExitCode::FAILURE;

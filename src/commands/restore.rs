@@ -1,4 +1,3 @@
-use crate::cli::print_results;
 use crate::git;
 use crate::vmr::Vmr;
 use anyhow::Result;
@@ -32,5 +31,5 @@ pub fn restore(
         })
         .collect::<Vec<_>>();
 
-    print_results(results)
+    git::print_results(results)
 }

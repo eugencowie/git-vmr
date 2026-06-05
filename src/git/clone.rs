@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -9,6 +9,7 @@ pub fn clone(
 ) -> Result<()>
 {
     let mut command = Command::new("git");
+
     command
         .arg("-C")
         .arg(working_dir)
@@ -24,20 +25,19 @@ pub fn clone(
     }
 
     let status = command.status().with_context(|| {
-        let destination = directory
-            .map(|directory| format!(" into '{}'", directory.display()))
-            .unwrap_or_default();
         format!(
             "fatal: failed to invoke git clone '{}'{} from '{}'",
             repository,
-            destination,
+            directory
+                .map(|directory| format!(" into '{}'", directory.display()))
+                .unwrap_or_default(),
             working_dir.display()
         )
     })?;
 
     if !status.success()
     {
-        bail!("fatal: git clone '{}' failed with {status}", repository);
+        std::process::exit(1);
     }
 
     Ok(())

@@ -1,14 +1,13 @@
-use crate::cli;
-use crate::git::{self, ResetMode};
+use crate::git;
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
-pub fn reset(
+pub fn fetch(
     working_dir: &Path,
-    mode: Option<ResetMode>,
-    commit: Option<&str>
+    repository: Option<&str>,
+    refspecs: &[String]
 ) -> Result<()>
 {
     // Find virtual monorepo
@@ -17,12 +16,12 @@ pub fn reset(
     // Get list of repositories
     let repos = vmr.repos()?;
 
-    // Reset each repository
+    // Fetch in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::reset(&repo.name, &repo.path, mode, commit))
+        .map(|repo| git::fetch(&repo.name, &repo.path, repository, refspecs))
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(results)
+    git::print_results(results)
 }
