@@ -102,7 +102,7 @@ ancillary user utilities.
 | [push](git-vmr/push.md) | Update remote refs along with associated objects. | ✅ |
 | range-diff | Compare two commit ranges (e.g. two versions of a branch). | ❌ |
 | [rebase](git-vmr/rebase.md) | Reapply commits on top of another base tip. | ✅ |
-| reset | Set **HEAD** or the index to a known state. | ❌ |
+| [reset](git-vmr/reset.md) | Set **HEAD** or the index to a known state. | ✅ |
 | [restore](git-vmr/restore.md) | Restore working tree files. | ✅ |
 | revert | Revert some existing commits. | ❌ |
 | [rm](git-vmr/rm.md) | Remove files from the working tree and from the index. | ✅ |
