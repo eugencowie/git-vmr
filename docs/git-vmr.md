@@ -87,7 +87,7 @@ ancillary user utilities.
 | [commit](git-vmr/commit.md) | Record changes to the repository. | ✅ |
 | describe | Give an object a human readable name based on an available ref. | ❌ |
 | diff | Show changes between commits, commit and working tree, etc. | ❌ |
-| fetch | Download objects and refs from another repository. | ❌ |
+| [fetch](git-vmr/fetch.md) | Download objects and refs from another repository. | ✅ |
 | format-patch | Prepare patches for e-mail submission. | ❌ |
 | gc | Cleanup unnecessary files and optimize the local repository. | ❌ |
 | grep | Print lines matching a pattern. | ❌ |
@@ -98,8 +98,8 @@ ancillary user utilities.
 | [merge](git-vmr/merge.md) | Join two or more development histories together. | ✅ |
 | [mv](git-vmr/mv.md) | Move or rename a file, a directory, or a symlink. | ✅ |
 | notes | Add or inspect object notes. | ❌ |
-| pull | Fetch from and integrate with another repository or a local branch. | ❌ |
-| push | Update remote refs along with associated objects. | ❌ |
+| [pull](git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch. | ✅ |
+| [push](git-vmr/push.md) | Update remote refs along with associated objects. | ✅ |
 | range-diff | Compare two commit ranges (e.g. two versions of a branch). | ❌ |
 | [rebase](git-vmr/rebase.md) | Reapply commits on top of another base tip. | ✅ |
 | reset | Set **HEAD** or the index to a known state. | ❌ |
