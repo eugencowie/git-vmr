@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+### 🚀 Features
+
+- Add missing flags to `add`, `mv`, and `rm` ([#45](https://github.com/eugencowie/git-vmr/pull/45))
+- Add branch deletion flags to `worktree remove` ([#48](https://github.com/eugencowie/git-vmr/pull/48))
+- Make `worktree` command with no arguments list worktrees ([#49](https://github.com/eugencowie/git-vmr/pull/49))
+
+### 📚 Documentation
+
+- Add copyright footers to generated documentation ([#43](https://github.com/eugencowie/git-vmr/pull/43))
+
+### 🎨 Styling
+
+- Standardise command output formatting ([#46](https://github.com/eugencowie/git-vmr/pull/46))
+- Standardise help text formatting ([#47](https://github.com/eugencowie/git-vmr/pull/47))
+
 ## 0.7.0
 
 ### 🚀 Features
