@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.0
+
+### 🚀 Features
+
+- Add `clone` command for cloning repositories ([#31](https://github.com/eugencowie/git-vmr/pull/31))
+- Add `tag` command for creating, deleting, and listing tags ([#33](https://github.com/eugencowie/git-vmr/pull/33))
+- Add `switch` command to switch between branches ([#34](https://github.com/eugencowie/git-vmr/pull/34))
+- Add `fetch`, `pull`, and `push` commands for collaboration ([#35](https://github.com/eugencowie/git-vmr/pull/35))
+- Add `reset` command to reset the index ([#36](https://github.com/eugencowie/git-vmr/pull/36))
+- Add `--create` argument to `switch` command to create branches ([#37](https://github.com/eugencowie/git-vmr/pull/37))
+
+### 🚜 Refactor
+
+- Extract command handling into dedicated module ([#39](https://github.com/eugencowie/git-vmr/pull/39))
+
+### 🎨 Styling
+
+- Standardise output handling ([#38](https://github.com/eugencowie/git-vmr/pull/38))
+
 ## 0.5.0
 
 ### 🚀 Features
