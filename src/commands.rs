@@ -3,6 +3,7 @@ mod branch;
 mod clone;
 mod commit;
 mod fetch;
+mod foreach;
 mod init;
 mod merge;
 mod mv;
@@ -311,6 +312,24 @@ pub enum Command
     {
         #[command(subcommand)]
         command: WorktreeCommand
+    },
+
+    /// Evaluates an arbitrary shell command in each checked out repository
+    Foreach
+    {
+        /// Only print error messages
+        #[arg(short, long)]
+        quiet: bool,
+
+        /// Command to evaluate through the shell
+        #[arg(
+                required = true,
+                num_args = 1..,
+                trailing_var_arg = true,
+                allow_hyphen_values = true,
+                value_name = "command"
+            )]
+        command: Vec<String>
     }
 }
 
@@ -413,7 +432,10 @@ impl Command
                     ),
                 WorktreeCommand::Remove { force, path } =>
                     worktree::remove(working_dir, &path, force),
-            }
+            },
+
+            Command::Foreach { quiet, command } =>
+                foreach::foreach(working_dir, quiet, &command),
         }
     }
 }

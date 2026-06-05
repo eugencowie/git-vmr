@@ -395,6 +395,76 @@ mod tests
     }
 
     #[test]
+    fn rejects_foreach_without_command()
+    {
+        // Act
+        let err = Cli::try_parse_from(["git-vmr", "foreach"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_foreach_quiet_mode()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "foreach", "--quiet", "echo", "ok"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Foreach {
+                quiet: true,
+                command
+            } if command == ["echo", "ok"]
+        ));
+    }
+
+    #[test]
+    fn parses_foreach_multi_word_command()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr", "foreach", "git", "status", "--short"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Foreach {
+                quiet: false,
+                command
+            } if command == ["git", "status", "--short"]
+        ));
+    }
+
+    #[test]
+    fn captures_foreach_child_command_options()
+    {
+        // Act
+        let cli = Cli::try_parse_from([
+            "git-vmr",
+            "foreach",
+            "echo",
+            "--not-a-vmr-option"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Foreach {
+                quiet: false,
+                command
+            } if command == ["echo", "--not-a-vmr-option"]
+        ));
+    }
+
+    #[test]
     fn rejects_worktree_add_extra_operands()
     {
         // Act

@@ -57,111 +57,16 @@ explain why the worktree is locked.
 
 ## COMMANDS
 
-**add** *\<path\>* \[*\<commit-ish\>*\]
-
-> Create a worktree at *\<path\>* and checkout *\<commit-ish\>* into it.
-> The new worktree is linked to the current repository, sharing
-> everything except per-worktree files such as **HEAD**, **index**, etc.
-> As a convenience, *\<commit-ish\>* may be a bare "**-**", which is
-> synonymous with **@**{-1}.
->
-> If *\<commit-ish\>* is a branch name (call it *\<branch\>*) and is not
-> found, and neither **-b** nor **-B** nor **--detach** are used, but
-> there does exist a tracking branch in exactly one remote (call it
-> *\<remote\>*) with a matching name, treat as equivalent to:
->
-> > $ git worktree add --track -b <branch> <path> <remote>/<branch>
->
-> If the branch exists in multiple remotes and one of them is named by
-> the **checkout.defaultRemote** configuration variable, we’ll use that
-> one for the purposes of disambiguation, even if the *\<branch\>* isn’t
-> unique across all remotes. Set it to e.g.
-> **checkout.defaultRemote=origin** to always checkout remote branches
-> from there if *\<branch\>* is ambiguous but exists on the **origin**
-> remote. See also **checkout.defaultRemote** in **git-config**(1).
->
-> If *\<commit-ish\>* is omitted and neither **-b** nor **-B** nor
-> **--detach** used, then, as a convenience, the new worktree is
-> associated with a branch (call it *\<branch\>*) named after
-> **\$**(**basename** *\<path\>*). If *\<branch\>* doesn’t exist, a new
-> branch based on **HEAD** is automatically created as if **-b**
-> *\<branch\>* was given. If *\<branch\>* does exist, it will be checked
-> out in the new worktree, if it’s not checked out anywhere else,
-> otherwise the command will refuse to create the worktree (unless
-> **--force** is used).
->
-> If *\<commit-ish\>* is omitted, neither **--detach**, or **--orphan**
-> is used, and there are no valid local branches (or remote branches if
-> **--guess-remote** is specified) then, as a convenience, the new
-> worktree is associated with a new unborn branch named *\<branch\>*
-> (after **\$**(**basename** *\<path\>*) if neither **-b** or **-B** is
-> used) as if **--orphan** was passed to the command. In the event the
-> repository has a remote and **--guess-remote** is used, but no remote
-> or local branches exist, then the command fails with a warning
-> reminding the user to fetch from their remote first (or override by
-> using **-f**/**--force**).
-
-**list**
-
-> List details of each worktree. The main worktree is listed first,
-> followed by each of the linked worktrees. The output details include
-> whether the worktree is bare, the revision currently checked out, the
-> branch currently checked out (or "detached HEAD" if none), "locked" if
-> the worktree is locked, "prunable" if the worktree can be pruned by
-> the **prune** command.
-
-**lock**
-
-> If a worktree is on a portable device or network share which is not
-> always mounted, lock it to prevent its administrative files from being
-> pruned automatically. This also prevents it from being moved or
-> deleted. Optionally, specify a reason for the lock with **--reason**.
-
-**move**
-
-> Move a worktree to a new location. Note that the main worktree or
-> linked worktrees containing submodules cannot be moved with this
-> command. (The **git** **worktree** **repair** command, however, can
-> reestablish the connection with linked worktrees if you move the main
-> worktree manually.)
-
-**prune**
-
-> Prune worktree information in **\$GIT_DIR/worktrees**.
-
-**remove**
-
-> Remove a worktree. Only clean worktrees (no untracked files and no
-> modification in tracked files) can be removed. Unclean worktrees or
-> ones with submodules can be removed with **--force**. The main
-> worktree cannot be removed.
-
-**repair** \[*\<path\>*...\]
-
-> Repair worktree administrative files, if possible, if they have become
-> corrupted or outdated due to external factors.
->
-> For instance, if the main worktree (or bare repository) is moved,
-> linked worktrees will be unable to locate it. Running **repair** in
-> the main worktree will reestablish the connection from linked
-> worktrees back to the main worktree.
->
-> Similarly, if the working tree for a linked worktree is moved without
-> using **git** **worktree** **move**, the main worktree (or bare
-> repository) will be unable to locate it. Running **repair** within the
-> recently-moved worktree will reestablish the connection. If multiple
-> linked worktrees are moved, running **repair** from any worktree with
-> each tree’s new *\<path\>* as an argument, will reestablish the
-> connection to all the specified paths.
->
-> If both the main worktree and linked worktrees have been moved or
-> copied manually, then running **repair** in the main worktree and
-> specifying the new *\<path\>* of each linked worktree will reestablish
-> all connections in both directions.
-
-**unlock**
-
-> Unlock a worktree, allowing it to be pruned, moved or deleted.
+| Command | Description | Supported? |
+| ------- | ----------- | ---------- |
+| **add** *\<path\>* \[*\<commit-ish\>*\] | Create a worktree at *\<path\>* and checkout *\<commit-ish\>* into it. The new worktree is linked to the current repository, sharing everything except per-worktree files such as **HEAD**, **index**, etc. As a convenience, *\<commit-ish\>* may be a bare "**-**", which is synonymous with **@**{-1}. | ✅ |
+| **list** | List details of each worktree. The main worktree is listed first, followed by each of the linked worktrees. The output details include whether the worktree is bare, the revision currently checked out, the branch currently checked out (or "detached HEAD" if none), "locked" if the worktree is locked, "prunable" if the worktree can be pruned by the **prune** command. | ✅ |
+| **lock** | If a worktree is on a portable device or network share which is not always mounted, lock it to prevent its administrative files from being pruned automatically. This also prevents it from being moved or deleted. Optionally, specify a reason for the lock with **--reason**. | ❌ |
+| **move** | Move a worktree to a new location. Note that the main worktree or linked worktrees containing submodules cannot be moved with this command. (The **git** **worktree** **repair** command, however, can reestablish the connection with linked worktrees if you move the main worktree manually.) | ✅ |
+| **prune** | Prune worktree information in **\$GIT_DIR/worktrees**. | ❌ |
+| **remove** | Remove a worktree. Only clean worktrees (no untracked files and no modification in tracked files) can be removed. Unclean worktrees or ones with submodules can be removed with **--force**. The main worktree cannot be removed. | ✅ |
+| **repair** \[*\<path\>*...\] | Repair worktree administrative files, if possible, if they have become corrupted or outdated due to external factors. | ❌ |
+| **unlock** | Unlock a worktree, allowing it to be pruned, moved or deleted. | ❌ |
 
 ## OPTIONS
 

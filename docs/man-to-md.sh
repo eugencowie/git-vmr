@@ -40,6 +40,11 @@ function emit_option() {
 }
 
 function begin_options() {
+    if (in_commands) {
+        end_commands()
+        in_commands = 0
+    }
+
     in_options = 1
     option_table = 0
     pending_blank = 0
@@ -72,6 +77,66 @@ function emit_command() {
     print "| " command " | " description " | " unsupported_mark " |"
     command = ""
     description = ""
+}
+
+function append_command_description(value) {
+    sub(/^> ?/, "", value)
+
+    if (done_description) {
+        return
+    }
+
+    if (value == "") {
+        done_description = 1
+        return
+    }
+
+    if (description != "") {
+        description = description " "
+    }
+    description = description value
+}
+
+function begin_commands(kind) {
+    in_commands = 1
+    command_kind = kind
+    command_table = 0
+    pending_command_blank = 0
+    pending_plain_command = ""
+    print_line()
+}
+
+function is_command_heading(value) {
+    if (command_kind == "git") {
+        return value ~ /^\*\*[^*]+\*\*\(1\)$/
+    }
+
+    return value ~ /^\*\*[^*]+\*\*([[:space:]].*)?$/
+}
+
+function is_plain_command_heading_start(value) {
+    return command_kind == "subcommand" && value ~ /^[[:lower:]][[:alnum:]_-]*($|[[:space:]]+(\\\[|\\?<|--|-|\())/
+}
+
+function start_command_table() {
+    if (command_table) {
+        return
+    }
+
+    print ""
+    print "| Command | Description | Supported? |"
+    print "| ------- | ----------- | ---------- |"
+    command_table = 1
+}
+
+function clean_command_heading(value) {
+    if (command_kind == "git") {
+        sub(/^\*\*/, "", value)
+        sub(/\*\*\(1\)$/, "", value)
+        sub(/^git-/, "", value)
+    }
+
+    return value
 }
 
 function end_commands() {
@@ -118,7 +183,11 @@ in_options && /^# / {
     }
 
     print_line()
-    in_commands = ($0 == "# GIT COMMANDS")
+    if ($0 == "# GIT COMMANDS") {
+        in_commands = 1
+        command_kind = "git"
+        command_table = 0
+    }
     next
 }
 
@@ -175,31 +244,62 @@ in_options {
     next
 }
 
-/# GIT COMMANDS/ {
-    in_commands = 1
-    print_line()
+/^# GIT COMMANDS$/ {
+    begin_commands("git")
     next
 }
 
-in_commands && /^\*\*[^*]+\*\*\(1\)$/ {
-    emit_command()
+/^# COMMANDS$/ {
+    begin_commands("subcommand")
+    next
+}
 
-    if (!command_table) {
-        print "| Command | Description | Supported? |"
-        print "| ------- | ----------- | ---------- |"
-        command_table = 1
+in_commands && command == "" && !command_table && $0 == "" {
+    pending_command_blank = 1
+    next
+}
+
+in_commands && pending_command_blank && !is_command_heading($0) && !is_plain_command_heading_start($0) {
+    print ""
+    pending_command_blank = 0
+}
+
+in_commands && pending_plain_command != "" {
+    if ($0 == "") {
+        next
     }
 
-    command = $0
-    sub(/^\*\*/, "", command)
-    sub(/\*\*\(1\)$/, "", command)
-    sub(/^git-/, "", command)
+    if ($0 ~ /^>/) {
+        start_command_table()
+        command = pending_plain_command
+        pending_plain_command = ""
+        done_description = 0
+        append_command_description($0)
+        next
+    }
+
+    pending_plain_command = pending_plain_command " " $0
+    next
+}
+
+in_commands && is_command_heading($0) {
+    emit_command()
+    pending_command_blank = 0
+    start_command_table()
+    command = clean_command_heading($0)
     done_description = 0
     next
 }
 
 in_commands && command != "" {
     if ($0 == "") {
+        next
+    }
+
+    if (is_plain_command_heading_start($0)) {
+        emit_command()
+        pending_command_blank = 0
+        pending_plain_command = $0
         next
     }
 
@@ -210,21 +310,15 @@ in_commands && command != "" {
     }
 
     sub(/^> ?/, "")
+    append_command_description($0)
 
-    if (done_description) {
-        next
-    }
+    next
+}
 
-    if ($0 == "") {
-        done_description = 1
-        next
-    }
-
-    if (description != "") {
-        description = description " "
-    }
-    description = description $0
-
+in_commands && is_plain_command_heading_start($0) {
+    emit_command()
+    pending_command_blank = 0
+    pending_plain_command = $0
     next
 }
 
