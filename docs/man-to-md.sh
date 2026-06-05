@@ -15,8 +15,11 @@ set -euo pipefail
 mkdir -p "$(dirname "$2")"
 gzip -dc "$(man -w "$1")" | pandoc --from=man --to=gfm --output="$2" -
 
+tmp_output="$(mktemp "${2}.XXXXXX")"
+trap 'rm -f "$tmp_output"' EXIT
+
 # Convert the markdown options to a table using awk
-awk -i inplace -v unsupported_mark="❌" '
+awk -v man_page="$1" -v unsupported_mark="❌" '
 function print_line() {
     if ($0 ~ /^#/) {
         print "#" $0
@@ -146,6 +149,15 @@ function end_commands() {
         print ""
         command_table = 0
     }
+}
+
+function emit_copyright_notice() {
+    print ""
+    print "## Copyright"
+    print ""
+    print "This documentation is derived from the Git man page for `" man_page "`."
+    print ""
+    print "Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git'\''s COPYING file](https://github.com/git/git/blob/master/COPYING)."
 }
 
 /^# NAME$/ {
@@ -338,5 +350,10 @@ END {
     if (in_commands) {
         end_commands()
     }
+
+    emit_copyright_notice()
 }
-' "$2"
+' "$2" > "$tmp_output"
+
+mv "$tmp_output" "$2"
+trap - EXIT

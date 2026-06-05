@@ -47,11 +47,11 @@ further modified after the merge was started), **git** **merge**
 **--abort** will in some cases be unable to reconstruct the original
 (pre-merge) changes. Therefore:
 
->   
+> \
 >
 > **Warning**
 >
->   
+> \
 >
 > Running **git** **merge** with non-trivial uncommitted changes is
 > discouraged: while possible, it may leave you in a state that is hard
@@ -870,3 +870,9 @@ what’s found there:
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-merge`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

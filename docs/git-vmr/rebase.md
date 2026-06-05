@@ -94,11 +94,11 @@ Here is a simplified description of what **git** **rebase**
 > Update your branch to point to the final commit with the equivalent of
 > **git** **checkout** **-B** *\<branch\>*.
 
->   
+> \
 >
 > **Note**
 >
->   
+> \
 >
 > When starting the rebase, **ORIG_HEAD** is set to point to the commit
 > at the tip of the to-be-rebased branch. However, **ORIG_HEAD** is not
@@ -928,11 +928,11 @@ you will end up with the fixed history
 Things get more complicated if the *subsystem* changes do not exactly
 correspond to the ones before the rebase.
 
->   
+> \
 >
 > **Note**
 >
->   
+> \
 >
 > While an "easy case recovery" sometimes appears to be successful even
 > in the hard case, it may have unintended consequences. For example, a
@@ -1217,3 +1217,9 @@ file:///nix/store/0kjpgj1grgba239ykdnv1cjc61xqk3aa-git-2.53.0-doc/share/doc/git/
 **filter-repo**
 
 https://github.com/newren/git-filter-repo
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-rebase`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

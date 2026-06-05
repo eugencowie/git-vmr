@@ -360,11 +360,11 @@ automatically set the upstream for you, for example:
 > *\<branch\>* will automatically create a local branch with that name
 > and set the upstream to the remote branch.
 
->   
+> \
 >
 > **Note**
 >
->   
+> \
 >
 > Upstream branches are sometimes referred to as "tracking information",
 > as in "set the branch’s tracking information".
@@ -677,3 +677,9 @@ be fixed in a future Git version.
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-pull`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).
