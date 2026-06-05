@@ -225,26 +225,122 @@ fn state_sort_key(state: &git::ChildWorktreeState) -> (&str, &str)
     }
 }
 
-pub fn remove(working_dir: &Path, path: &Path, force: u8) -> Result<()>
+pub fn remove(
+    working_dir: &Path,
+    path: &Path,
+    force: u8,
+    delete: bool,
+    force_delete: bool
+) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
     let repos = vmr.repos()?;
     let target = resolve_path(working_dir, path).clean();
 
-    let results = repos
+    let removals = repos
         .par_iter()
         .map(|repo| {
-            git::worktree_remove(
+            let child_target = target.join(&repo.name).clean();
+            let branch = if delete || force_delete
+            {
+                child_worktree_branch(&repo.name, &repo.path, &child_target)?
+            }
+            else
+            {
+                None
+            };
+            let result = git::worktree_remove(
                 &repo.name,
                 &repo.path,
-                &target.join(&repo.name),
+                &child_target,
                 force
-            )
+            );
+
+            Ok(RemovalOutcome {
+                repo_name: repo.name.clone(),
+                repo_path: repo.path.clone(),
+                branch,
+                result
+            })
         })
         .collect::<Vec<_>>();
 
-    git::print_results(results)?;
+    let mut all_child_removals_succeeded = true;
+    let mut results = Vec::new();
+    let mut deletion_targets = Vec::new();
+    for removal in removals
+    {
+        match removal
+        {
+            Ok(RemovalOutcome { repo_name, repo_path, branch, result }) =>
+            {
+                if !matches!(result, Ok(git::RepoOutcome::Success(_)))
+                {
+                    all_child_removals_succeeded = false;
+                }
+                else if let Some(branch) = branch
+                {
+                    deletion_targets.push((repo_name, repo_path, branch));
+                }
 
+                results.push(result);
+            }
+            Err(error) =>
+            {
+                all_child_removals_succeeded = false;
+                results.push(Err(error));
+            }
+        }
+    }
+
+    if delete || force_delete
+    {
+        let branch_deletions = deletion_targets
+            .par_iter()
+            .map(|(repo_name, repo_path, branch)| {
+                git::delete_branch(repo_name, repo_path, branch, force_delete)
+            })
+            .collect::<Vec<_>>();
+        results.extend(branch_deletions);
+    }
+
+    if all_child_removals_succeeded
+    {
+        cleanup_aggregate_worktree(&target)?;
+    }
+
+    git::print_results(results)
+}
+
+struct RemovalOutcome
+{
+    repo_name: String,
+    repo_path: PathBuf,
+    branch: Option<String>,
+    result: git::GitCommandResult
+}
+
+fn child_worktree_branch(
+    repo_name: &str,
+    repo_path: &Path,
+    child_target: &Path
+) -> Result<Option<String>>
+{
+    let entries = git::worktree_list(repo_name, repo_path)?;
+    let child_target = child_target.clean();
+
+    Ok(entries
+        .into_iter()
+        .find(|entry| entry.path.clean() == child_target)
+        .and_then(|entry| match entry.state
+        {
+            git::ChildWorktreeState::Branch(branch) => Some(branch),
+            git::ChildWorktreeState::Detached => None
+        }))
+}
+
+fn cleanup_aggregate_worktree(target: &Path) -> Result<()>
+{
     let marker = target.join(".gitvmr");
     if marker.exists()
     {
@@ -268,7 +364,7 @@ pub fn remove(working_dir: &Path, path: &Path, force: u8) -> Result<()>
         }
     }
 
-    match fs::remove_dir(&target)
+    match fs::remove_dir(target)
     {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
