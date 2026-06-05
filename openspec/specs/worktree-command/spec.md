@@ -180,12 +180,12 @@ The `git vmr worktree add` command SHALL require exactly one aggregate target pa
 - **AND** no child repository worktree additions SHALL be attempted
 
 ### Requirement: Worktree list shows aggregate VMR worktrees
-The `git vmr worktree list` command SHALL discover the VMR root from the effective working directory, scan immediate child directories of the VMR root, skip non-Git child directories, read each child Git repository's worktree list, and render aggregate VMR worktrees grouped by aggregate root path.
+The `git vmr worktree list` command SHALL discover the VMR root from the effective working directory, scan immediate child directories of the VMR root, skip non-Git child directories, read each child Git repository's worktree list, and render one unified entry for each aggregate VMR worktree root.
 
 #### Scenario: List main aggregate worktree for multiple child repositories
 - **WHEN** a VMR contains child Git repositories `backend` and `frontend`
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list the VMR root aggregate worktree
+- **THEN** the command SHALL list the VMR root aggregate worktree once
 - **AND** the listed aggregate worktree SHALL represent both `backend` and `frontend`
 - **AND** the command SHALL exit successfully
 
@@ -194,7 +194,7 @@ The `git vmr worktree list` command SHALL discover the VMR root from the effecti
 - **AND** linked child worktrees exist at `../wt/backend` and `../wt/frontend`
 - **AND** `../wt/.gitvmr` exists
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list `../wt` as an aggregate worktree
+- **THEN** the command SHALL list `../wt` once as an aggregate worktree
 - **AND** the listed aggregate worktree SHALL represent both `backend` and `frontend`
 
 #### Scenario: Non-Git child directories are skipped during listing
@@ -203,6 +203,20 @@ The `git vmr worktree list` command SHALL discover the VMR root from the effecti
 - **THEN** the command SHALL read worktree information for `backend`
 - **AND** the command SHALL NOT fail because of `docs`
 - **AND** the command SHALL NOT report `docs` as a repository participant
+
+### Requirement: Worktree list renders Git-style path separators
+The `git vmr worktree list` command SHALL render aggregate worktree paths with Git-style `/` separators, regardless of the separator style used by the underlying platform path display or Git worktree list input.
+
+#### Scenario: Windows-style aggregate path is normalized
+- **WHEN** `git vmr worktree list` renders an aggregate worktree path represented as `C:\Projects\vmr`
+- **THEN** the output SHALL contain `C:/Projects/vmr`
+- **AND** the output SHALL NOT contain `C:\Projects\vmr`
+
+#### Scenario: Mixed path sources render consistently
+- **WHEN** `git vmr worktree list` renders aggregate worktree paths represented as `C:\Projects\vmr` and `C:/Worktrees/new-feature`
+- **THEN** the output SHALL contain `C:/Projects/vmr`
+- **AND** the output SHALL contain `C:/Worktrees/new-feature`
+- **AND** both rendered paths SHALL use `/` as the path separator
 
 ### Requirement: Worktree list filters non-aggregate child worktrees
 The `git vmr worktree list` command SHALL render only worktrees that correspond to the discovered VMR root or to a marked aggregate VMR linked worktree whose child paths follow the `<aggregate-root>/<repo-name>` layout.
@@ -220,30 +234,39 @@ The `git vmr worktree list` command SHALL render only worktrees that correspond 
 - **AND** the command SHALL NOT treat the parent directory of `../backend-only` as an aggregate VMR worktree
 
 ### Requirement: Worktree list reports branch and detached HEAD state
-For each listed aggregate VMR worktree, `git vmr worktree list` SHALL report the aggregate path and the branch currently checked out by each participating child worktree. If a participating child worktree has no branch, the command SHALL report its detached HEAD state.
+For each listed aggregate VMR worktree, `git vmr worktree list` SHALL report the aggregate path and the branch currently checked out by each participating child worktree. If a participating child worktree has no branch, the command SHALL report its detached HEAD state. Branch-backed child worktrees SHALL be grouped by branch name and SHALL NOT be split into separate rendered states solely because their HEAD hashes differ.
 
 #### Scenario: Shared branch is reported once
 - **WHEN** linked child worktrees at `../wt/backend` and `../wt/frontend` are both checked out on branch `wt`
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list aggregate path `../wt`
-- **AND** the command SHALL report branch `wt` for that aggregate worktree
+- **THEN** the command SHALL list aggregate path `../wt` once
+- **AND** the command SHALL report branch `wt` once for that aggregate worktree
 - **AND** the branch report SHALL NOT require separate repository suffixes for `backend` and `frontend`
 
-#### Scenario: Mixed branches are reported with repository suffixes
+#### Scenario: Shared branch with different child HEAD hashes is reported once
+- **WHEN** linked child worktrees at `../wt/backend` and `../wt/frontend` are both checked out on branch `wt`
+- **AND** `../wt/backend` and `../wt/frontend` have different HEAD hashes
+- **AND** user runs `git vmr worktree list`
+- **THEN** the command SHALL list aggregate path `../wt` once
+- **AND** the command SHALL report branch `wt` once for that aggregate worktree
+- **AND** the command SHALL NOT render separate branch reports for each HEAD hash
+
+#### Scenario: Mixed branches are reported under one aggregate worktree
 - **WHEN** linked child worktree `../wt/backend` is checked out on branch `backend-topic`
 - **AND** linked child worktree `../wt/frontend` is checked out on branch `frontend-topic`
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list aggregate path `../wt` with branch `backend-topic` for `backend`
-- **AND** the command SHALL list aggregate path `../wt` with branch `frontend-topic` for `frontend`
+- **THEN** the command SHALL list aggregate path `../wt` once
+- **AND** the command SHALL report branch `backend-topic` for `backend`
+- **AND** the command SHALL report branch `frontend-topic` for `frontend`
 
-#### Scenario: Detached child worktree is reported
+#### Scenario: Detached child worktree is reported under one aggregate worktree
 - **WHEN** linked child worktree `../wt/backend` is detached at a commit
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list aggregate path `../wt`
+- **THEN** the command SHALL list aggregate path `../wt` once
 - **AND** the command SHALL report detached HEAD state for `backend`
 
 ### Requirement: Worktree list reports partial aggregate coverage
-When an aggregate VMR worktree exists for only some child Git repositories, `git vmr worktree list` SHALL list the aggregate worktree and append the participating repository names.
+When an aggregate VMR worktree exists for only some child Git repositories, `git vmr worktree list` SHALL list the aggregate worktree once and append the participating repository names to state that applies to only those repositories.
 
 #### Scenario: Partial linked aggregate worktree is listed with repositories
 - **WHEN** a VMR contains child Git repositories `backend`, `frontend`, and `tools`
@@ -251,12 +274,12 @@ When an aggregate VMR worktree exists for only some child Git repositories, `git
 - **AND** no linked child worktree exists at `../wt/tools`
 - **AND** `../wt/.gitvmr` exists
 - **AND** user runs `git vmr worktree list`
-- **THEN** the command SHALL list `../wt` as an aggregate worktree
+- **THEN** the command SHALL list `../wt` once as an aggregate worktree
 - **AND** the command SHALL identify `backend` and `frontend` as the participating repositories
 - **AND** the command SHALL NOT identify `tools` as a participant for `../wt`
 
 ### Requirement: Worktree list output is deterministic
-The `git vmr worktree list` command SHALL render aggregate worktrees in deterministic path order, and repository suffixes SHALL list repositories in deterministic repository name order.
+The `git vmr worktree list` command SHALL render aggregate worktrees in deterministic path order. Within an aggregate worktree, rendered branch and detached states SHALL use deterministic state order, and repository suffixes SHALL list repositories in deterministic repository name order.
 
 #### Scenario: Aggregate worktrees are sorted by path
 - **WHEN** aggregate linked worktrees exist at `../zeta` and `../alpha`
@@ -267,6 +290,11 @@ The `git vmr worktree list` command SHALL render aggregate worktrees in determin
 - **WHEN** aggregate linked worktree `../wt` exists for child repositories `zeta` and `alpha`
 - **AND** user runs `git vmr worktree list`
 - **THEN** the repository suffix for `../wt` SHALL list `alpha` before `zeta`
+
+#### Scenario: Mixed states are sorted deterministically
+- **WHEN** aggregate linked worktree `../wt` has child repositories on multiple branches and at least one detached HEAD state
+- **AND** user runs `git vmr worktree list`
+- **THEN** branch and detached state reports under `../wt` SHALL appear in deterministic order
 
 ### Requirement: Worktree list uses existing working directory behavior
 The `git vmr worktree list` command SHALL interpret the global `-C <path>` option the same way as existing commands. It SHALL use the resolved working directory as the starting point for VMR root discovery.

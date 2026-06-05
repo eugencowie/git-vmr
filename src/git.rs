@@ -142,6 +142,11 @@ pub fn print_results(results: Vec<GitCommandResult>) -> Result<()>
     Ok(())
 }
 
+pub(crate) fn git_style_path(path: &Path) -> String
+{
+    path.display().to_string().replace('\\', "/")
+}
+
 const REPOSITORY_NAME_LIMIT: usize = 5;
 
 enum SuccessRepositoryFormat
@@ -396,10 +401,33 @@ mod tests
 {
     use super::*;
     use anyhow::anyhow;
+    use std::path::Path;
 
     fn repo_message(repo: &str, message: &str) -> RepoMessage
     {
         RepoMessage { repo: repo.to_owned(), message: message.to_owned() }
+    }
+
+    #[test]
+    fn git_style_path_normalizes_windows_separators()
+    {
+        assert_eq!(
+            git_style_path(Path::new(r"C:\Projects\vmr")),
+            "C:/Projects/vmr"
+        );
+    }
+
+    #[test]
+    fn git_style_path_normalizes_mixed_separator_inputs()
+    {
+        assert_eq!(
+            git_style_path(Path::new(r"C:\Projects\vmr")),
+            "C:/Projects/vmr"
+        );
+        assert_eq!(
+            git_style_path(Path::new("C:/Worktrees/new-feature")),
+            "C:/Worktrees/new-feature"
+        );
     }
 
     #[test]

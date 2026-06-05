@@ -35,9 +35,7 @@ pub fn delete_branch(
     command_result(
         repo_name,
         &output,
-        |output| {
-            first_non_empty_line(&output.stdout, "git branch failed").into()
-        },
+        |_| Some(format!("Deleted branch {branch_name}")),
         |output| first_non_empty_line(&output.stderr, "git branch failed")
     )
 }

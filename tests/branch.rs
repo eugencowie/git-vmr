@@ -360,8 +360,9 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted branch feature/auth (was")
+            predicate::str::contains("Deleted branch feature/auth")
                 .and(predicate::str::contains("(backend, frontend)"))
+                .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -395,8 +396,9 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted branch feature/auth (was")
+            predicate::str::contains("Deleted branch feature/auth")
                 .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -421,8 +423,9 @@ fn branch_delete_skips_non_git_child_directories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted branch feature/auth (was")
+            predicate::str::contains("Deleted branch feature/auth")
                 .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains("(was").not())
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -455,9 +458,10 @@ fn branch_delete_partial_failure_does_not_stop_other_repositories()
         .assert()
         .failure()
         .stdout(
-            predicate::str::contains("Deleted branch feature/auth (was")
+            predicate::str::contains("Deleted branch feature/auth")
                 .and(predicate::str::contains("frontend"))
                 .and(predicate::str::contains("tools"))
+                .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::contains(
             "error: the branch 'feature/auth' is not fully merged (backend)"

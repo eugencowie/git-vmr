@@ -56,21 +56,8 @@ pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
     git::print_results(results)
 }
 
-pub fn delete(working_dir: &Path, branch_name: &str) -> Result<()>
-{
-    delete_branch(working_dir, branch_name, false)
-}
-
-pub fn force_delete(working_dir: &Path, branch_name: &str) -> Result<()>
-{
-    delete_branch(working_dir, branch_name, true)
-}
-
-fn delete_branch(
-    working_dir: &Path,
-    branch_name: &str,
-    force: bool
-) -> Result<()>
+pub fn delete(working_dir: &Path, branch_name: &str, force: bool)
+-> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;

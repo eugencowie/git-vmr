@@ -133,27 +133,26 @@ fn render_group(
 )
 {
     entries.sort_by(|a, b| {
-        (&a.state, short_head(&a.head), &a.repo).cmp(&(
-            &b.state,
+        (state_sort_key(&a.state), short_head(&a.head), &a.repo).cmp(&(
+            state_sort_key(&b.state),
             short_head(&b.head),
             &b.repo
         ))
     });
 
-    let mut state_groups: BTreeMap<
-        (git::ChildWorktreeState, String),
-        Vec<String>
-    > = BTreeMap::new();
+    let mut state_groups: BTreeMap<RenderedState, Vec<String>> =
+        BTreeMap::new();
 
     for entry in entries
     {
         state_groups
-            .entry((entry.state, short_head(&entry.head).to_owned()))
+            .entry(RenderedState::from_entry(&entry))
             .or_default()
             .push(entry.repo);
     }
 
-    for ((state, head), mut repos) in state_groups
+    let mut lines = Vec::new();
+    for (state, mut repos) in state_groups
     {
         repos.sort();
         let suffix = if repos == repo_names
@@ -165,28 +164,65 @@ fn render_group(
             format!(" ({})", repos.join(", "))
         };
 
-        println!(
-            "{} {} {}{}",
-            root.display(),
-            head,
-            render_state(&state),
-            suffix
-        );
+        lines.push(format!("{}{}", state.render(), suffix));
+    }
+
+    if lines.len() == 1
+    {
+        println!("{} {}", git::git_style_path(root), lines[0]);
+    }
+    else
+    {
+        println!("{}", git::git_style_path(root));
+        for line in lines
+        {
+            println!("  {line}");
+        }
     }
 }
 
-fn render_state(state: &git::ChildWorktreeState) -> String
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+enum RenderedState
 {
-    match state
+    Branch(String),
+    Detached(String)
+}
+
+impl RenderedState
+{
+    fn from_entry(entry: &AggregateEntry) -> Self
     {
-        git::ChildWorktreeState::Branch(branch) => format!("[{branch}]"),
-        git::ChildWorktreeState::Detached => "(detached HEAD)".to_owned()
+        match &entry.state
+        {
+            git::ChildWorktreeState::Branch(branch) =>
+                Self::Branch(branch.clone()),
+            git::ChildWorktreeState::Detached =>
+                Self::Detached(short_head(&entry.head).to_owned()),
+        }
+    }
+
+    fn render(&self) -> String
+    {
+        match self
+        {
+            Self::Branch(branch) => format!("[{branch}]"),
+            Self::Detached(head) => format!("{head} (detached HEAD)")
+        }
     }
 }
 
 fn short_head(head: &str) -> &str
 {
     head.get(..8).unwrap_or(head)
+}
+
+fn state_sort_key(state: &git::ChildWorktreeState) -> (&str, &str)
+{
+    match state
+    {
+        git::ChildWorktreeState::Branch(branch) => ("branch", branch),
+        git::ChildWorktreeState::Detached => ("detached", "")
+    }
 }
 
 pub fn remove(working_dir: &Path, path: &Path, force: u8) -> Result<()>

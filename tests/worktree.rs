@@ -77,6 +77,11 @@ fn head_short(path: &Path) -> String
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn count_occurrences(haystack: &str, needle: &str) -> usize
+{
+    haystack.match_indices(needle).count()
+}
+
 fn init_vmr_with_repos(tmp: &Path, repos: &[&str]) -> std::path::PathBuf
 {
     let vmr = tmp.join("vmr");
@@ -107,7 +112,6 @@ fn worktree_list_lists_main_aggregate_for_multiple_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
-    let head = head_short(&vmr.join("backend"));
 
     git_vmr()
         .current_dir(&vmr)
@@ -115,13 +119,9 @@ fn worktree_list_lists_main_aggregate_for_multiple_child_repositories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(format!(
-                "{} {} [master]",
-                vmr.display(),
-                head
-            ))
-            .and(predicate::str::contains("backend").not())
-            .and(predicate::str::contains("frontend").not())
+            predicate::str::contains(format!("{} [master]", vmr.display()))
+                .and(predicate::str::contains("backend").not())
+                .and(predicate::str::contains("frontend").not())
         )
         .stderr(predicate::str::is_empty());
 }
@@ -134,7 +134,6 @@ fn worktree_list_lists_linked_aggregate_and_skips_non_git_children()
     fs::create_dir(vmr.join("docs")).expect("failed to create docs dir");
     add_worktrees(&vmr);
     let wt = tmp.path().join("wt");
-    let head = head_short(&wt.join("backend"));
 
     git_vmr()
         .current_dir(&vmr)
@@ -142,9 +141,35 @@ fn worktree_list_lists_linked_aggregate_and_skips_non_git_children()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(format!("{} {} [wt]", wt.display(), head))
+            predicate::str::contains(format!("{} [wt]", wt.display()))
                 .and(predicate::str::contains("docs").not())
         )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn worktree_list_reports_shared_branch_with_different_child_heads_once()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+    let wt = tmp.path().join("wt");
+
+    commit_file_with_content(&wt.join("backend"), "backend.txt", "backend\n");
+    let backend_head = head_short(&wt.join("backend"));
+    let frontend_head = head_short(&wt.join("frontend"));
+    assert_ne!(backend_head, frontend_head);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::function(move |stdout: &str| {
+            count_occurrences(stdout, &format!("{} [wt]", wt.display())) == 1
+                && !stdout.contains(&backend_head)
+                && !stdout.contains(&frontend_head)
+        }))
         .stderr(predicate::str::is_empty());
 }
 
@@ -189,21 +214,24 @@ fn worktree_list_reports_mixed_detached_partial_and_sorted_output()
     git(&vmr.join("tools"), ["worktree", "add", "../../alpha-wt/tools"]);
     git(&tmp.path().join("zeta-wt/alpha"), ["checkout", "-b", "alpha-topic"]);
     git(&tmp.path().join("zeta-wt/zeta"), ["checkout", "--detach"]);
+    let zeta_head = head_short(&tmp.path().join("zeta-wt/zeta"));
 
     git_vmr()
         .current_dir(&vmr)
         .args(["worktree", "list"])
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains(format!(
-                "{}",
-                tmp.path().join("alpha-wt").display()
-            ))
-            .and(predicate::str::contains("[alpha-topic] (alpha)"))
-            .and(predicate::str::contains("(detached HEAD) (zeta)"))
-            .and(predicate::str::contains("[tools] (tools)"))
-        )
+        .stdout(predicate::function(move |stdout: &str| {
+            let alpha_wt = format!("{}", tmp.path().join("alpha-wt").display());
+            let zeta_wt = format!("{}", tmp.path().join("zeta-wt").display());
+
+            count_occurrences(stdout, &alpha_wt) == 1
+                && count_occurrences(stdout, &zeta_wt) == 1
+                && stdout.contains(&format!("{alpha_wt} [tools] (tools)"))
+                && stdout.contains("  [alpha-topic] (alpha)")
+                && stdout
+                    .contains(&format!("  {zeta_head} (detached HEAD) (zeta)"))
+        }))
         .stderr(predicate::str::is_empty());
 }
 

@@ -386,19 +386,17 @@ impl Command
             Command::Status => status::status(bin_name, working_dir),
 
             Command::Branch { delete, force_delete, force, branch_name } =>
-                match (branch_name, delete, force_delete, force)
+                match branch_name
                 {
-                    (Some(branch_name), true, false, false) =>
-                        branch::delete(working_dir, &branch_name),
-                    (Some(branch_name), false, true, false) =>
-                        branch::force_delete(working_dir, &branch_name),
-                    (Some(branch_name), true, false, true) =>
-                        branch::force_delete(working_dir, &branch_name),
-                    (Some(branch_name), false, false, false) =>
+                    Some(branch_name) if delete || force_delete =>
+                        branch::delete(
+                            working_dir,
+                            &branch_name,
+                            force || force_delete
+                        ),
+                    Some(branch_name) =>
                         branch::branch(working_dir, &branch_name),
-                    (None, false, false, false) =>
-                        branch::branches(working_dir),
-                    _ => unreachable!()
+                    None => branch::branches(working_dir)
                 },
 
             Command::Commit { message } =>

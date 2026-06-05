@@ -94,9 +94,7 @@ fn status_reports_clean_summary_for_clean_child_repo()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::contains("On branch master").and(
-            predicate::str::contains("nothing to commit, working tree clean")
-        ))
+        .stdout("On branch master\n\nnothing to commit, working tree clean\n")
         .stderr(predicate::str::is_empty());
 }
 
@@ -119,10 +117,10 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
         .success()
         .stdout(
             predicate::str::contains(
-                "On branch master\nnothing to commit, working tree clean"
+                "On branch master\n\nnothing to commit, working tree clean\n\n"
             )
             .and(predicate::str::contains(
-                "On branch master (new-repo)\n\nNo commits yet\n\n"
+                "On branch master (new-repo)\n\nNo commits yet\n"
             ))
             .and(
                 predicate::str::contains(
