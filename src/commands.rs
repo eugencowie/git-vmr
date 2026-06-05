@@ -26,12 +26,12 @@ use std::path::{Path, PathBuf};
 #[derive(Subcommand)]
 pub enum WorktreeCommand
 {
-    /// Create a worktree at [path] and checkout [commit-ish] into it
+    /// Create a worktree at <path> and checkout [commit-ish] into it
     Add
     {
-        /// With add, create a new branch named [new-branch] starting at
-        /// [commit-ish], and check out [new-branch] into the new worktree
-        #[arg(short = 'b', value_name = "new-branch")]
+        /// With add, create a new branch named <new-branch> starting at
+        /// [commit-ish], and check out <new-branch> into the new worktree
+        #[arg(short, value_name = "new-branch")]
         branch: Option<String>,
 
         #[arg(value_name = "path")]
@@ -255,18 +255,18 @@ pub enum Command
         hard: bool,
 
         /// Reset the index and update the files in the working tree that are
-        /// different between <commit> and HEAD, but keep those which are
+        /// different between [commit] and HEAD, but keep those which are
         /// different between the index and working tree (i.e. which have
         /// changes which have not been added)
         #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "keep"])]
         merge: bool,
 
         /// Resets index entries and updates files in the working tree that are
-        /// different between <commit> and HEAD
+        /// different between [commit] and HEAD
         #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "merge"])]
         keep: bool,
 
-        /// Set the current branch head (HEAD) to point at <commit>
+        /// Set the current branch head (HEAD) to point at [commit]
         #[arg(value_name = "commit")]
         commit: Option<String>
     },
@@ -274,8 +274,8 @@ pub enum Command
     /// Switch branches
     Switch
     {
-        /// Create a new branch named [branch] before switching to the branch
-        #[arg(short = 'c', long)]
+        /// Create a new branch named <branch> before switching to the branch
+        #[arg(short, long)]
         create: bool,
 
         /// Branch to switch to
