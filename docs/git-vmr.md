@@ -114,7 +114,7 @@ ancillary user utilities.
 | submodule | Initialize, update or inspect submodules. | ❌ |
 | [switch](git-vmr/switch.md) | Switch branches. | ✅ |
 | [tag](git-vmr/tag.md) | Create, list, delete or verify tags. | ✅ |
-| worktree | Manage multiple working trees. | ❌ |
+| [worktree](git-vmr/worktree.md) | Manage multiple working trees. | ✅ |
 | gitk | The Git repository browser. | ❌ |
 | scalar | A tool for managing large Git repositories. | ❌ |
 

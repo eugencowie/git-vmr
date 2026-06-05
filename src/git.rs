@@ -15,6 +15,7 @@ mod rm;
 mod status;
 mod switch;
 mod tag;
+mod worktree;
 
 pub use add::{add, add_path};
 use anyhow::{Context, Result, bail};
@@ -37,6 +38,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 pub use switch::{create, switch};
 pub use tag::{delete_tag, tag, tags};
+pub use worktree::{
+    ChildWorktreeState, worktree_add, worktree_list, worktree_move,
+    worktree_remove
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Head

@@ -15,11 +15,64 @@ mod rm;
 mod status;
 mod switch;
 mod tag;
+mod worktree;
 
 use crate::git::ResetMode;
 use anyhow::Result;
-use clap::Subcommand;
+use clap::{ArgAction, Subcommand};
 use std::path::{Path, PathBuf};
+
+#[derive(Subcommand)]
+pub enum WorktreeCommand
+{
+    /// Create a worktree at [path] and checkout [commit-ish] into it
+    Add
+    {
+        /// With add, create a new branch named [new-branch] starting at
+        /// [commit-ish], and check out [new-branch] into the new worktree
+        #[arg(short = 'b', value_name = "new-branch")]
+        branch: Option<String>,
+
+        #[arg(value_name = "path")]
+        path: PathBuf,
+
+        #[arg(value_name = "commit-ish")]
+        commit_ish: Option<String>
+    },
+
+    /// List details of each worktree
+    List,
+
+    /// Move a worktree to a new location
+    Move
+    {
+        /// Move a worktree even when Git would otherwise refuse. Specify twice
+        /// for cases that require two force flags.
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf,
+
+        /// New location for the worktree
+        #[arg(value_name = "new-path")]
+        new_path: PathBuf
+    },
+
+    /// Remove a worktree
+    Remove
+    {
+        /// By default, remove refuses to remove an unclean worktree unless
+        /// --force is used. To remove a locked worktree, specify --force twice
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf
+    }
+}
 
 #[derive(Subcommand)]
 pub enum Command
@@ -251,6 +304,13 @@ pub enum Command
         /// Specify what destination ref to update with what source object
         #[arg(value_name = "refspec")]
         refspecs: Vec<String>
+    },
+
+    /// Manage multiple working trees
+    Worktree
+    {
+        #[command(subcommand)]
+        command: WorktreeCommand
     }
 }
 
@@ -333,6 +393,27 @@ impl Command
 
             Command::Push { repository, refspecs } =>
                 push::push(working_dir, repository.as_deref(), &refspecs),
+
+            Command::Worktree { command } => match command
+            {
+                WorktreeCommand::Add { branch, path, commit_ish } =>
+                    worktree::add(
+                        working_dir,
+                        &path,
+                        branch.as_deref(),
+                        commit_ish.as_deref()
+                    ),
+                WorktreeCommand::List => worktree::list(working_dir),
+                WorktreeCommand::Move { force, path, new_path } =>
+                    worktree::move_worktree(
+                        working_dir,
+                        &path,
+                        &new_path,
+                        force
+                    ),
+                WorktreeCommand::Remove { force, path } =>
+                    worktree::remove(working_dir, &path, force),
+            }
         }
     }
 }

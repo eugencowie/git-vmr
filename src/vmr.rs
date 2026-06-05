@@ -196,7 +196,7 @@ impl Vmr
     }
 }
 
-fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
+pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
 {
     // Interpret relative paths against effective working directory
     if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
