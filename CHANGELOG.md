@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+### 🚀 Features
+
+- Add `worktree` commands to add, move, remove and list worktrees ([#40](https://github.com/eugencowie/git-vmr/pull/40))
+- Add `foreach` command to run arbitrary shell commands ([#42](https://github.com/eugencowie/git-vmr/pull/42))
+
 ## 0.6.0
 
 ### 🚀 Features
