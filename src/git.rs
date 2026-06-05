@@ -16,7 +16,7 @@ mod switch;
 mod tag;
 
 pub use add::{add, add_path};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 pub use branch::{branch, branches, delete_branch};
 pub use commit::commit;
 pub use diff::is_dirty;
@@ -85,7 +85,37 @@ pub struct GitOutput
     pub stderr: Vec<u8>
 }
 
-pub type GitCommandResult = Result<Option<String>>;
+pub struct RepoMessage
+{
+    pub repo: String,
+    pub message: String
+}
+
+pub enum RepoOutcome
+{
+    Success(Option<RepoMessage>),
+    Failure(RepoMessage)
+}
+
+pub type GitCommandResult = Result<RepoOutcome>;
+
+pub(crate) fn quiet_success() -> RepoOutcome
+{
+    RepoOutcome::Success(None)
+}
+
+pub(crate) fn success_message(repo_name: &str, message: String) -> RepoOutcome
+{
+    RepoOutcome::Success(Some(RepoMessage {
+        repo: repo_name.to_owned(),
+        message
+    }))
+}
+
+pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
+{
+    RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
+}
 
 pub(crate) fn command_result(
     repo_name: &str,
@@ -96,12 +126,15 @@ pub(crate) fn command_result(
 {
     if output.status.success()
     {
-        Ok(success_message(output)
-            .map(|message| format!("{message} ({repo_name})")))
+        Ok(match success_message(output)
+        {
+            Some(message) => crate::git::success_message(repo_name, message),
+            None => quiet_success()
+        })
     }
     else
     {
-        Err(anyhow!("{} ({})", failure_message(output), repo_name))
+        Ok(crate::git::failure_message(repo_name, failure_message(output)))
     }
 }
 
@@ -120,7 +153,7 @@ where
         .args(&args)
         .output()
         .with_context(|| {
-            format!("failed to invoke git for '{}'", repo_path.display())
+            format!("fatal: failed to invoke git for '{}'", repo_path.display())
         })?;
 
     Ok(GitOutput {
@@ -193,18 +226,6 @@ pub(crate) fn first_non_empty_line(bytes: &[u8], fallback: &str) -> String
         .to_owned()
 }
 
-pub(crate) fn first_non_empty_line_strip_fatal(
-    bytes: &[u8],
-    fallback: &str
-) -> String
-{
-    let text = String::from_utf8_lossy(bytes);
-    let line =
-        text.lines().find(|line| !line.trim().is_empty()).unwrap_or(fallback);
-
-    line.strip_prefix("fatal: ").unwrap_or(line).to_owned()
-}
-
 pub(crate) fn first_non_empty_line_with_fallback(
     primary: &[u8],
     secondary: &[u8],
@@ -223,24 +244,6 @@ pub(crate) fn first_non_empty_line_with_fallback(
     }
 }
 
-pub(crate) fn first_non_empty_line_with_fallback_strip_fatal(
-    primary: &[u8],
-    secondary: &[u8],
-    fallback: &str
-) -> String
-{
-    let primary_line = first_non_empty_line_strip_fatal(primary, "");
-
-    if primary_line.is_empty()
-    {
-        first_non_empty_line_strip_fatal(secondary, fallback)
-    }
-    else
-    {
-        primary_line
-    }
-}
-
 pub(crate) fn status_head(
     repo_path: &Path,
     context: &str,
@@ -251,7 +254,7 @@ pub(crate) fn status_head(
     let header = String::from_utf8_lossy(header);
     let header = header
         .strip_prefix("## ")
-        .context("git status branch header had unexpected format")?;
+        .context("fatal: git status branch header had unexpected format")?;
 
     if let Some(branch) = header.strip_prefix("No commits yet on ")
     {
@@ -263,7 +266,7 @@ pub(crate) fn status_head(
         let hash = String::from_utf8_lossy(
             &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
                 .with_context(|| {
-                    format!("{context} for '{}'", repo_path.display())
+                    format!("fatal: {context} for '{}'", repo_path.display())
                 })?
         )
         .trim()

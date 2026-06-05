@@ -1,4 +1,3 @@
-use crate::git::GitCommandResult;
 use crate::vmr::Vmr;
 use crate::{cli, git};
 use anyhow::Result;
@@ -38,30 +37,5 @@ pub fn create(working_dir: &Path, branch_name: &str) -> Result<()>
         .collect::<Vec<_>>();
 
     // Print results
-    cli::print_results(deduplicate_success_messages(results))
-}
-
-fn deduplicate_success_messages(
-    results: Vec<GitCommandResult>
-) -> Vec<GitCommandResult>
-{
-    let mut messages = Vec::new();
-    let mut deduplicated = Vec::new();
-
-    for result in results
-    {
-        match result
-        {
-            Ok(Some(message)) if messages.contains(&message) =>
-            {}
-            Ok(Some(message)) =>
-            {
-                messages.push(message.clone());
-                deduplicated.push(Ok(Some(message)));
-            }
-            other => deduplicated.push(other)
-        }
-    }
-
-    deduplicated
+    cli::print_results(results)
 }

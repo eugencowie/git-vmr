@@ -15,7 +15,7 @@ pub fn rm(working_dir: &Path, paths: &[PathBuf], recursive: bool)
     // Require explicit recursive intent for aggregate root removal
     if !recursive && targets_vmr_root(working_dir, &vmr.path, paths)
     {
-        bail!("cannot remove VMR root without -r");
+        bail!("error: cannot remove VMR root without -r");
     }
 
     // Route requested paths before removing anything

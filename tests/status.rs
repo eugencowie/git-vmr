@@ -48,7 +48,12 @@ fn status_errors_outside_a_vmr()
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("not a virtual monorepo"));
+        .stderr(
+            predicate::str::contains(
+                "fatal: not a virtual monorepo (or any of the parent directories): .gitvmr"
+            )
+            .and(predicate::str::contains("fatal: fatal: not a virtual monorepo").not())
+        );
 }
 
 #[test]

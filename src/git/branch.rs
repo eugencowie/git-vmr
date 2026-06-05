@@ -1,6 +1,6 @@
 use crate::git::{
     GitCommandResult, GitOutput, Head, RepoBranches, command_result,
-    first_non_empty_line_strip_fatal, git_output, git_stdout
+    first_non_empty_line, git_output, git_stdout
 };
 use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
@@ -18,12 +18,7 @@ pub fn branch(
         repo_name,
         &output,
         |_| None,
-        |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stderr,
-                "git branch failed"
-            )
-        }
+        |output| first_non_empty_line(&output.stderr, "git branch failed")
     )
 }
 
@@ -41,18 +36,9 @@ pub fn delete_branch(
         repo_name,
         &output,
         |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stdout,
-                "git branch failed"
-            )
-            .into()
+            first_non_empty_line(&output.stdout, "git branch failed").into()
         },
-        |output| {
-            first_non_empty_line_strip_fatal(
-                &output.stderr,
-                "git branch failed"
-            )
-        }
+        |output| first_non_empty_line(&output.stderr, "git branch failed")
     )
 }
 
@@ -65,7 +51,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
     ])
     .with_context(|| {
         format!(
-            "failed to read branch information for '{}'",
+            "fatal: failed to read branch information for '{}'",
             repo.path.display()
         )
     })?;
@@ -82,7 +68,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
     ])
     .with_context(|| {
         format!(
-            "failed to read branch information for '{}'",
+            "fatal: failed to read branch information for '{}'",
             repo.path.display()
         )
     })?
@@ -95,7 +81,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
                 &git_stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
                     .with_context(|| {
                         format!(
-                            "failed to read branch information for '{}'",
+                            "fatal: failed to read branch information for '{}'",
                             repo.path.display()
                         )
                     })?
@@ -105,7 +91,7 @@ pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>
             Head::Detached(hash)
         }
         GitOutput { stderr, .. } => bail!(
-            "failed to read branch information for '{}': {}",
+            "fatal: failed to read branch information for '{}': {}",
             repo.path.display(),
             String::from_utf8_lossy(&stderr).trim()
         )

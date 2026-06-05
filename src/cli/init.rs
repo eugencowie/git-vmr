@@ -11,12 +11,18 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
     // Ensure the target path is a directory
     if target_dir.exists() && !target_dir.is_dir()
     {
-        bail!("cannot initialize '{}': Not a directory", target_dir.display());
+        bail!(
+            "fatal: cannot initialize '{}': Not a directory",
+            target_dir.display()
+        );
     }
 
     // Create target directory
     fs::create_dir_all(&target_dir).with_context(|| {
-        format!("failed to create init directory '{}'", target_dir.display())
+        format!(
+            "fatal: failed to create init directory '{}'",
+            target_dir.display()
+        )
     })?;
 
     // Construct path to config file
@@ -35,13 +41,13 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
 
     // Create VMR directory
     fs::create_dir_all(&vmr_dir)
-        .context("failed to create .gitvmr directory")?;
+        .context("fatal: failed to create .gitvmr directory")?;
 
     // Create config file
     let config = toml::to_string(&Config::default())
-        .context("failed to serialize config")?;
+        .context("fatal: failed to serialize config")?;
     fs::write(&config_path, config)
-        .context("failed to write .gitvmr/config")?;
+        .context("fatal: failed to write .gitvmr/config")?;
     println!("Created .gitvmr in {}", target_dir.display());
 
     Ok(())

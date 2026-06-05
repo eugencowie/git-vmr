@@ -119,8 +119,8 @@ fn merge_clean_branch_across_multiple_child_repositories()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend)"))
-                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -181,8 +181,8 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
         .assert()
         .failure()
         .stdout(
-            predicate::str::contains("(backend)")
-                .and(predicate::str::contains("(tools)"))
+            predicate::str::contains("backend")
+                .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
             "merge: feature/auth - not something we can merge (frontend)"
@@ -266,8 +266,7 @@ fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
                 .and(predicate::str::contains("(beta)"))
         )
         .stderr(predicate::str::starts_with(
-            "fatal: merge: feature/auth - not something we can merge (alpha)\n\
-             fatal: merge: feature/auth - not something we can merge (zeta)\n"
+            "merge: feature/auth - not something we can merge (alpha, zeta)\n"
         ));
 }
 

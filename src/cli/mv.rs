@@ -47,7 +47,7 @@ fn mv_between_repos(
     // Move the worktree path across child repositories
     fs::rename(&source_path, &destination_path).with_context(|| {
         format!(
-            "failed to move '{}' to '{}'",
+            "fatal: failed to move '{}' to '{}'",
             source_path.display(),
             destination_path.display()
         )
@@ -56,14 +56,14 @@ fn mv_between_repos(
     // Stage the source deletion and destination addition in their repositories
     git::add_path(&source_repo.path, &source_relative).with_context(|| {
         format!(
-            "failed to stage source deletion in '{}'",
+            "fatal: failed to stage source deletion in '{}'",
             source_repo.path.display()
         )
     })?;
     git::add_path(&destination_repo.path, &final_destination_relative)
         .with_context(|| {
             format!(
-                "failed to stage destination addition in '{}'",
+                "fatal: failed to stage destination addition in '{}'",
                 destination_repo.path.display()
             )
         })?;
@@ -84,22 +84,28 @@ fn final_destination_path(
     {
         let source_name = source_relative
             .file_name()
-            .context("source path does not have a file name")?;
+            .context("error: source path does not have a file name")?;
         return Ok(destination_relative.join(source_name));
     }
 
     // Reject conflicts and missing parents before moving the source
     if destination_path.exists()
     {
-        bail!("destination '{}' already exists", destination_path.display());
+        bail!(
+            "error: destination '{}' already exists",
+            destination_path.display()
+        );
     }
 
     let parent = destination_path
         .parent()
-        .context("destination path does not have a parent")?;
+        .context("error: destination path does not have a parent")?;
     if !parent.is_dir()
     {
-        bail!("destination parent '{}' does not exist", parent.display());
+        bail!(
+            "error: destination parent '{}' does not exist",
+            parent.display()
+        );
     }
 
     Ok(destination_relative.to_path_buf())

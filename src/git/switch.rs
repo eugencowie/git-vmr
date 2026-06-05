@@ -1,6 +1,6 @@
 use crate::git::{
-    GitCommandResult, command_result, first_non_empty_line_with_fallback,
-    git_output
+    GitCommandResult, command_result, failure_message,
+    first_non_empty_line_with_fallback, git_output, success_message
 };
 use std::path::Path;
 
@@ -42,22 +42,24 @@ pub fn create(
 
     if output.status.success()
     {
-        Ok(Some(first_non_empty_line_with_fallback(
-            &output.stdout,
-            &output.stderr,
-            "git switch succeeded"
-        )))
+        Ok(success_message(
+            repo_name,
+            first_non_empty_line_with_fallback(
+                &output.stdout,
+                &output.stderr,
+                "git switch succeeded"
+            )
+        ))
     }
     else
     {
-        Err(anyhow::anyhow!(
-            "{} ({})",
+        Ok(failure_message(
+            repo_name,
             first_non_empty_line_with_fallback(
                 &output.stderr,
                 &output.stdout,
                 "git switch failed"
-            ),
-            repo_name
+            )
         ))
     }
 }

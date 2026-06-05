@@ -7,7 +7,7 @@ pub fn is_dirty(repo_path: &Path) -> Result<bool>
     let output = git_output(repo_path, ["diff", "--cached", "--quiet"])
         .with_context(|| {
             format!(
-                "failed to inspect staged changes for '{}'",
+                "fatal: failed to inspect staged changes for '{}'",
                 repo_path.display()
             )
         })?;
@@ -17,7 +17,7 @@ pub fn is_dirty(repo_path: &Path) -> Result<bool>
         Some(0) => Ok(false),
         Some(1) => Ok(true),
         _ => bail!(
-            "git diff --cached --quiet failed for '{}': {}",
+            "fatal: git diff --cached --quiet failed for '{}': {}",
             repo_path.display(),
             stderr(&output)
         )

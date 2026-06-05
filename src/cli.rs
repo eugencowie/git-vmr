@@ -16,70 +16,12 @@ mod status;
 mod switch;
 mod tag;
 
-use crate::git::{GitCommandResult, ResetMode};
+use crate::git::{GitCommandResult, RepoMessage, RepoOutcome, ResetMode};
 use anyhow::{Context, Result, bail};
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
-
-#[derive(Debug)]
-pub struct AggregateError
-{
-    errors: Vec<anyhow::Error>
-}
-
-impl AggregateError
-{
-    pub fn new(errors: Vec<anyhow::Error>) -> Self
-    {
-        Self { errors }
-    }
-
-    pub fn errors(&self) -> &[anyhow::Error]
-    {
-        &self.errors
-    }
-}
-
-impl std::fmt::Display for AggregateError
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-    {
-        write!(f, "{} errors occurred", self.errors.len())
-    }
-}
-
-impl std::error::Error for AggregateError {}
-
-fn print_results(results: Vec<GitCommandResult>) -> Result<()>
-{
-    let mut messages = Vec::new();
-    let mut errors = Vec::new();
-
-    for result in results
-    {
-        match result
-        {
-            Ok(Some(message)) => messages.push(message),
-            Ok(None) =>
-            {}
-            Err(error) => errors.push(error)
-        }
-    }
-
-    for message in messages
-    {
-        println!("{message}");
-    }
-
-    if !errors.is_empty()
-    {
-        return Err(AggregateError::new(errors).into());
-    }
-
-    Ok(())
-}
 
 #[derive(Subcommand)]
 enum Command
@@ -447,14 +389,17 @@ impl Cli
                 // Get absolute path
                 let absolute_path =
                     working_dir.canonicalize().with_context(|| {
-                        format!("cannot change to '{}'", working_dir.display())
+                        format!(
+                            "fatal: cannot change to '{}'",
+                            working_dir.display()
+                        )
                     })?;
 
                 // Ensure the path is a directory
                 if !absolute_path.is_dir()
                 {
                     bail!(
-                        "cannot change to '{}': Not a directory",
+                        "fatal: cannot change to '{}': Not a directory",
                         working_dir.display()
                     );
                 }
@@ -463,8 +408,8 @@ impl Cli
             }
 
             // If none provided, use current working directory
-            None =>
-                env::current_dir().context("failed to get current directory"),
+            None => env::current_dir()
+                .context("fatal: failed to get current directory")
         }
     }
 }
@@ -495,6 +440,112 @@ fn reset_mode(
         (false, false, false, false, true) => Some(ResetMode::Keep),
         (false, false, false, false, false) => None,
         _ => unreachable!()
+    }
+}
+
+fn print_results(results: Vec<GitCommandResult>) -> Result<()>
+{
+    let mut successes = Vec::new();
+    let mut failures = Vec::new();
+    let mut errors = Vec::new();
+
+    for result in results
+    {
+        match result
+        {
+            Ok(RepoOutcome::Success(Some(message))) => successes.push(message),
+            Ok(RepoOutcome::Success(None)) =>
+            {}
+            Ok(RepoOutcome::Failure(message)) => failures.push(message),
+            Err(error) => errors.push(error)
+        }
+    }
+
+    for message in
+        grouped_messages(successes, SuccessRepositoryFormat::NamesUntilLimit)
+    {
+        println!("{message}");
+    }
+
+    let mut rendered_errors =
+        grouped_messages(failures, SuccessRepositoryFormat::NamesWithCount);
+    rendered_errors.extend(errors.into_iter().map(|error| error.to_string()));
+
+    if !rendered_errors.is_empty()
+    {
+        bail!(rendered_errors.join("\n"));
+    }
+
+    Ok(())
+}
+
+const REPOSITORY_NAME_LIMIT: usize = 5;
+
+enum SuccessRepositoryFormat
+{
+    NamesUntilLimit,
+    NamesWithCount
+}
+
+fn grouped_messages(
+    messages: Vec<RepoMessage>,
+    format: SuccessRepositoryFormat
+) -> Vec<String>
+{
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+
+    for repo_message in messages
+    {
+        if let Some((_, repos)) = groups
+            .iter_mut()
+            .find(|(message, _)| message == &repo_message.message)
+        {
+            repos.push(repo_message.repo);
+        }
+        else
+        {
+            groups.push((repo_message.message, vec![repo_message.repo]));
+        }
+    }
+
+    groups
+        .into_iter()
+        .map(|(message, repos)| {
+            format!("{message} {}", repository_suffix(&repos, &format))
+        })
+        .collect()
+}
+
+fn repository_suffix(
+    repos: &[String],
+    format: &SuccessRepositoryFormat
+) -> String
+{
+    if repos.len() == 1
+    {
+        return format!("({})", repos[0]);
+    }
+
+    match format
+    {
+        SuccessRepositoryFormat::NamesUntilLimit
+            if repos.len() > REPOSITORY_NAME_LIMIT =>
+        {
+            format!("({} repos)", repos.len())
+        }
+        SuccessRepositoryFormat::NamesUntilLimit =>
+            format!("({})", repos.join(", ")),
+        SuccessRepositoryFormat::NamesWithCount
+            if repos.len() > REPOSITORY_NAME_LIMIT =>
+        {
+            format!(
+                "({} repos: {}, ...)",
+                repos.len(),
+                repos[..REPOSITORY_NAME_LIMIT].join(", ")
+            )
+        }
+        SuccessRepositoryFormat::NamesWithCount =>
+            format!("({})", repos.join(", ")),
     }
 }
 
@@ -1738,5 +1789,90 @@ mod tests
 
         // Assert
         assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    fn repo_message(repo: &str, message: &str) -> RepoMessage
+    {
+        RepoMessage { repo: repo.to_owned(), message: message.to_owned() }
+    }
+
+    #[test]
+    fn grouped_success_rendering_includes_single_repository_name()
+    {
+        let messages = grouped_messages(
+            vec![repo_message("backend", "Already up to date.")],
+            SuccessRepositoryFormat::NamesUntilLimit
+        );
+
+        assert_eq!(messages, vec!["Already up to date. (backend)"]);
+    }
+
+    #[test]
+    fn grouped_success_rendering_combines_small_repository_sets()
+    {
+        let messages = grouped_messages(
+            vec![
+                repo_message("backend", "Already up to date."),
+                repo_message("frontend", "Already up to date."),
+                repo_message("tools", "Updating abc123..def456"),
+            ],
+            SuccessRepositoryFormat::NamesUntilLimit
+        );
+
+        assert_eq!(messages, vec![
+            "Already up to date. (backend, frontend)",
+            "Updating abc123..def456 (tools)"
+        ]);
+    }
+
+    #[test]
+    fn grouped_success_rendering_uses_count_for_large_repository_sets()
+    {
+        let messages = grouped_messages(
+            (1..=6)
+                .map(|index| {
+                    repo_message(
+                        &format!("repo-{index}"),
+                        "Already up to date."
+                    )
+                })
+                .collect(),
+            SuccessRepositoryFormat::NamesUntilLimit
+        );
+
+        assert_eq!(messages, vec!["Already up to date. (6 repos)"]);
+    }
+
+    #[test]
+    fn grouped_failure_rendering_keeps_large_repository_context()
+    {
+        let messages = grouped_messages(
+            (1..=6)
+                .map(|index| {
+                    repo_message(&format!("repo-{index}"), "remote rejected")
+                })
+                .collect(),
+            SuccessRepositoryFormat::NamesWithCount
+        );
+
+        assert_eq!(messages, vec![
+            "remote rejected (6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)"
+        ]);
+    }
+
+    #[test]
+    fn grouped_failure_rendering_preserves_error_prefix()
+    {
+        let messages = grouped_messages(
+            vec![repo_message(
+                "backend",
+                "error: branch 'feature/auth' not found"
+            )],
+            SuccessRepositoryFormat::NamesWithCount
+        );
+
+        assert_eq!(messages, vec![
+            "error: branch 'feature/auth' not found (backend)"
+        ]);
     }
 }

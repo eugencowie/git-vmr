@@ -93,12 +93,9 @@ fn switch_shared_branch_across_multiple_child_repositories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(
-                "Switched to branch 'feature/auth' (backend)"
-            )
-            .and(predicate::str::contains(
-                "Switched to branch 'feature/auth' (frontend)"
-            ))
+            predicate::str::contains("Switched to branch 'feature/auth'")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -161,12 +158,9 @@ fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
         .assert()
         .failure()
         .stdout(
-            predicate::str::contains(
-                "Switched to branch 'feature/auth' (backend)"
-            )
-            .and(predicate::str::contains(
-                "Switched to branch 'feature/auth' (tools)"
-            ))
+            predicate::str::contains("Switched to branch 'feature/auth'")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
             "fatal: invalid reference: feature/auth (frontend)"
@@ -221,8 +215,7 @@ fn switch_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: fatal: invalid reference: feature/auth (alpha)\n\
-             fatal: fatal: invalid reference: feature/auth (zeta)\n"
+            "fatal: invalid reference: feature/auth (alpha, zeta)\n"
         ));
 }
 
@@ -270,12 +263,9 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(
-                "Switched to branch 'feature/auth' (backend)"
-            )
-            .and(predicate::str::contains(
-                "Switched to branch 'feature/auth' (frontend)"
-            ))
+            predicate::str::contains("Switched to branch 'feature/auth'")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -289,12 +279,9 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(
-                "Switched to branch 'feature/auth' (backend)"
-            )
-            .and(predicate::str::contains(
-                "Switched to branch 'feature/auth' (frontend)"
-            ))
+            predicate::str::contains("Switched to branch 'feature/auth'")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -318,7 +305,11 @@ fn switch_create_shared_branch_across_multiple_child_repositories_deduplicates_s
         .args(["switch", "--create", "feature/auth"])
         .assert()
         .success()
-        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stdout(
+            predicate::str::contains("Switched to a new branch 'feature/auth'")
+                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("frontend"))
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -338,7 +329,10 @@ fn switch_create_short_form_creates_and_switches()
         .args(["switch", "-c", "feature/auth"])
         .assert()
         .success()
-        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stdout(
+            predicate::str::contains("Switched to a new branch 'feature/auth'")
+                .and(predicate::str::contains("(backend)"))
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -369,7 +363,7 @@ fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .success()
         .stdout(
             predicate::str::contains("Switched to a new branch 'feature/auth'")
-                .and(predicate::str::contains("backend").not())
+                .and(predicate::str::contains("backend"))
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -396,7 +390,11 @@ fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_o
         .args(["switch", "--create", "feature/auth"])
         .assert()
         .failure()
-        .stdout(predicate::eq("Switched to a new branch 'feature/auth'\n"))
+        .stdout(
+            predicate::str::contains("Switched to a new branch 'feature/auth'")
+                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("tools"))
+        )
         .stderr(predicate::str::contains(
             "fatal: a branch named 'feature/auth' already exists (backend)"
         ));
@@ -452,8 +450,7 @@ fn switch_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: fatal: a branch named 'feature/auth' already exists (alpha)\n\
-             fatal: fatal: a branch named 'feature/auth' already exists (zeta)\n"
+            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
         ));
 
     assert_eq!(current_branch(&alpha), "master");

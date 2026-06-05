@@ -298,8 +298,7 @@ fn fetch_reports_success_failure_and_failure_order_with_repository_suffixes()
                 .and(predicate::str::contains("(backend)"))
         )
         .stderr(predicate::str::starts_with(
-            "fatal: fatal: 'origin' does not appear to be a git repository (alpha)\n\
-             fatal: fatal: 'origin' does not appear to be a git repository (zeta)\n"
+            "fatal: 'origin' does not appear to be a git repository (alpha, zeta)\n"
         ));
 }
 
@@ -322,10 +321,7 @@ fn fetch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .arg("fetch")
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains("(backend)")
-                .and(predicate::str::contains("(frontend)"))
-        )
+        .stdout(predicate::str::contains("(backend, frontend)"))
         .stderr(predicate::str::is_empty());
 
     write_commit(&source, "README.md", "updated twice\n", "update twice");
@@ -336,10 +332,7 @@ fn fetch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .arg("fetch")
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains("(backend)")
-                .and(predicate::str::contains("(frontend)"))
-        )
+        .stdout(predicate::str::contains("(backend, frontend)"))
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "origin/master"), head(&source, "master"));
