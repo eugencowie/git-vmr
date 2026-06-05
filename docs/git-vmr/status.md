@@ -216,7 +216,7 @@ easy to parse optional headers.
 Header lines start with \# and are added in response to specific command
 line arguments. Parsers should ignore headers they don’t recognize.
 
-  
+\
 
 **Branch Headers**
 
@@ -231,7 +231,7 @@ line arguments. Parsers should ignore headers they don’t recognize.
 > | \# **branch.upstream** *\<upstream-branch\>* | If upstream is set. |
 > | \# **branch.ab** **+***\<ahead\>* **-***\<behind\>* | If upstream is set and the commit is present. |
 
-  
+\
 
 **Stash Information**
 
@@ -240,7 +240,7 @@ line arguments. Parsers should ignore headers they don’t recognize.
 >
 > > # stash <N>
 
-  
+\
 
 **Changed Tracked Entries**
 
@@ -360,7 +360,7 @@ line arguments. Parsers should ignore headers they don’t recognize.
 > | *\<h3\>* | The object name in stage 3. |
 > | *\<path\>* | The pathname. |
 
-  
+\
 
 **Other Items**
 
@@ -376,7 +376,7 @@ line arguments. Parsers should ignore headers they don’t recognize.
 >
 > > ! <path>
 
-  
+\
 
 **Pathname Format Notes and -z**
 
@@ -495,3 +495,9 @@ caches to warm up before you see improved command times. This is normal.
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-status`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

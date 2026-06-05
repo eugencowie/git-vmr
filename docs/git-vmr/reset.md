@@ -457,3 +457,9 @@ The following tables show what happens when there are unmerged entries:
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-reset`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

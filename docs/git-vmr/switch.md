@@ -141,11 +141,11 @@ found there:
 > affect all commands that perform checkout. E.g. checkout, clone,
 > reset, sparse-checkout, etc.
 >
-> >   
+> > \
 > >
 > > **Note**
 > >
-> >   
+> > \
 > > Parallel checkout usually delivers better performance for
 > > repositories located on SSDs or over NFS. For repositories on
 > > spinning disks and/or machines with a small number of cores, the
@@ -168,3 +168,9 @@ found there:
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-switch`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

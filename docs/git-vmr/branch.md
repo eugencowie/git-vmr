@@ -373,3 +373,9 @@ Part of the **git**(1) suite
 "Understanding history: What is a branch?"
 
 file:///nix/store/0kjpgj1grgba239ykdnv1cjc61xqk3aa-git-2.53.0-doc/share/doc/git/user-manual.html#what-is-a-branch
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-branch`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

@@ -203,3 +203,9 @@ There are three commands with similar names: **git** **reset**, **git**
 >
 > **git** **reset** can also be used to restore the index, overlapping
 > with **git** **restore**.
+
+## Copyright
+
+This documentation is derived from the Git man page for `git`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).

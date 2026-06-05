@@ -266,11 +266,11 @@ ISO 8601
 > for example **2005-04-07T22:13:13.019** will be treated as
 > **2005-04-07T22:13:13**.
 >
-> >   
+> > \
 > >
 > > **Note**
 > >
-> >   
+> > \
 > > In addition, the date part is accepted in the following formats:
 > > **YYYY.MM.DD**, **MM/DD/YYYY** and **DD.MM.YYYY**.
 
@@ -428,3 +428,9 @@ This command can run **commit-msg**, **prepare-commit-msg**,
 ## GIT
 
 Part of the **git**(1) suite
+
+## Copyright
+
+This documentation is derived from the Git man page for `git-commit`.
+
+Copyright (c) Git contributors. Licensed under the GNU General Public License version 2; see [Git's COPYING file](https://github.com/git/git/blob/master/COPYING).
