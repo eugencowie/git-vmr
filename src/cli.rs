@@ -254,6 +254,10 @@ enum Command
     /// Switch branches
     Switch
     {
+        /// Create a new branch named [branch] before switching to the branch
+        #[arg(short = 'c', long)]
+        create: bool,
+
         /// Branch to switch to
         #[arg(required = true, value_name = "branch")]
         branch_name: String
@@ -412,8 +416,11 @@ impl Cli
                     reset_mode(soft, mixed, hard, merge, keep),
                     commit.as_deref()
                 ),
-            Command::Switch { branch_name } =>
-                switch::switch(&working_dir, &branch_name),
+            Command::Switch { create, branch_name } => match create
+            {
+                true => switch::create(&working_dir, &branch_name),
+                false => switch::switch(&working_dir, &branch_name)
+            },
             Command::Tag { delete, tag_name } => match (tag_name, delete)
             {
                 (Some(tag_name), true) => tag::delete(&working_dir, &tag_name),
@@ -1619,8 +1626,46 @@ mod tests
         // Assert
         match cli.command
         {
-            Command::Switch { branch_name } =>
+            Command::Switch { create, branch_name } =>
             {
+                assert!(!create);
+                assert_eq!(branch_name, "feature/auth");
+            }
+            _ => panic!("expected switch command")
+        }
+    }
+
+    #[test]
+    fn parses_switch_with_create_long()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "switch", "--create", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Switch { create, branch_name } =>
+            {
+                assert!(create);
+                assert_eq!(branch_name, "feature/auth");
+            }
+            _ => panic!("expected switch command")
+        }
+    }
+
+    #[test]
+    fn parses_switch_with_create_short()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "switch", "-c", "feature/auth"]);
+
+        // Assert
+        match cli.command
+        {
+            Command::Switch { create, branch_name } =>
+            {
+                assert!(create);
                 assert_eq!(branch_name, "feature/auth");
             }
             _ => panic!("expected switch command")
@@ -1639,5 +1684,59 @@ mod tests
 
         // Assert
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_switch_create_without_branch_name()
+    {
+        // Act
+        let err = match Cli::try_parse_from(["git-vmr", "switch", "--create"])
+        {
+            Ok(_) => panic!("expected switch parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_switch_create_start_point()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "switch",
+            "--create",
+            "feature/auth",
+            "main"
+        ])
+        {
+            Ok(_) => panic!("expected switch parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_switch_create_short_start_point()
+    {
+        // Act
+        let err = match Cli::try_parse_from([
+            "git-vmr",
+            "switch",
+            "-c",
+            "feature/auth",
+            "main"
+        ])
+        {
+            Ok(_) => panic!("expected switch parse to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 }

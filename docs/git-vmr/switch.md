@@ -28,9 +28,9 @@ with **--discard-changes** or **--merge**.
 | Option | Description | Supported? |
 | ------ | ----------- | ---------- |
 | *\<branch\>* | Branch to switch to. | ✅ |
-| *\<new-branch\>* | Name for the new branch. | ❌ |
+| *\<new-branch\>* | Name for the new branch. | ✅ |
 | *\<start-point\>* | The starting point for the new branch. Specifying a *\<start-point\>* allows you to create a branch based on some other point in history than where **HEAD** currently points. (Or, in the case of **--detach**, allows you to inspect and detach from some other point.) | ❌ |
-| **-c** *\<new-branch\>*, **--create** *\<new-branch\>* | Create a new branch named *\<new-branch\>* starting at *\<start-point\>* before switching to the branch. This is the transactional equivalent of | ❌ |
+| **-c** *\<new-branch\>*, **--create** *\<new-branch\>* | Create a new branch named *\<new-branch\>* starting at *\<start-point\>* before switching to the branch. This is the transactional equivalent of | ✅ |
 | **-C** *\<new-branch\>*, **--force-create** *\<new-branch\>* | Similar to **--create** except that if *\<new-branch\>* already exists, it will be reset to *\<start-point\>*. This is a convenient shortcut for: | ❌ |
 | **-d**, **--detach** | Switch to a commit for inspection and discardable experiments. See the "DETACHED HEAD" section in **git-checkout**(1) for details. | ❌ |
 | **--guess**, **--no-guess** | If *\<branch\>* is not found but there does exist a tracking branch in exactly one remote (call it *\<remote\>*) with a matching name, treat as equivalent to | ❌ |
