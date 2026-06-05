@@ -62,6 +62,7 @@ pub enum WorktreeCommand
     },
 
     /// Remove a worktree
+    #[command(visible_alias = "rm")]
     Remove
     {
         /// By default, remove refuses to remove an unclean worktree unless
@@ -345,7 +346,7 @@ pub enum Command
     Worktree
     {
         #[command(subcommand)]
-        command: WorktreeCommand
+        command: Option<WorktreeCommand>
     },
 
     /// Evaluates an arbitrary shell command in each checked out repository
@@ -447,6 +448,7 @@ impl Command
                 push::push(working_dir, repository.as_deref(), &refspecs),
 
             Command::Worktree { command } => match command
+                .unwrap_or(WorktreeCommand::List)
             {
                 WorktreeCommand::Add { branch, path, commit_ish } =>
                     worktree::add(

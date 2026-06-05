@@ -127,6 +127,28 @@ fn worktree_list_lists_main_aggregate_for_multiple_child_repositories()
 }
 
 #[test]
+fn worktree_without_subcommand_matches_worktree_list()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+
+    let list = git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "list"])
+        .output()
+        .expect("failed to run git-vmr worktree list");
+    let bare = git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree"])
+        .output()
+        .expect("failed to run git-vmr worktree");
+
+    assert_eq!(bare.status, list.status);
+    assert_eq!(bare.stdout, list.stdout);
+    assert_eq!(bare.stderr, list.stderr);
+}
+
+#[test]
 fn worktree_list_lists_linked_aggregate_and_skips_non_git_children()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -624,6 +646,24 @@ fn worktree_remove_removes_child_worktrees()
     git_vmr()
         .current_dir(&vmr)
         .args(["worktree", "remove", "../wt"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(!tmp.path().join("wt/frontend").exists());
+}
+
+#[test]
+fn worktree_remove_rm_alias_removes_child_worktrees()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    add_worktrees(&vmr);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "rm", "../wt"])
         .assert()
         .success()
         .stderr(predicate::str::is_empty());
