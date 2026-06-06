@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod git;
+mod update_check;
 mod vmr;
 
 use cli::Cli;
@@ -17,6 +18,11 @@ fn main() -> ExitCode
     {
         eprintln!("{e:#}");
         return ExitCode::FAILURE;
+    }
+
+    if let Some(notice) = update_check::run_auto_update_check()
+    {
+        eprintln!("{notice}");
     }
 
     ExitCode::SUCCESS

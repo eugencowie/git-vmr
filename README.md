@@ -82,6 +82,30 @@ These are common git-vmr commands used in various situations:
 
 [docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
 
+## Update checks
+
+Installed `git-vmr` binaries automatically check whether a newer release is
+available after successful normal command execution. Checks are throttled and
+run daily by default. They do not run for help output, version output, or
+commands that exit with an error.
+
+The global update-check configuration file is stored outside `.gitvmr` at:
+
+```toml
+<config_dir>/git-vmr/config.toml
+```
+
+Set the check frequency with:
+
+```toml
+[updates]
+check_frequency = "daily"
+```
+
+Supported values are `hourly`, `daily`, `weekly`, `monthly`, and `never`.
+`monthly` is treated as 30 days. Runtime update-check state is stored
+separately at `<state_dir>/git-vmr/update.toml`.
+
 ## License
 
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; version 2.
