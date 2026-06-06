@@ -40,6 +40,35 @@ fn successful_subcommand_triggers_due_update_check()
 }
 
 #[test]
+fn configured_never_through_global_config_skips_update_check()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let config_dir = tmp.path().join("config");
+    let state_dir = tmp.path().join("state");
+    let config_file = config_dir.join("git-vmr").join("config.toml");
+    let state_file = state_dir.join("git-vmr").join("update.toml");
+    fs::create_dir_all(config_file.parent().unwrap())
+        .expect("failed to create config dir");
+    fs::write(&config_file, "[updates]\ncheckfrequency = \"never\"\n")
+        .expect("failed to write config");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .env("GIT_VMR_CONFIG_DIR", &config_dir)
+        .env("GIT_VMR_STATE_DIR", &state_dir)
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    assert!(!state_file.exists());
+}
+
+#[test]
 fn failed_subcommand_does_not_trigger_update_check()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");

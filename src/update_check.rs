@@ -1,160 +1,14 @@
-use anyhow::{Context, Result, bail};
+use crate::config::GlobalConfig;
+use crate::state::UpdateCheckState;
+use anyhow::{Context, Result};
 use axoasset::reqwest::Client;
 use axoupdater::AxoUpdater;
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use chrono::{DateTime, Utc};
+use std::path::PathBuf;
 use std::time::Duration as StdDuration;
-use std::{fmt, fs};
 
 const APP_NAME: &str = "git-vmr";
 const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CheckFrequency
-{
-    Hourly,
-    Daily,
-    Weekly,
-    Monthly,
-    Never
-}
-
-impl CheckFrequency
-{
-    fn interval(self) -> Option<Duration>
-    {
-        match self
-        {
-            Self::Hourly => Some(Duration::hours(1)),
-            Self::Daily => Some(Duration::days(1)),
-            Self::Weekly => Some(Duration::days(7)),
-            Self::Monthly => Some(Duration::days(30)),
-            Self::Never => None
-        }
-    }
-}
-
-impl FromStr for CheckFrequency
-{
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<Self>
-    {
-        match value
-        {
-            "hourly" => Ok(Self::Hourly),
-            "daily" => Ok(Self::Daily),
-            "weekly" => Ok(Self::Weekly),
-            "monthly" => Ok(Self::Monthly),
-            "never" => Ok(Self::Never),
-            _ => bail!("unsupported update check frequency '{value}'")
-        }
-    }
-}
-
-impl fmt::Display for CheckFrequency
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
-        let value = match self
-        {
-            Self::Hourly => "hourly",
-            Self::Daily => "daily",
-            Self::Weekly => "weekly",
-            Self::Monthly => "monthly",
-            Self::Never => "never"
-        };
-        f.write_str(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GlobalUpdateConfig
-{
-    pub updates: UpdatesConfig
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdatesConfig
-{
-    pub check_frequency: CheckFrequency
-}
-
-impl Default for GlobalUpdateConfig
-{
-    fn default() -> Self
-    {
-        Self {
-            updates: UpdatesConfig { check_frequency: CheckFrequency::Daily }
-        }
-    }
-}
-
-impl GlobalUpdateConfig
-{
-    pub fn load(path: &Path) -> Result<Self>
-    {
-        match fs::read_to_string(path)
-        {
-            Ok(contents) => toml::from_str(&contents)
-                .with_context(|| format!("failed to parse {}", path.display())),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound =>
-                Ok(Self::default()),
-            Err(err) => Err(err)
-                .with_context(|| format!("failed to read {}", path.display()))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdateCheckState
-{
-    pub last_attempted_check: Option<DateTime<Utc>>,
-    pub last_available_version: Option<String>
-}
-
-impl UpdateCheckState
-{
-    pub fn load(path: &Path) -> Result<Self>
-    {
-        match fs::read_to_string(path)
-        {
-            Ok(contents) => toml::from_str(&contents)
-                .with_context(|| format!("failed to parse {}", path.display())),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound =>
-                Ok(Self::default()),
-            Err(err) => Err(err)
-                .with_context(|| format!("failed to read {}", path.display()))
-        }
-    }
-
-    pub fn save(&self, path: &Path) -> Result<()>
-    {
-        if let Some(parent) = path.parent()
-        {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create {}", parent.display())
-            })?;
-        }
-        let contents = toml::to_string(self)?;
-        fs::write(path, contents)
-            .with_context(|| format!("failed to write {}", path.display()))
-    }
-
-    fn is_due(&self, frequency: CheckFrequency, now: DateTime<Utc>) -> bool
-    {
-        let Some(interval) = frequency.interval()
-        else
-        {
-            return false;
-        };
-        self.last_attempted_check
-            .is_none_or(|last| now.signed_duration_since(last) >= interval)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct UpdateCheckPaths
@@ -236,7 +90,7 @@ pub fn run_with_paths(
     query: &mut dyn UpdateQuery
 ) -> Option<String>
 {
-    let config = match GlobalUpdateConfig::load(&paths.config_file)
+    let config = match GlobalConfig::load_from_path(&paths.config_file)
     {
         Ok(config) => config,
         Err(err) => return Some(format!("warning: {err:#}"))
@@ -308,7 +162,9 @@ fn query_with_axoupdater() -> Result<QueryOutcome>
 mod tests
 {
     use super::*;
+    use anyhow::bail;
     use std::cell::Cell;
+    use std::fs;
 
     #[derive(Debug)]
     struct FakeQuery
@@ -369,39 +225,6 @@ mod tests
     }
 
     #[test]
-    fn missing_global_config_defaults_to_daily()
-    {
-        let tmp = tempfile::tempdir().unwrap();
-        let config =
-            GlobalUpdateConfig::load(&tmp.path().join("missing.toml")).unwrap();
-
-        assert_eq!(config.updates.check_frequency, CheckFrequency::Daily);
-    }
-
-    #[test]
-    fn parses_supported_frequencies()
-    {
-        for (value, expected) in [
-            ("hourly", CheckFrequency::Hourly),
-            ("daily", CheckFrequency::Daily),
-            ("weekly", CheckFrequency::Weekly),
-            ("monthly", CheckFrequency::Monthly),
-            ("never", CheckFrequency::Never)
-        ]
-        {
-            assert_eq!(value.parse::<CheckFrequency>().unwrap(), expected);
-        }
-    }
-
-    #[test]
-    fn rejects_unsupported_frequency()
-    {
-        let err = "yearly".parse::<CheckFrequency>().unwrap_err();
-
-        assert!(err.to_string().contains("unsupported update check frequency"));
-    }
-
-    #[test]
     fn never_skips_update_checks()
     {
         let tmp = tempfile::tempdir().unwrap();
@@ -409,7 +232,7 @@ mod tests
         fs::create_dir_all(paths.config_file.parent().unwrap()).unwrap();
         fs::write(
             &paths.config_file,
-            "[updates]\ncheck_frequency = \"never\"\n"
+            "[core]\nversion = 0\n[updates]\ncheckfrequency = \"never\"\n"
         )
         .unwrap();
         let mut query =
@@ -419,52 +242,6 @@ mod tests
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 0);
-    }
-
-    #[test]
-    fn state_roundtrips()
-    {
-        let tmp = tempfile::tempdir().unwrap();
-        let path = tmp.path().join("state").join("update.toml");
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now()),
-            last_available_version: Some("1.2.3".to_owned())
-        };
-
-        state.save(&path).unwrap();
-        let loaded = UpdateCheckState::load(&path).unwrap();
-
-        assert_eq!(loaded, state);
-    }
-
-    #[test]
-    fn missing_state_is_due()
-    {
-        let state = UpdateCheckState::default();
-
-        assert!(state.is_due(CheckFrequency::Daily, now()));
-    }
-
-    #[test]
-    fn recent_state_is_not_due()
-    {
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now() - Duration::hours(23)),
-            last_available_version: None
-        };
-
-        assert!(!state.is_due(CheckFrequency::Daily, now()));
-    }
-
-    #[test]
-    fn expired_state_is_due()
-    {
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now() - Duration::days(31)),
-            last_available_version: None
-        };
-
-        assert!(state.is_due(CheckFrequency::Monthly, now()));
     }
 
     #[test]

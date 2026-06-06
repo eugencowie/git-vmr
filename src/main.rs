@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod git;
+mod state;
 mod update_check;
 mod vmr;
 
