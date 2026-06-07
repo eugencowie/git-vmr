@@ -1,6 +1,7 @@
 mod context;
 
 use crate::commands::Command;
+use crate::updates;
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
@@ -69,7 +70,15 @@ impl Cli
         let context = CliContext::new(&self.display_name, &self.working_dir)?;
 
         // Run command
-        self.command.run(&context)
+        self.command.run(&context)?;
+
+        // Check for updates
+        if let Some(update) = updates::check_for_updates(context.global_config()?)
+        {
+            eprintln!("{update}");
+        }
+
+        Ok(())
     }
 }
 

@@ -7,7 +7,6 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::time::Duration as StdDuration;
 
-const APP_NAME: &str = "git-vmr";
 const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
 
 #[derive(Debug, Clone)]
@@ -25,8 +24,7 @@ pub trait UpdateQuery
 pub enum QueryOutcome
 {
     NewerVersion(String),
-    CurrentVersion,
-    Ineligible
+    CurrentVersion
 }
 
 pub struct AxoUpdateQuery;
@@ -39,12 +37,12 @@ impl UpdateQuery for AxoUpdateQuery
     }
 }
 
-pub fn run_auto_update_check(config: &GlobalConfig) -> Option<String>
+pub fn check_for_updates(config: &GlobalConfig) -> Option<String>
 {
     let state_file = match UpdateCheckState::path()
     {
         Ok(state_file) => state_file,
-        Err(err) => return Some(format!("warning: {err:#}"))
+        Err(_) => return None
     };
     let paths = UpdateCheckPaths { state_file };
     let mut query = AxoUpdateQuery;
@@ -76,8 +74,7 @@ pub fn run_with_paths(
             let _ = state.save(&paths.state_file);
             Some(format!("A new git-vmr version is available: {version}"))
         }
-        Ok(QueryOutcome::CurrentVersion | QueryOutcome::Ineligible)
-        | Err(_) => None
+        Ok(QueryOutcome::CurrentVersion) | Err(_) => None
     }
 }
 
@@ -87,10 +84,6 @@ fn query_with_axoupdater() -> Result<QueryOutcome>
     let client = Client::builder().timeout(QUERY_TIMEOUT).build()?;
     updater.set_client(client);
     updater.load_receipt()?;
-    if !updater.check_receipt_is_for_this_executable()?
-    {
-        return Ok(QueryOutcome::Ineligible);
-    }
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
