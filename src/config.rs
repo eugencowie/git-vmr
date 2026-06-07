@@ -1,14 +1,16 @@
 mod core;
+mod frequency;
 mod updates;
 
 use crate::cli::APP_NAME;
 use anyhow::{Context, Result};
 pub use core::Core;
+pub use frequency::Frequency;
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
-pub use updates::{Frequency, Updates};
+pub use updates::Updates;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -75,7 +77,6 @@ impl GlobalConfig
 mod tests
 {
     use super::*;
-    use std::time::Duration;
 
     mod config
     {
@@ -172,16 +173,13 @@ mod tests
         {
             // Act
             let config: GlobalConfig = toml::from_str(
-                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"7 days\""
+                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"1 week\""
             )
             .unwrap();
 
             // Assert
             assert_eq!(config.core.version, 42);
-            assert_eq!(
-                config.updates.check_frequency,
-                Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))
-            );
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
         }
 
         #[test]
@@ -207,7 +205,7 @@ mod tests
             assert_eq!(config.core, Core::default());
             assert_eq!(
                 config.updates.check_frequency,
-                Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))
+                Frequency::from_days(7)
             );
         }
 

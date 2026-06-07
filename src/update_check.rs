@@ -1,6 +1,6 @@
 use crate::config::GlobalConfig;
 use crate::state::UpdateCheckState;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use axoasset::reqwest::Client;
 use axoupdater::AxoUpdater;
 use chrono::{DateTime, Utc};
@@ -15,39 +15,6 @@ pub struct UpdateCheckPaths
 {
     pub config_file: PathBuf,
     pub state_file: PathBuf
-}
-
-impl UpdateCheckPaths
-{
-    pub fn resolve() -> Result<Self>
-    {
-        Self::resolve_with(None, None)
-    }
-
-    fn resolve_with(
-        config_dir: Option<PathBuf>,
-        state_dir: Option<PathBuf>
-    ) -> Result<Self>
-    {
-        let config_root = config_dir
-            .or_else(|| {
-                std::env::var_os("GIT_VMR_CONFIG_DIR").map(PathBuf::from)
-            })
-            .or_else(dirs::config_dir)
-            .context("failed to resolve user config directory")?;
-        let state_root = state_dir
-            .or_else(|| {
-                std::env::var_os("GIT_VMR_STATE_DIR").map(PathBuf::from)
-            })
-            .or_else(dirs::state_dir)
-            .or_else(dirs::data_local_dir)
-            .context("failed to resolve user state directory")?;
-
-        Ok(Self {
-            config_file: config_root.join(APP_NAME).join("config.toml"),
-            state_file: state_root.join(APP_NAME).join("update.toml")
-        })
-    }
 }
 
 pub trait UpdateQuery
@@ -75,11 +42,17 @@ impl UpdateQuery for AxoUpdateQuery
 
 pub fn run_auto_update_check() -> Option<String>
 {
-    let paths = match UpdateCheckPaths::resolve()
+    let config_file = match GlobalConfig::path()
     {
-        Ok(paths) => paths,
+        Ok(config_file) => config_file,
         Err(err) => return Some(format!("warning: {err:#}"))
     };
+    let state_file = match UpdateCheckState::path()
+    {
+        Ok(state_file) => state_file,
+        Err(err) => return Some(format!("warning: {err:#}"))
+    };
+    let paths = UpdateCheckPaths { config_file, state_file };
     let mut query = AxoUpdateQuery;
     run_with_paths(&paths, Utc::now(), &mut query)
 }
@@ -322,26 +295,6 @@ mod tests
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 1);
-    }
-
-    #[test]
-    fn resolves_user_level_paths_outside_gitvmr()
-    {
-        let tmp = tempfile::tempdir().unwrap();
-        let paths = UpdateCheckPaths::resolve_with(
-            Some(tmp.path().join("config")),
-            Some(tmp.path().join("state"))
-        )
-        .unwrap();
-
-        assert_eq!(
-            paths.config_file,
-            tmp.path().join("config").join(APP_NAME).join("config.toml")
-        );
-        assert_eq!(
-            paths.state_file,
-            tmp.path().join("state").join(APP_NAME).join("update.toml")
-        );
     }
 
     #[test]

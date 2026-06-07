@@ -3,7 +3,9 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+const APP_NAME: &str = "git-vmr";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpdateCheckState
@@ -14,6 +16,24 @@ pub struct UpdateCheckState
 
 impl UpdateCheckState
 {
+    pub fn path() -> Result<PathBuf>
+    {
+        Self::path_with_state_dir(None)
+    }
+
+    pub fn path_with_state_dir(state_dir: Option<PathBuf>) -> Result<PathBuf>
+    {
+        let state_root = state_dir
+            .or_else(|| {
+                std::env::var_os("GIT_VMR_STATE_DIR").map(PathBuf::from)
+            })
+            .or_else(dirs::state_dir)
+            .or_else(dirs::data_local_dir)
+            .context("failed to resolve user state directory")?;
+
+        Ok(state_root.join(APP_NAME).join("update.toml"))
+    }
+
     pub fn load(path: &Path) -> Result<Self>
     {
         match fs::read_to_string(path)
@@ -140,5 +160,24 @@ mod tests
 
         // Assert
         assert!(due);
+    }
+
+    #[test]
+    fn path_uses_user_level_state_file()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let path = UpdateCheckState::path_with_state_dir(Some(
+            tmp.path().join("state")
+        ))
+        .unwrap();
+
+        // Assert
+        assert_eq!(
+            path,
+            tmp.path().join("state").join("git-vmr").join("update.toml")
+        );
     }
 }
