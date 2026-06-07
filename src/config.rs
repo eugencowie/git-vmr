@@ -1,16 +1,14 @@
 mod core;
-mod frequency;
 mod updates;
 
 use crate::cli::APP_NAME;
 use anyhow::{Context, Result};
 pub use core::Core;
-pub use frequency::Frequency;
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
-pub use updates::Updates;
+pub use updates::{Frequency, Updates};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -140,6 +138,7 @@ mod tests
     mod global_config
     {
         use super::*;
+        use updates::Frequency;
 
         #[test]
         fn default_has_default_values()

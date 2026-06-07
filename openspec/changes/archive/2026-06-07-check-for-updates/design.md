@@ -79,8 +79,8 @@ config type:
 check_frequency = "1 day"
 ```
 
-Supported values are humantime duration strings such as `1h`, `1 day`,
-`7 days`, and `30 days`, plus `never`.
+Supported values are humantime duration strings of at least `1h`, such as
+`1h`, `1 day`, `7 days`, and `30 days`, plus `never`.
 
 Alternative considered: only support named frequencies such as `daily` and
 `weekly`. Humantime duration strings provide more flexibility while remaining

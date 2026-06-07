@@ -1,4 +1,6 @@
-use crate::config::Frequency;
+mod frequency;
+
+pub use frequency::Frequency;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

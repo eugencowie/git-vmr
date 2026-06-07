@@ -24,7 +24,8 @@ output, and SHALL NOT run after a subcommand exits with an error.
 The system SHALL read update-check configuration from a global user-level
 configuration file outside `.gitvmr`. When the global configuration file is
 missing, the system SHALL use `daily` as the default update-check frequency.
-The supported frequency values SHALL be humantime duration strings and `never`.
+The supported frequency values SHALL be humantime duration strings of at least
+1 hour and `never`.
 
 #### Scenario: Missing global config uses daily
 - **WHEN** no global `git-vmr` configuration file exists
@@ -47,10 +48,17 @@ The supported frequency values SHALL be humantime duration strings and `never`.
 - **THEN** the subcommand SHALL still succeed
 - **AND** the CLI SHALL NOT attempt an update check for that invocation
 
+#### Scenario: Sub-hour duration is invalid
+- **WHEN** the global `git-vmr` configuration file contains
+  `[updates] check_frequency = "30 minutes"`
+- **AND** user runs a `git-vmr` subcommand that otherwise completes successfully
+- **THEN** the subcommand SHALL still succeed
+- **AND** the CLI SHALL NOT attempt an update check for that invocation
+
 ### Requirement: Update checks are throttled by state
 The system SHALL persist update-check runtime state outside `.gitvmr` and SHALL
 use the state to avoid checking more often than the configured humantime
-duration.
+duration. Configured durations shorter than 1 hour SHALL be rejected.
 
 #### Scenario: Recent daily check skips network query
 - **WHEN** update checks are configured to run daily

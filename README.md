@@ -102,9 +102,10 @@ Set the check frequency with:
 check_frequency = "1 day"
 ```
 
-Supported values are humantime duration strings such as `1h`, `1 day`,
-`7 days`, and `30 days`, plus `never` to disable automatic checks. Runtime
-update-check state is stored separately at `<state_dir>/git-vmr/update.toml`.
+Supported values are humantime duration strings of at least `1h`, such as
+`1h`, `1 day`, `7 days`, and `30 days`, plus `never` to disable automatic
+checks. Runtime update-check state is stored separately at
+`<state_dir>/git-vmr/update.toml`.
 
 ## License
 

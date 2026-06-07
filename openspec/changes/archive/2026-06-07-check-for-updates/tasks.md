@@ -7,7 +7,7 @@
 ## 2. Global Config and State
 
 - [x] 2.1 Implement loading global update config from the user-level config path with `daily` as the missing-file default.
-- [x] 2.2 Implement parsing and validation for humantime durations and `never`.
+- [x] 2.2 Implement parsing and validation for humantime durations of at least 1 hour and `never`.
 - [x] 2.3 Implement update-check state loading and saving from the user-level state path outside `.gitvmr`.
 - [x] 2.4 Implement frequency-based due checks from parsed humantime durations.
 - [x] 2.5 Record the last attempted check before any network query when a check is due.
