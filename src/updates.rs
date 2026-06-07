@@ -49,21 +49,31 @@ pub fn run_with_paths(
     query: &mut dyn UpdateQuery
 ) -> Option<String>
 {
-    let mut state = UpdateCheckState::load(state_file).unwrap_or_default();
+    let mut state = match UpdateCheckState::load(state_file)
+    {
+        Ok(state) => state,
+        Err(_) => return None
+    };
     if !state.is_due(config.updates.check_frequency, now)
     {
         return None;
     }
 
     state.last_attempted_check = Some(now);
-    let _ = state.save(state_file);
+    if state.save(state_file).is_err()
+    {
+        return None;
+    }
 
     match query.query_new_version()
     {
         Ok(QueryOutcome::NewerVersion(version)) =>
         {
             state.last_available_version = Some(version.clone());
-            let _ = state.save(state_file);
+            if state.save(state_file).is_err()
+            {
+                return None;
+            }
             Some(format!("A new git-vmr version is available: {version}"))
         }
         Ok(QueryOutcome::CurrentVersion) | Err(_) => None
@@ -113,6 +123,7 @@ mod tests
     use crate::config::{Frequency, Updates};
     use anyhow::bail;
     use std::cell::Cell;
+    use std::fs;
     use std::path::PathBuf;
 
     #[derive(Debug)]
@@ -212,6 +223,78 @@ mod tests
         let notice = run_with_paths(&config, &state_file, now(), &mut query);
 
         assert_eq!(notice, None);
+    }
+
+    #[test]
+    fn state_load_failure_is_quiet_and_skips_query()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let state_file = state_file(&tmp);
+        fs::create_dir_all(state_file.parent().unwrap()).unwrap();
+        fs::write(&state_file, "last_attempted_check =").unwrap();
+        let config = GlobalConfig::default();
+        let mut query =
+            FakeQuery::new(QueryOutcome::NewerVersion("1.2.3".into()));
+
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
+
+        assert_eq!(notice, None);
+        assert_eq!(query.calls.get(), 0);
+    }
+
+    #[test]
+    fn attempt_save_failure_is_quiet_and_skips_query()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let state_file = state_file(&tmp);
+        fs::create_dir_all(state_file.parent().unwrap()).unwrap();
+        fs::write(&state_file, "").unwrap();
+        let original_permissions =
+            fs::metadata(&state_file).unwrap().permissions();
+        let mut readonly_permissions = original_permissions.clone();
+        readonly_permissions.set_readonly(true);
+        fs::set_permissions(&state_file, readonly_permissions).unwrap();
+        let config = GlobalConfig::default();
+        let mut query =
+            FakeQuery::new(QueryOutcome::NewerVersion("1.2.3".into()));
+
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
+
+        fs::set_permissions(&state_file, original_permissions).unwrap();
+        assert_eq!(notice, None);
+        assert_eq!(query.calls.get(), 0);
+    }
+
+    #[test]
+    fn available_version_save_failure_is_quiet()
+    {
+        struct BlockingQuery<'a>
+        {
+            state_file: &'a Path,
+            calls: Cell<usize>
+        }
+
+        impl UpdateQuery for BlockingQuery<'_>
+        {
+            fn query_new_version(&mut self) -> Result<QueryOutcome>
+            {
+                self.calls.set(self.calls.get() + 1);
+                fs::remove_file(self.state_file).unwrap();
+                fs::create_dir(self.state_file).unwrap();
+                Ok(QueryOutcome::NewerVersion("1.2.3".into()))
+            }
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let state_file = state_file(&tmp);
+        let config = GlobalConfig::default();
+        let mut query =
+            BlockingQuery { state_file: &state_file, calls: Cell::new(0) };
+
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
+
+        assert_eq!(notice, None);
+        assert_eq!(query.calls.get(), 1);
     }
 
     #[test]
