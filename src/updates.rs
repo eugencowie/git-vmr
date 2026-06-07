@@ -4,16 +4,10 @@ use anyhow::Result;
 use axoasset::reqwest::Client;
 use axoupdater::AxoUpdater;
 use chrono::{DateTime, Utc};
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::Duration as StdDuration;
 
 const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
-
-#[derive(Debug, Clone)]
-pub struct UpdateCheckPaths
-{
-    pub state_file: PathBuf
-}
 
 pub trait UpdateQuery
 {
@@ -44,34 +38,32 @@ pub fn check_for_updates(config: &GlobalConfig) -> Option<String>
         Ok(state_file) => state_file,
         Err(_) => return None
     };
-    let paths = UpdateCheckPaths { state_file };
     let mut query = AxoUpdateQuery;
-    run_with_paths(config, &paths, Utc::now(), &mut query)
+    run_with_paths(config, &state_file, Utc::now(), &mut query)
 }
 
 pub fn run_with_paths(
     config: &GlobalConfig,
-    paths: &UpdateCheckPaths,
+    state_file: &Path,
     now: DateTime<Utc>,
     query: &mut dyn UpdateQuery
 ) -> Option<String>
 {
-    let mut state =
-        UpdateCheckState::load(&paths.state_file).unwrap_or_default();
+    let mut state = UpdateCheckState::load(state_file).unwrap_or_default();
     if !state.is_due(config.updates.check_frequency, now)
     {
         return None;
     }
 
     state.last_attempted_check = Some(now);
-    let _ = state.save(&paths.state_file);
+    let _ = state.save(state_file);
 
     match query.query_new_version()
     {
         Ok(QueryOutcome::NewerVersion(version)) =>
         {
             state.last_available_version = Some(version.clone());
-            let _ = state.save(&paths.state_file);
+            let _ = state.save(state_file);
             Some(format!("A new git-vmr version is available: {version}"))
         }
         Ok(QueryOutcome::CurrentVersion) | Err(_) => None
@@ -121,6 +113,7 @@ mod tests
     use crate::config::{Frequency, Updates};
     use anyhow::bail;
     use std::cell::Cell;
+    use std::path::PathBuf;
 
     #[derive(Debug)]
     struct FakeQuery
@@ -157,15 +150,9 @@ mod tests
         }
     }
 
-    fn paths(tmp: &tempfile::TempDir) -> UpdateCheckPaths
+    fn state_file(tmp: &tempfile::TempDir) -> PathBuf
     {
-        UpdateCheckPaths {
-            state_file: tmp
-                .path()
-                .join("state")
-                .join(APP_NAME)
-                .join("update.toml")
-        }
+        tmp.path().join("state").join(APP_NAME).join("update.toml")
     }
 
     fn config(check_frequency: Frequency) -> GlobalConfig
@@ -187,12 +174,12 @@ mod tests
     fn never_skips_update_checks()
     {
         let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
+        let state_file = state_file(&tmp);
         let config = config(Frequency::Never);
         let mut query =
             FakeQuery::new(QueryOutcome::NewerVersion("9.0.0".into()));
 
-        let notice = run_with_paths(&config, &paths, now(), &mut query);
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 0);
@@ -203,7 +190,7 @@ mod tests
     {
         struct FailingQuery<'a>
         {
-            paths: &'a UpdateCheckPaths,
+            state_file: &'a Path,
             now: DateTime<Utc>
         }
 
@@ -211,19 +198,18 @@ mod tests
         {
             fn query_new_version(&mut self) -> Result<QueryOutcome>
             {
-                let state =
-                    UpdateCheckState::load(&self.paths.state_file).unwrap();
+                let state = UpdateCheckState::load(self.state_file).unwrap();
                 assert_eq!(state.last_attempted_check, Some(self.now));
                 bail!("network failed")
             }
         }
 
         let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
+        let state_file = state_file(&tmp);
         let config = GlobalConfig::default();
-        let mut query = FailingQuery { paths: &paths, now: now() };
+        let mut query = FailingQuery { state_file: &state_file, now: now() };
 
-        let notice = run_with_paths(&config, &paths, now(), &mut query);
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
 
         assert_eq!(notice, None);
     }
@@ -232,13 +218,13 @@ mod tests
     fn new_version_prints_version_only_notice()
     {
         let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
+        let state_file = state_file(&tmp);
         let config = GlobalConfig::default();
         let mut query =
             FakeQuery::new(QueryOutcome::NewerVersion("1.2.3".into()));
 
         let notice =
-            run_with_paths(&config, &paths, now(), &mut query).unwrap();
+            run_with_paths(&config, &state_file, now(), &mut query).unwrap();
 
         assert_eq!(notice, "A new git-vmr version is available: 1.2.3");
     }
@@ -247,24 +233,11 @@ mod tests
     fn current_version_is_quiet()
     {
         let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
+        let state_file = state_file(&tmp);
         let config = GlobalConfig::default();
         let mut query = FakeQuery::new(QueryOutcome::CurrentVersion);
 
-        let notice = run_with_paths(&config, &paths, now(), &mut query);
-
-        assert_eq!(notice, None);
-    }
-
-    #[test]
-    fn ineligible_receipt_is_quiet()
-    {
-        let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
-        let config = GlobalConfig::default();
-        let mut query = FakeQuery::new(QueryOutcome::Ineligible);
-
-        let notice = run_with_paths(&config, &paths, now(), &mut query);
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
 
         assert_eq!(notice, None);
     }
@@ -273,12 +246,12 @@ mod tests
     fn query_failure_is_quiet_and_non_fatal()
     {
         let tmp = tempfile::tempdir().unwrap();
-        let paths = paths(&tmp);
+        let state_file = state_file(&tmp);
         let config = GlobalConfig::default();
         let mut query =
             FakeQuery { outcome: FakeOutcome::Err, calls: Cell::new(0) };
 
-        let notice = run_with_paths(&config, &paths, now(), &mut query);
+        let notice = run_with_paths(&config, &state_file, now(), &mut query);
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 1);
