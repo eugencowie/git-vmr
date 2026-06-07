@@ -18,8 +18,8 @@ network work begins.
 - Check for newer `git-vmr` releases automatically during normal successful CLI
   operation.
 - Default checks to once per day.
-- Let users opt into `hourly`, `daily`, `weekly`, `monthly`, or `never` by
-  editing a global config file outside `.gitvmr`.
+- Let users configure update-check frequency with humantime duration strings or
+  `never` by editing a global config file outside `.gitvmr`.
 - Persist update-check runtime state outside project metadata.
 - Avoid retry storms by recording an attempted check before the network query.
 - Bound due update checks with a short timeout unless `axoupdater` already
@@ -76,16 +76,15 @@ config type:
 
 ```toml
 [updates]
-check_frequency = "daily"
+check_frequency = "1 day"
 ```
 
-Supported values are `hourly`, `daily`, `weekly`, `monthly`, and `never`.
-`monthly` means 30 days for deterministic interval math, not calendar-month
-rollover.
+Supported values are humantime duration strings such as `1h`, `1 day`,
+`7 days`, and `30 days`, plus `never`.
 
-Alternative considered: encode durations directly, such as `24h` or
-`604800s`. Named frequencies are enough for this feature and make future config
-commands easier to validate.
+Alternative considered: only support named frequencies such as `daily` and
+`weekly`. Humantime duration strings provide more flexibility while remaining
+readable in a hand-edited config file.
 
 ### Throttle before network work
 
@@ -170,7 +169,7 @@ hand-edited preference file capable of breaking every `git-vmr` command.
 2. Add the update-check module and wire it after successful command execution.
 3. Add `axoupdater` and the minimal runtime support needed to call its async
    query API.
-4. Add tests for default frequency, configured frequency, `never`, due/not-due
+4. Add tests for default frequency, configured durations, `never`, due/not-due
    state, state update before query, non-fatal failures, and notification
    output.
 5. Validate normal command behavior still matches existing tests.

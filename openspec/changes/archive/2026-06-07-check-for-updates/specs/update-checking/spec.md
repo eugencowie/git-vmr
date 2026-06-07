@@ -24,17 +24,16 @@ output, and SHALL NOT run after a subcommand exits with an error.
 The system SHALL read update-check configuration from a global user-level
 configuration file outside `.gitvmr`. When the global configuration file is
 missing, the system SHALL use `daily` as the default update-check frequency.
-The supported frequency values SHALL be `hourly`, `daily`, `weekly`, `monthly`,
-and `never`.
+The supported frequency values SHALL be humantime duration strings and `never`.
 
 #### Scenario: Missing global config uses daily
 - **WHEN** no global `git-vmr` configuration file exists
 - **THEN** the update-check frequency SHALL be `daily`
 
-#### Scenario: Configured frequency is honored
+#### Scenario: Configured duration frequency is honored
 - **WHEN** the global `git-vmr` configuration file contains
-  `[updates] check_frequency = "weekly"`
-- **THEN** the update-check frequency SHALL be `weekly`
+  `[updates] check_frequency = "7 days"`
+- **THEN** the update-check frequency SHALL be 7 days
 
 #### Scenario: Never disables update checks
 - **WHEN** the global `git-vmr` configuration file contains
@@ -50,9 +49,8 @@ and `never`.
 
 ### Requirement: Update checks are throttled by state
 The system SHALL persist update-check runtime state outside `.gitvmr` and SHALL
-use the state to avoid checking more often than the configured frequency.
-`hourly` SHALL mean 1 hour, `daily` SHALL mean 1 day, `weekly` SHALL mean 7
-days, and `monthly` SHALL mean 30 days.
+use the state to avoid checking more often than the configured humantime
+duration.
 
 #### Scenario: Recent daily check skips network query
 - **WHEN** update checks are configured to run daily

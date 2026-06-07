@@ -99,12 +99,12 @@ Set the check frequency with:
 
 ```toml
 [updates]
-check_frequency = "daily"
+check_frequency = "1 day"
 ```
 
-Supported values are `hourly`, `daily`, `weekly`, `monthly`, and `never`.
-`monthly` is treated as 30 days. Runtime update-check state is stored
-separately at `<state_dir>/git-vmr/update.toml`.
+Supported values are humantime duration strings such as `1h`, `1 day`,
+`7 days`, and `30 days`, plus `never` to disable automatic checks. Runtime
+update-check state is stored separately at `<state_dir>/git-vmr/update.toml`.
 
 ## License
 

@@ -75,6 +75,7 @@ impl GlobalConfig
 mod tests
 {
     use super::*;
+    use std::time::Duration;
 
     mod config
     {
@@ -162,7 +163,7 @@ mod tests
             // Assert
             assert_eq!(
                 toml,
-                "[core]\nversion = 0\n\n[updates]\ncheckfrequency = \"daily\"\n"
+                "[core]\nversion = 0\n\n[updates]\ncheckfrequency = \"1day\"\n"
             );
         }
 
@@ -171,13 +172,16 @@ mod tests
         {
             // Act
             let config: GlobalConfig = toml::from_str(
-                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"weekly\""
+                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"7 days\""
             )
             .unwrap();
 
             // Assert
             assert_eq!(config.core.version, 42);
-            assert_eq!(config.updates.check_frequency, Frequency::Weekly);
+            assert_eq!(
+                config.updates.check_frequency,
+                Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))
+            );
         }
 
         #[test]
@@ -196,12 +200,15 @@ mod tests
         {
             // Act
             let config: GlobalConfig =
-                toml::from_str("[updates]\ncheckfrequency = \"weekly\"")
+                toml::from_str("[updates]\ncheckfrequency = \"1 week\"")
                     .unwrap();
 
             // Assert
             assert_eq!(config.core, Core::default());
-            assert_eq!(config.updates.check_frequency, Frequency::Weekly);
+            assert_eq!(
+                config.updates.check_frequency,
+                Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))
+            );
         }
 
         #[test]

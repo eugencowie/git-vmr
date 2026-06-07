@@ -7,9 +7,9 @@
 ## 2. Global Config and State
 
 - [x] 2.1 Implement loading global update config from the user-level config path with `daily` as the missing-file default.
-- [x] 2.2 Implement parsing and validation for `hourly`, `daily`, `weekly`, `monthly`, and `never`.
+- [x] 2.2 Implement parsing and validation for humantime durations and `never`.
 - [x] 2.3 Implement update-check state loading and saving from the user-level state path outside `.gitvmr`.
-- [x] 2.4 Implement frequency-based due checks where `monthly` is treated as 30 days.
+- [x] 2.4 Implement frequency-based due checks from parsed humantime durations.
 - [x] 2.5 Record the last attempted check before any network query when a check is due.
 
 ## 3. Axoupdater Query
@@ -28,7 +28,7 @@
 
 ## 5. Tests
 
-- [x] 5.1 Add unit tests for global config defaults, supported frequency parsing, unsupported frequency handling, and `never`.
+- [x] 5.1 Add unit tests for global config defaults, supported duration parsing, unsupported frequency handling, and `never`.
 - [x] 5.2 Add unit tests for state loading, state saving, due/not-due interval calculations, and attempt-time recording before query.
 - [x] 5.3 Add tests for eligible receipt, ineligible receipt, missing receipt, newer-version, current-version, timeout, and query-failure outcomes using an injectable updater abstraction.
 - [x] 5.4 Add CLI-level tests that successful subcommands can trigger a due check while failed subcommands, help, and version output do not.

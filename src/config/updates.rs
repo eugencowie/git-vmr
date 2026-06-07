@@ -1,17 +1,13 @@
-use anyhow::{Result, bail};
-use chrono::Duration;
-use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
+use std::time::Duration;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Frequency
 {
-    Hourly,
-    Daily,
-    Weekly,
-    Monthly,
+    Every(Duration),
     Never
 }
 
@@ -28,7 +24,11 @@ impl Default for Updates
     /// Default update configuration
     fn default() -> Self
     {
-        Self { check_frequency: Frequency::Daily }
+        Self {
+            check_frequency: Frequency::Every(Duration::from_secs(
+                60 * 60 * 24
+            ))
+        }
     }
 }
 
@@ -40,12 +40,10 @@ impl FromStr for Frequency
     {
         match value
         {
-            "hourly" => Ok(Self::Hourly),
-            "daily" => Ok(Self::Daily),
-            "weekly" => Ok(Self::Weekly),
-            "monthly" => Ok(Self::Monthly),
             "never" => Ok(Self::Never),
-            _ => bail!("unsupported update check frequency '{value}'")
+            _ => humantime::parse_duration(value).map(Self::Every).with_context(
+                || format!("unsupported update check frequency '{value}'")
+            )
         }
     }
 }
@@ -54,15 +52,12 @@ impl Display for Frequency
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult
     {
-        let value = match self
+        match self
         {
-            Self::Hourly => "hourly",
-            Self::Daily => "daily",
-            Self::Weekly => "weekly",
-            Self::Monthly => "monthly",
-            Self::Never => "never"
-        };
-        f.write_str(value)
+            Self::Every(duration) =>
+                f.write_str(&humantime::format_duration(*duration).to_string()),
+            Self::Never => f.write_str("never")
+        }
     }
 }
 
@@ -72,12 +67,28 @@ impl Frequency
     {
         match self
         {
-            Self::Hourly => Some(Duration::hours(1)),
-            Self::Daily => Some(Duration::days(1)),
-            Self::Weekly => Some(Duration::days(7)),
-            Self::Monthly => Some(Duration::days(30)),
+            Self::Every(duration) => Some(duration),
             Self::Never => None
         }
+    }
+}
+
+impl Serialize for Frequency
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Frequency
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de>
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_str(&value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -93,7 +104,10 @@ mod tests
         let updates = Updates::default();
 
         // Assert
-        assert_eq!(updates.check_frequency, Frequency::Daily);
+        assert_eq!(
+            updates.check_frequency,
+            Frequency::Every(Duration::from_secs(60 * 60 * 24))
+        );
     }
 
     #[test]
@@ -106,7 +120,7 @@ mod tests
         let toml = toml::to_string(&updates).unwrap();
 
         // Assert
-        assert_eq!(toml, "checkfrequency = \"daily\"\n");
+        assert_eq!(toml, "checkfrequency = \"1day\"\n");
     }
 
     #[test]
@@ -114,21 +128,27 @@ mod tests
     {
         // Act
         let updates: Updates =
-            toml::from_str("checkfrequency = \"weekly\"").unwrap();
+            toml::from_str("checkfrequency = \"7 days\"").unwrap();
 
         // Assert
-        assert_eq!(updates.check_frequency, Frequency::Weekly);
+        assert_eq!(
+            updates.check_frequency,
+            Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))
+        );
     }
 
     #[test]
-    fn parse_supported_frequencies()
+    fn parse_supported_duration_frequencies()
     {
         // Arrange
         let cases = [
-            ("hourly", Frequency::Hourly),
-            ("daily", Frequency::Daily),
-            ("weekly", Frequency::Weekly),
-            ("monthly", Frequency::Monthly),
+            ("1h", Frequency::Every(Duration::from_secs(60 * 60))),
+            ("1 day", Frequency::Every(Duration::from_secs(60 * 60 * 24))),
+            ("7 days", Frequency::Every(Duration::from_secs(60 * 60 * 24 * 7))),
+            (
+                "30 days",
+                Frequency::Every(Duration::from_secs(60 * 60 * 24 * 30))
+            ),
             ("never", Frequency::Never)
         ];
 
@@ -148,9 +168,23 @@ mod tests
     fn parse_rejects_unsupported_frequency()
     {
         // Act
-        let err = "yearly".parse::<Frequency>().unwrap_err();
+        let err = "daily".parse::<Frequency>().unwrap_err();
 
         // Assert
         assert!(err.to_string().contains("unsupported update check frequency"));
+    }
+
+    #[test]
+    fn display_formats_duration_with_humantime()
+    {
+        // Arrange
+        let frequency =
+            Frequency::Every(Duration::from_secs(60 * 60 * 24 * 30));
+
+        // Act
+        let value = frequency.to_string();
+
+        // Assert
+        assert_eq!(value, "30days");
     }
 }

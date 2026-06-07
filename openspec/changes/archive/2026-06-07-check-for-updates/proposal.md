@@ -12,7 +12,7 @@ throttled so normal Git workflows are not slowed down or made noisy.
   `git-vmr` binary.
 - Throttle update checks to once per day by default.
 - Add a global user-level configuration file, outside `.gitvmr`, that controls
-  the check frequency with `hourly`, `daily`, `weekly`, `monthly`, or `never`.
+  the check frequency with humantime duration strings or `never`.
 - Store update-check runtime state separately from project `.gitvmr` metadata.
 - Treat update-check failures as non-fatal so the requested command remains the
   primary behavior.

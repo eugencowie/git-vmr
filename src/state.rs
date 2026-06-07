@@ -47,8 +47,11 @@ impl UpdateCheckState
         {
             return false;
         };
-        self.last_attempted_check
-            .is_none_or(|last| now.signed_duration_since(last) >= interval)
+        self.last_attempted_check.is_none_or(|last| {
+            now.signed_duration_since(last)
+                .to_std()
+                .is_ok_and(|elapsed| elapsed >= interval)
+        })
     }
 }
 
@@ -57,6 +60,7 @@ mod tests
 {
     use super::*;
     use chrono::Duration;
+    use std::time::Duration as StdDuration;
 
     fn now() -> DateTime<Utc>
     {
@@ -91,7 +95,10 @@ mod tests
         let state = UpdateCheckState::default();
 
         // Act
-        let due = state.is_due(Frequency::Daily, now());
+        let due = state.is_due(
+            Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
+            now()
+        );
 
         // Assert
         assert!(due);
@@ -107,7 +114,10 @@ mod tests
         };
 
         // Act
-        let due = state.is_due(Frequency::Daily, now());
+        let due = state.is_due(
+            Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
+            now()
+        );
 
         // Assert
         assert!(!due);
@@ -123,7 +133,10 @@ mod tests
         };
 
         // Act
-        let due = state.is_due(Frequency::Monthly, now());
+        let due = state.is_due(
+            Frequency::Every(StdDuration::from_secs(60 * 60 * 24 * 30)),
+            now()
+        );
 
         // Assert
         assert!(due);
