@@ -8,8 +8,8 @@ release setup uses dist-generated shell and PowerShell installers, and
 the release source and current installation details.
 
 Automatic update checks are user-visible but not core Git behavior. They should
-therefore be quiet unless useful, non-fatal on any error, and throttled before
-network work begins.
+therefore be quiet unless useful, non-fatal on update-query errors, and
+throttled before network work begins.
 
 ## Goals / Non-Goals
 
@@ -25,7 +25,7 @@ network work begins.
 - Bound due update checks with a short timeout unless `axoupdater` already
   provides one.
 - Preserve existing command stdout/stderr behavior except for update notices and
-  non-fatal global config warnings.
+  fatal global config errors.
 
 **Non-Goals:**
 
@@ -36,6 +36,14 @@ network work begins.
 - Block, fail, or roll back the requested command when the update check fails.
 
 ## Decisions
+
+### Load config before running normal commands
+
+Load global config after argument parsing and before command dispatch. A missing
+global config file uses defaults. An existing but malformed global config file,
+including invalid values, is a fatal error and the requested subcommand does not
+run. This keeps user-authored policy validation in the config module and avoids
+mixing config error handling into update-check orchestration.
 
 ### Run checks after successful normal commands
 
@@ -138,13 +146,14 @@ noise in normal command output.
 
 ### Keep update-check errors non-fatal
 
-Update checks should not return errors to `main`. Global config parse errors may
-emit a warning to stderr and suppress update checking for that invocation.
-Receipt, eligibility, network, release parsing, state-write, and state-read
-errors are ignored except for best-effort state writes needed for throttling.
+Update checks should not return errors to `main`. Receipt, eligibility, network,
+release parsing, state-write, and state-read errors are ignored except for
+best-effort state writes needed for throttling.
 
-Alternative considered: fail on invalid global config. That would make a
-hand-edited preference file capable of breaking every `git-vmr` command.
+Alternative considered: treat invalid global config as a warning and suppress
+update checking for that invocation. Failing before command dispatch makes
+hand-edited user policy errors visible and keeps config validation owned by the
+config module.
 
 ## Risks / Trade-offs
 
@@ -153,9 +162,8 @@ hand-edited preference file capable of breaking every `git-vmr` command.
   `axoupdater` does not provide one.
 - [Users may not know how to install the available update] -> Keep the initial
   notice concise and leave installer guidance for future UX work.
-- [Malformed global config could create repeated warnings] -> Warn only for
-  config parsing or unreadable config; do not warn for transient update-query
-  failures.
+- [Malformed global config can block normal commands] -> Fail before command
+  dispatch with the parse error so the user can fix the hand-edited config.
 - [Tests involving user directories can be flaky] -> Implement path resolution
   behind injectable helpers and test with temporary paths.
 - [Package-manager installs may not receive notices] -> Deliberately limit

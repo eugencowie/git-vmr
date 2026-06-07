@@ -41,18 +41,27 @@ The supported frequency values SHALL be humantime duration strings of at least
   `[updates] check_frequency = "never"`
 - **THEN** the CLI SHALL NOT attempt automatic update checks
 
-#### Scenario: Invalid global config is non-fatal
+#### Scenario: Invalid global config is fatal
 - **WHEN** the global `git-vmr` configuration file contains an unsupported
   update-check frequency
-- **AND** user runs a `git-vmr` subcommand that otherwise completes successfully
-- **THEN** the subcommand SHALL still succeed
+- **AND** user runs a `git-vmr` subcommand
+- **THEN** the CLI SHALL report the config parse error
+- **AND** the CLI SHALL NOT run the requested subcommand
+- **AND** the CLI SHALL NOT attempt an update check for that invocation
+
+#### Scenario: Syntax error in global config is fatal
+- **WHEN** the global `git-vmr` configuration file contains invalid TOML syntax
+- **AND** user runs a `git-vmr` subcommand
+- **THEN** the CLI SHALL report the config parse error
+- **AND** the CLI SHALL NOT run the requested subcommand
 - **AND** the CLI SHALL NOT attempt an update check for that invocation
 
 #### Scenario: Sub-hour duration is invalid
 - **WHEN** the global `git-vmr` configuration file contains
   `[updates] check_frequency = "30 minutes"`
-- **AND** user runs a `git-vmr` subcommand that otherwise completes successfully
-- **THEN** the subcommand SHALL still succeed
+- **AND** user runs a `git-vmr` subcommand
+- **THEN** the CLI SHALL report the config parse error
+- **AND** the CLI SHALL NOT run the requested subcommand
 - **AND** the CLI SHALL NOT attempt an update check for that invocation
 
 ### Requirement: Update checks are throttled by state

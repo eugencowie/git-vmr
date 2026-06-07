@@ -24,7 +24,7 @@
 
 - [x] 4.1 Invoke the throttled update check after successful normal subcommand execution.
 - [x] 4.2 Ensure failed subcommands, help output, and version output do not trigger update checks.
-- [x] 4.3 Preserve existing command stdout and stderr behavior except for update notices and any non-fatal global config warning.
+- [x] 4.3 Preserve existing command stdout and stderr behavior except for update notices and fatal global config errors.
 
 ## 5. Tests
 

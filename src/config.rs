@@ -229,7 +229,8 @@ mod tests
             // Arrange
             let tmp = tempfile::tempdir().unwrap();
             let path = tmp.path().join("config.toml");
-            fs::write(&path, "[core]\nversion = true").unwrap();
+            fs::write(&path, "[updates]\ncheckfrequency = \"daily\"\n")
+                .unwrap();
 
             // Act
             let err = GlobalConfig::load_from_path(&path).unwrap_err();

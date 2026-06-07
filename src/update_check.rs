@@ -13,7 +13,6 @@ const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
 #[derive(Debug, Clone)]
 pub struct UpdateCheckPaths
 {
-    pub config_file: PathBuf,
     pub state_file: PathBuf
 }
 
@@ -40,34 +39,25 @@ impl UpdateQuery for AxoUpdateQuery
     }
 }
 
-pub fn run_auto_update_check() -> Option<String>
+pub fn run_auto_update_check(config: &GlobalConfig) -> Option<String>
 {
-    let config_file = match GlobalConfig::path()
-    {
-        Ok(config_file) => config_file,
-        Err(err) => return Some(format!("warning: {err:#}"))
-    };
     let state_file = match UpdateCheckState::path()
     {
         Ok(state_file) => state_file,
         Err(err) => return Some(format!("warning: {err:#}"))
     };
-    let paths = UpdateCheckPaths { config_file, state_file };
+    let paths = UpdateCheckPaths { state_file };
     let mut query = AxoUpdateQuery;
-    run_with_paths(&paths, Utc::now(), &mut query)
+    run_with_paths(config, &paths, Utc::now(), &mut query)
 }
 
 pub fn run_with_paths(
+    config: &GlobalConfig,
     paths: &UpdateCheckPaths,
     now: DateTime<Utc>,
     query: &mut dyn UpdateQuery
 ) -> Option<String>
 {
-    let config = match GlobalConfig::load_from_path(&paths.config_file)
-    {
-        Ok(config) => config,
-        Err(err) => return Some(format!("warning: {err:#}"))
-    };
     let mut state =
         UpdateCheckState::load(&paths.state_file).unwrap_or_default();
     if !state.is_due(config.updates.check_frequency, now)
@@ -135,9 +125,9 @@ fn query_with_axoupdater() -> Result<QueryOutcome>
 mod tests
 {
     use super::*;
+    use crate::config::{Frequency, Updates};
     use anyhow::bail;
     use std::cell::Cell;
-    use std::fs;
 
     #[derive(Debug)]
     struct FakeQuery
@@ -177,16 +167,19 @@ mod tests
     fn paths(tmp: &tempfile::TempDir) -> UpdateCheckPaths
     {
         UpdateCheckPaths {
-            config_file: tmp
-                .path()
-                .join("config")
-                .join(APP_NAME)
-                .join("config.toml"),
             state_file: tmp
                 .path()
                 .join("state")
                 .join(APP_NAME)
                 .join("update.toml")
+        }
+    }
+
+    fn config(check_frequency: Frequency) -> GlobalConfig
+    {
+        GlobalConfig {
+            updates: Updates { check_frequency },
+            ..GlobalConfig::default()
         }
     }
 
@@ -202,16 +195,11 @@ mod tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
-        fs::create_dir_all(paths.config_file.parent().unwrap()).unwrap();
-        fs::write(
-            &paths.config_file,
-            "[core]\nversion = 0\n[updates]\ncheckfrequency = \"never\"\n"
-        )
-        .unwrap();
+        let config = config(Frequency::Never);
         let mut query =
             FakeQuery::new(QueryOutcome::NewerVersion("9.0.0".into()));
 
-        let notice = run_with_paths(&paths, now(), &mut query);
+        let notice = run_with_paths(&config, &paths, now(), &mut query);
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 0);
@@ -239,9 +227,10 @@ mod tests
 
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
+        let config = GlobalConfig::default();
         let mut query = FailingQuery { paths: &paths, now: now() };
 
-        let notice = run_with_paths(&paths, now(), &mut query);
+        let notice = run_with_paths(&config, &paths, now(), &mut query);
 
         assert_eq!(notice, None);
     }
@@ -251,10 +240,12 @@ mod tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
+        let config = GlobalConfig::default();
         let mut query =
             FakeQuery::new(QueryOutcome::NewerVersion("1.2.3".into()));
 
-        let notice = run_with_paths(&paths, now(), &mut query).unwrap();
+        let notice =
+            run_with_paths(&config, &paths, now(), &mut query).unwrap();
 
         assert_eq!(notice, "A new git-vmr version is available: 1.2.3");
     }
@@ -264,9 +255,10 @@ mod tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
+        let config = GlobalConfig::default();
         let mut query = FakeQuery::new(QueryOutcome::CurrentVersion);
 
-        let notice = run_with_paths(&paths, now(), &mut query);
+        let notice = run_with_paths(&config, &paths, now(), &mut query);
 
         assert_eq!(notice, None);
     }
@@ -276,9 +268,10 @@ mod tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
+        let config = GlobalConfig::default();
         let mut query = FakeQuery::new(QueryOutcome::Ineligible);
 
-        let notice = run_with_paths(&paths, now(), &mut query);
+        let notice = run_with_paths(&config, &paths, now(), &mut query);
 
         assert_eq!(notice, None);
     }
@@ -288,10 +281,11 @@ mod tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let paths = paths(&tmp);
+        let config = GlobalConfig::default();
         let mut query =
             FakeQuery { outcome: FakeOutcome::Err, calls: Cell::new(0) };
 
-        let notice = run_with_paths(&paths, now(), &mut query);
+        let notice = run_with_paths(&config, &paths, now(), &mut query);
 
         assert_eq!(notice, None);
         assert_eq!(query.calls.get(), 1);
