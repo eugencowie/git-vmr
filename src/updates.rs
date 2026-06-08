@@ -1,5 +1,5 @@
-use crate::config::GlobalConfig;
-use crate::state::UpdateCheckState;
+use crate::config::{Frequency, GlobalConfig};
+use crate::state::GlobalState;
 use anyhow::Result;
 use axoasset::reqwest::Client;
 use axoupdater::AxoUpdater;
@@ -33,33 +33,55 @@ impl UpdateQuery for AxoUpdateQuery
 
 pub fn check_for_updates(config: &GlobalConfig) -> Option<String>
 {
-    let state_file = match UpdateCheckState::path()
+    if config.updates.check_frequency == Frequency::Never
+    {
+        return None;
+    }
+
+    let mut state = match GlobalState::load()
+    {
+        Ok(state) => state,
+        Err(_) => return None
+    };
+    let state_file = match GlobalState::path()
     {
         Ok(state_file) => state_file,
         Err(_) => return None
     };
     let mut query = AxoUpdateQuery;
-    run_with_paths(config, &state_file, Utc::now(), &mut query)
+    run(config, &state_file, &mut state, Utc::now(), &mut query)
 }
 
-pub fn run_with_paths(
+#[cfg(test)]
+fn run_with_paths(
     config: &GlobalConfig,
     state_file: &Path,
     now: DateTime<Utc>,
     query: &mut dyn UpdateQuery
 ) -> Option<String>
 {
-    let mut state = match UpdateCheckState::load(state_file)
+    let mut state = match GlobalState::load_from_path(state_file)
     {
         Ok(state) => state,
         Err(_) => return None
     };
-    if !state.is_due(config.updates.check_frequency, now)
+    run(config, state_file, &mut state, now, query)
+}
+
+fn run(
+    config: &GlobalConfig,
+    state_file: &Path,
+    state: &mut GlobalState,
+    now: DateTime<Utc>,
+    query: &mut dyn UpdateQuery
+) -> Option<String>
+{
+    if !state.updates.is_due(config.updates.check_frequency, now)
     {
         return None;
     }
 
-    state.last_attempted_check = Some(now);
+    state.updates.last_check = Some(now);
     if state.save(state_file).is_err()
     {
         return None;
@@ -69,7 +91,7 @@ pub fn run_with_paths(
     {
         Ok(QueryOutcome::NewerVersion(version)) =>
         {
-            state.last_available_version = Some(version.clone());
+            state.updates.last_available = Some(version.clone());
             if state.save(state_file).is_err()
             {
                 return None;
@@ -163,7 +185,7 @@ mod tests
 
     fn state_file(tmp: &tempfile::TempDir) -> PathBuf
     {
-        tmp.path().join("state").join(APP_NAME).join("update.toml")
+        tmp.path().join("state").join(APP_NAME).join("state.toml")
     }
 
     fn config(check_frequency: Frequency) -> GlobalConfig
@@ -209,8 +231,9 @@ mod tests
         {
             fn query_new_version(&mut self) -> Result<QueryOutcome>
             {
-                let state = UpdateCheckState::load(self.state_file).unwrap();
-                assert_eq!(state.last_attempted_check, Some(self.now));
+                let state =
+                    GlobalState::load_from_path(self.state_file).unwrap();
+                assert_eq!(state.updates.last_check, Some(self.now));
                 bail!("network failed")
             }
         }
@@ -231,7 +254,7 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
         let state_file = state_file(&tmp);
         fs::create_dir_all(state_file.parent().unwrap()).unwrap();
-        fs::write(&state_file, "last_attempted_check =").unwrap();
+        fs::write(&state_file, "[updates]\nlast_check =").unwrap();
         let config = GlobalConfig::default();
         let mut query =
             FakeQuery::new(QueryOutcome::NewerVersion("1.2.3".into()));

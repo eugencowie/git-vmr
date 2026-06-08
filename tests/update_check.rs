@@ -22,7 +22,7 @@ fn successful_subcommand_triggers_due_update_check()
     init_vmr(&vmr);
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
 
     git_vmr()
         .current_dir(&vmr)
@@ -36,7 +36,8 @@ fn successful_subcommand_triggers_due_update_check()
 
     let state = fs::read_to_string(state_file)
         .expect("expected update-check state to be written");
-    assert!(state.contains("last_attempted_check"));
+    assert!(state.contains("[updates]"));
+    assert!(state.contains("last_check"));
 }
 
 #[test]
@@ -49,7 +50,7 @@ fn configured_never_through_global_config_skips_update_check()
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let config_file = config_dir.join("git-vmr").join("config.toml");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
     fs::create_dir_all(config_file.parent().unwrap())
         .expect("failed to create config dir");
     fs::write(&config_file, "[updates]\ncheckfrequency = \"never\"\n")
@@ -75,7 +76,7 @@ fn invalid_global_config_value_fails_before_subcommand_runs()
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let config_file = config_dir.join("git-vmr").join("config.toml");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
     fs::create_dir_all(config_file.parent().unwrap())
         .expect("failed to create config dir");
     fs::write(&config_file, "[updates]\ncheckfrequency = \"daily\"\n")
@@ -103,7 +104,7 @@ fn syntax_error_in_global_config_fails_before_subcommand_runs()
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let config_file = config_dir.join("git-vmr").join("config.toml");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
     fs::create_dir_all(config_file.parent().unwrap())
         .expect("failed to create config dir");
     fs::write(&config_file, "[updates\ncheck_frequency = \"1 day\"\n")
@@ -129,7 +130,7 @@ fn failed_subcommand_does_not_trigger_update_check()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
 
     git_vmr()
         .current_dir(tmp.path())
@@ -150,7 +151,7 @@ fn version_output_does_not_trigger_update_check()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
-    let state_file = state_dir.join("git-vmr").join("update.toml");
+    let state_file = state_dir.join("git-vmr").join("state.toml");
 
     git_vmr()
         .env("GIT_VMR_CONFIG_DIR", &config_dir)

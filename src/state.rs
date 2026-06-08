@@ -1,47 +1,46 @@
-use crate::config::Frequency;
+mod updates;
+
+use crate::cli::APP_NAME;
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
+pub use updates::UpdateState;
 
 const APP_NAME: &str = "git-vmr";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdateCheckState
+#[serde(default)]
+pub struct GlobalState
 {
-    pub last_attempted_check: Option<DateTime<Utc>>,
-    pub last_available_version: Option<String>
+    pub updates: UpdateState
 }
 
-impl UpdateCheckState
+impl GlobalState
 {
-    pub fn path() -> Result<PathBuf>
+    /// Load global state
+    pub fn load() -> Result<Self>
     {
-        Self::path_with_state_dir(None)
+        // Resolve state path
+        let state_path = Self::resolve_path(None)?;
+
+        // Load state from path
+        Self::load_from_path(&state_path)
     }
 
-    pub fn path_with_state_dir(state_dir: Option<PathBuf>) -> Result<PathBuf>
-    {
-        let state_root = state_dir
-            .or_else(|| {
-                std::env::var_os("GIT_VMR_STATE_DIR").map(PathBuf::from)
-            })
-            .or_else(dirs::state_dir)
-            .or_else(dirs::data_local_dir)
-            .context("failed to resolve user state directory")?;
-
-        Ok(state_root.join(APP_NAME).join("update.toml"))
-    }
-
-    pub fn load(path: &Path) -> Result<Self>
+    /// Load global state from path
+    pub fn load_from_path(path: &Path) -> Result<Self>
     {
         match fs::read_to_string(path)
         {
             Ok(contents) => toml::from_str(&contents)
                 .with_context(|| format!("failed to parse {}", path.display())),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound =>
+
+            // Missing global state uses defaults
+            Err(err) if err.kind() == ErrorKind::NotFound =>
                 Ok(Self::default()),
+
             Err(err) => Err(err)
                 .with_context(|| format!("failed to read {}", path.display()))
         }
@@ -55,23 +54,13 @@ impl UpdateCheckState
                 format!("failed to create {}", parent.display())
             })?;
         }
-        let contents = toml::to_string(self)?;
+
+        // Serialize and write state file
+        let contents = toml::to_string(self).with_context(|| {
+            format!("failed to serialize {}", path.display())
+        })?;
         fs::write(path, contents)
             .with_context(|| format!("failed to write {}", path.display()))
-    }
-
-    pub fn is_due(&self, frequency: Frequency, now: DateTime<Utc>) -> bool
-    {
-        let Some(interval) = frequency.interval()
-        else
-        {
-            return false;
-        };
-        self.last_attempted_check.is_none_or(|last| {
-            now.signed_duration_since(last)
-                .to_std()
-                .is_ok_and(|elapsed| elapsed >= interval)
-        })
     }
 }
 
@@ -79,8 +68,7 @@ impl UpdateCheckState
 mod tests
 {
     use super::*;
-    use chrono::Duration;
-    use std::time::Duration as StdDuration;
+    use chrono::{DateTime, Utc};
 
     fn now() -> DateTime<Utc>
     {
@@ -90,76 +78,109 @@ mod tests
     }
 
     #[test]
+    fn default_has_default_values()
+    {
+        // Act
+        let state = GlobalState::default();
+
+        // Assert
+        assert_eq!(state.updates, UpdateState::default());
+    }
+
+    #[test]
+    fn to_string_serializes_to_toml()
+    {
+        // Arrange
+        let state = GlobalState {
+            updates: UpdateState {
+                last_check: Some(now()),
+                last_available: Some("1.2.3".to_owned())
+            }
+        };
+
+        // Act
+        let toml = toml::to_string(&state).unwrap();
+
+        // Assert
+        assert_eq!(
+            toml,
+            "[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\"\n"
+        );
+    }
+
+    #[test]
+    fn from_str_deserializes_from_toml()
+    {
+        // Act
+        let state: GlobalState = toml::from_str(
+            "[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\""
+        )
+        .unwrap();
+
+        // Assert
+        assert_eq!(state.updates.last_check, Some(now()));
+        assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
+    }
+
+    #[test]
+    fn from_str_defaults_missing_updates_section()
+    {
+        // Act
+        let state: GlobalState = toml::from_str("").unwrap();
+
+        // Assert
+        assert_eq!(state.updates, UpdateState::default());
+    }
+
+    #[test]
     fn roundtrips()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        let path = tmp.path().join("state").join("update.toml");
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now()),
-            last_available_version: Some("1.2.3".to_owned())
+        let path = tmp.path().join("state").join("state.toml");
+        let state = GlobalState {
+            updates: UpdateState {
+                last_check: Some(now()),
+                last_available: Some("1.2.3".to_owned())
+            }
         };
 
         // Act
         state.save(&path).unwrap();
-        let loaded = UpdateCheckState::load(&path).unwrap();
+        let loaded = GlobalState::load_from_path(&path).unwrap();
 
         // Assert
         assert_eq!(loaded, state);
     }
 
     #[test]
-    fn missing_state_is_due()
+    fn load_missing_file_returns_default()
     {
         // Arrange
-        let state = UpdateCheckState::default();
+        let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        let due = state.is_due(
-            Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
-            now()
-        );
+        let state =
+            GlobalState::load_from_path(&tmp.path().join("missing.toml"))
+                .unwrap();
 
         // Assert
-        assert!(due);
+        assert_eq!(state, GlobalState::default());
     }
 
     #[test]
-    fn recent_state_is_not_due()
+    fn load_rejects_malformed_file()
     {
         // Arrange
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now() - Duration::hours(23)),
-            last_available_version: None
-        };
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("state.toml");
+        fs::write(&path, "[updates]\nlast_check =").unwrap();
 
         // Act
-        let due = state.is_due(
-            Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
-            now()
-        );
+        let err = GlobalState::load_from_path(&path).unwrap_err();
 
         // Assert
-        assert!(!due);
-    }
-
-    #[test]
-    fn expired_state_is_due()
-    {
-        // Arrange
-        let state = UpdateCheckState {
-            last_attempted_check: Some(now() - Duration::days(31)),
-            last_available_version: None
-        };
-
-        // Act
-        let due = state.is_due(
-            Frequency::Every(StdDuration::from_secs(60 * 60 * 24 * 30)),
-            now()
-        );
-
-        // Assert
-        assert!(due);
+        assert!(err.to_string().contains("failed to parse"));
     }
 
     #[test]
@@ -169,15 +190,13 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        let path = UpdateCheckState::path_with_state_dir(Some(
-            tmp.path().join("state")
-        ))
-        .unwrap();
+        let path =
+            GlobalState::resolve_path(Some(tmp.path().join("state"))).unwrap();
 
         // Assert
         assert_eq!(
             path,
-            tmp.path().join("state").join("git-vmr").join("update.toml")
+            tmp.path().join("state").join("git-vmr").join("state.toml")
         );
     }
 }
