@@ -1,10 +1,10 @@
+use crate::cli::{APP_NAME, CliContext};
 use crate::config::{Frequency, GlobalConfig};
 use crate::state::GlobalState;
 use anyhow::Result;
 use axoasset::reqwest::Client;
 use axoupdater::AxoUpdater;
 use chrono::{DateTime, Utc};
-use std::path::Path;
 use std::time::Duration as StdDuration;
 
 const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
@@ -31,31 +31,26 @@ impl UpdateQuery for AxoUpdateQuery
     }
 }
 
-pub fn check_for_updates(config: &GlobalConfig) -> Option<String>
+pub fn check_for_updates(context: &mut CliContext) -> Option<String>
 {
-    if config.updates.check_frequency == Frequency::Never
+    if context.global_config.updates.check_frequency == Frequency::Never
     {
         return None;
     }
 
-    let mut state = match GlobalState::load()
-    {
-        Ok(state) => state,
-        Err(_) => return None
-    };
-    let state_file = match GlobalState::path()
-    {
-        Ok(state_file) => state_file,
-        Err(_) => return None
-    };
     let mut query = AxoUpdateQuery;
-    run(config, &state_file, &mut state, Utc::now(), &mut query)
+    run(
+        &context.global_config,
+        &mut context.global_state,
+        Utc::now(),
+        &mut query
+    )
 }
 
 #[cfg(test)]
 fn run_with_paths(
     config: &GlobalConfig,
-    state_file: &Path,
+    state_file: &std::path::Path,
     now: DateTime<Utc>,
     query: &mut dyn UpdateQuery
 ) -> Option<String>
@@ -65,12 +60,11 @@ fn run_with_paths(
         Ok(state) => state,
         Err(_) => return None
     };
-    run(config, state_file, &mut state, now, query)
+    run(config, &mut state, now, query)
 }
 
 fn run(
     config: &GlobalConfig,
-    state_file: &Path,
     state: &mut GlobalState,
     now: DateTime<Utc>,
     query: &mut dyn UpdateQuery
@@ -82,7 +76,7 @@ fn run(
     }
 
     state.updates.last_check = Some(now);
-    if state.save(state_file).is_err()
+    if state.save().is_err()
     {
         return None;
     }
@@ -92,7 +86,7 @@ fn run(
         Ok(QueryOutcome::NewerVersion(version)) =>
         {
             state.updates.last_available = Some(version.clone());
-            if state.save(state_file).is_err()
+            if state.save().is_err()
             {
                 return None;
             }
@@ -146,7 +140,7 @@ mod tests
     use anyhow::bail;
     use std::cell::Cell;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     #[derive(Debug)]
     struct FakeQuery

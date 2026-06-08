@@ -24,6 +24,8 @@ pub struct GlobalConfig
 {
     /// Core configuration
     pub core: Core,
+
+    /// Software updates
     pub updates: Updates
 }
 
@@ -189,7 +191,7 @@ mod tests
 
             // Assert
             assert_eq!(config.core.version, 0);
-            assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(1));
         }
 
         #[test]
@@ -202,10 +204,7 @@ mod tests
 
             // Assert
             assert_eq!(config.core, Core::default());
-            assert_eq!(
-                config.updates.check_frequency,
-                Frequency::from_days(7)
-            );
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
         }
 
         #[test]
