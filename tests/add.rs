@@ -1,12 +1,9 @@
-use assert_cmd::Command;
+mod common;
+
+use common::git_vmr;
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git_vmr() -> Command
-{
-    Command::cargo_bin("git-vmr").expect("failed to find git-vmr binary")
-}
 
 fn git<const N: usize>(dir: &Path, args: [&str; N])
 {

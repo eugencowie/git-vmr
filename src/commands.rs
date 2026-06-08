@@ -18,10 +18,11 @@ mod switch;
 mod tag;
 mod worktree;
 
+use crate::cli::CliContext;
 use crate::git::{ChmodMode, ResetMode};
 use anyhow::Result;
 use clap::{ArgAction, Subcommand};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Subcommand)]
 pub enum WorktreeCommand
@@ -370,8 +371,10 @@ pub enum Command
 
 impl Command
 {
-    pub fn run(self, bin_name: &str, working_dir: &Path) -> Result<()>
+    pub fn run(self, context: &CliContext) -> Result<()>
     {
+        let working_dir = &context.working_dir;
+
         match self
         {
             Command::Clone { repository, directory } =>
@@ -392,7 +395,8 @@ impl Command
             Command::Rm { paths, recursive, force, dry_run, cached } =>
                 rm::rm(working_dir, &paths, recursive, force, dry_run, cached),
 
-            Command::Status => status::status(bin_name, working_dir),
+            Command::Status =>
+                status::status(&context.display_name, working_dir),
 
             Command::Branch { delete, force_delete, force, branch_name } =>
                 match branch_name
