@@ -1,11 +1,8 @@
-use assert_cmd::Command;
+mod common;
+
+use common::git_vmr;
 use predicates::prelude::*;
 use std::fs;
-
-fn git_vmr() -> Command
-{
-    Command::cargo_bin("git-vmr").expect("failed to find git-vmr binary")
-}
 
 #[test]
 fn init_creates_default_config_in_current_directory()

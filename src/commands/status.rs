@@ -9,7 +9,7 @@ use std::path::Path;
 struct RenderContext<'a>
 {
     repos: &'a [(&'a Repo, &'a RepoStatus)],
-    bin_name: &'a str,
+    display_name: &'a str,
     working_dir: &'a Path
 }
 
@@ -51,7 +51,7 @@ impl StatusStyles
     }
 }
 
-pub fn status(bin_name: &str, working_dir: &Path) -> Result<()>
+pub fn status(display_name: &str, working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -69,14 +69,14 @@ pub fn status(bin_name: &str, working_dir: &Path) -> Result<()>
     statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
 
     // Render status output
-    anstream::print!("{}", render_status(&statuses, bin_name, working_dir));
+    anstream::print!("{}", render_status(&statuses, display_name, working_dir));
 
     Ok(())
 }
 
 fn render_status(
     statuses: &[(Repo, RepoStatus)],
-    bin_name: &str,
+    display_name: &str,
     working_dir: &Path
 ) -> String
 {
@@ -124,7 +124,7 @@ fn render_status(
             ));
         }
 
-        render_group(&mut output, &repos, bin_name, working_dir, &styles);
+        render_group(&mut output, &repos, display_name, working_dir, &styles);
     }
 
     // Render detached repositories
@@ -138,7 +138,7 @@ fn render_status(
         render_group(
             &mut output,
             &[(repo, status)],
-            bin_name,
+            display_name,
             working_dir,
             &styles
         );
@@ -186,12 +186,12 @@ fn largest_committed_branch<'a>(
 fn render_group(
     output: &mut String,
     repos: &[(&Repo, &RepoStatus)],
-    bin_name: &str,
+    display_name: &str,
     working_dir: &Path,
     styles: &StatusStyles
 )
 {
-    let context = RenderContext { repos, bin_name, working_dir };
+    let context = RenderContext { repos, display_name, working_dir };
 
     // Render initial commit notice
     let has_initial = repos.iter().any(|(_, status)| status.initial);
@@ -206,7 +206,7 @@ fn render_group(
         "Changes to be committed:",
         &[format!(
             "  (use \"{} restore --staged <file>...\" to unstage)",
-            context.bin_name
+            context.display_name
         )],
         &context,
         |status| &status.staged_changes,
@@ -218,11 +218,11 @@ fn render_group(
         &[
             format!(
                 "  (use \"{} add <file>...\" to update what will be committed)",
-                context.bin_name
+                context.display_name
             ),
             format!(
                 "  (use \"{} restore <file>...\" to discard changes in working directory)",
-                context.bin_name
+                context.display_name
             )
         ],
         &context,
@@ -234,7 +234,7 @@ fn render_group(
         "Untracked files:",
         &[format!(
             "  (use \"{} add <file>...\" to include in what will be committed)",
-            context.bin_name
+            context.display_name
         )],
         &context,
         |status| &status.untracked_files,
@@ -329,7 +329,7 @@ mod tests
     use std::path::PathBuf;
     use std::process::Command;
 
-    const BIN_NAME: &str = "git-vmr";
+    const DISPLAY_NAME: &str = "git vmr";
 
     #[test]
     fn renders_single_branch_without_repo_list()
@@ -342,7 +342,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch "));
@@ -359,7 +359,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), repo_status("main"))];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch main"));
@@ -379,7 +379,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("main"));
@@ -403,7 +403,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("On branch develop\n"));
@@ -428,7 +428,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "tools"), status)];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("HEAD detached at "));
@@ -447,7 +447,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "new-repo"), status)];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains("master"));
@@ -468,7 +468,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains(
@@ -494,7 +494,7 @@ mod tests
         ];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, tmp.path());
+        let output = render_status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(output.contains(
@@ -518,7 +518,7 @@ mod tests
         let statuses = vec![(repo(tmp.path(), "backend"), status)];
 
         // Act
-        let output = render_status(&statuses, BIN_NAME, &working_dir);
+        let output = render_status(&statuses, DISPLAY_NAME, &working_dir);
 
         // Assert
         assert!(output.contains("../backend/src/main.rs"));
@@ -575,7 +575,7 @@ mod tests
         init_git_repo(&tmp.path().join("backend"));
 
         // Act
-        let result = status(BIN_NAME, tmp.path());
+        let result = status(DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(result.is_ok());
