@@ -2,6 +2,8 @@ mod cli;
 mod commands;
 mod config;
 mod git;
+mod state;
+mod updates;
 mod vmr;
 
 use cli::Cli;

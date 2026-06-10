@@ -1,4 +1,5 @@
 mod core;
+mod updates;
 
 use crate::cli::APP_NAME;
 use anyhow::{Context, Result};
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+pub use updates::{Frequency, Updates};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -21,7 +23,10 @@ pub struct Config
 pub struct GlobalConfig
 {
     /// Core configuration
-    pub core: Core
+    pub core: Core,
+
+    /// Software updates
+    pub updates: Updates
 }
 
 impl GlobalConfig
@@ -135,6 +140,7 @@ mod tests
     mod global_config
     {
         use super::*;
+        use updates::Frequency;
 
         #[test]
         fn default_has_default_values()
@@ -144,6 +150,7 @@ mod tests
 
             // Assert
             assert_eq!(config.core, Core::default());
+            assert_eq!(config.updates, Updates::default());
         }
 
         #[test]
@@ -156,18 +163,24 @@ mod tests
             let toml = toml::to_string(&config).unwrap();
 
             // Assert
-            assert_eq!(toml, "[core]\nversion = 0\n");
+            assert_eq!(
+                toml,
+                "[core]\nversion = 0\n\n[updates]\ncheckfrequency = \"1day\"\n"
+            );
         }
 
         #[test]
         fn from_str_deserializes_from_toml()
         {
             // Act
-            let config: GlobalConfig =
-                toml::from_str("[core]\nversion = 42").unwrap();
+            let config: GlobalConfig = toml::from_str(
+                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"1 week\""
+            )
+            .unwrap();
 
             // Assert
             assert_eq!(config.core.version, 42);
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
         }
 
         #[test]
@@ -178,16 +191,20 @@ mod tests
 
             // Assert
             assert_eq!(config.core.version, 0);
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(1));
         }
 
         #[test]
         fn from_str_defaults_missing_core_section()
         {
             // Act
-            let config: GlobalConfig = toml::from_str("").unwrap();
+            let config: GlobalConfig =
+                toml::from_str("[updates]\ncheckfrequency = \"1 week\"")
+                    .unwrap();
 
             // Assert
             assert_eq!(config.core, Core::default());
+            assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
         }
 
         #[test]
@@ -211,7 +228,8 @@ mod tests
             // Arrange
             let tmp = tempfile::tempdir().unwrap();
             let path = tmp.path().join("config.toml");
-            fs::write(&path, "[core]\nversion = true").unwrap();
+            fs::write(&path, "[updates]\ncheckfrequency = \"daily\"\n")
+                .unwrap();
 
             // Act
             let err = GlobalConfig::load_from_path(&path).unwrap_err();

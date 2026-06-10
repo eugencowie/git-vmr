@@ -1,4 +1,5 @@
 use crate::config::GlobalConfig;
+use crate::state::GlobalState;
 use anyhow::{Context, Result, bail};
 use std::env;
 use std::path::PathBuf;
@@ -12,8 +13,10 @@ pub struct CliContext
     pub working_dir: PathBuf,
 
     /// Global configuration
-    #[allow(unused)]
-    pub global_config: GlobalConfig
+    pub global_config: GlobalConfig,
+
+    /// Global runtime state
+    pub global_state: GlobalState
 }
 
 impl CliContext
@@ -28,8 +31,15 @@ impl CliContext
         Ok(Self {
             display_name: display_name.to_owned(),
             working_dir: Self::resolve_working_dir(working_dir)?,
-            global_config: GlobalConfig::load()?
+            global_config: GlobalConfig::load()?,
+            global_state: GlobalState::load()?
         })
+    }
+
+    /// Save changes to the context
+    pub fn save(&mut self) -> Result<()>
+    {
+        self.global_state.save()
     }
 
     /// Resolve working directory for command execution
