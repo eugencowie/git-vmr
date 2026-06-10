@@ -74,7 +74,7 @@ impl Cli
         self.command.run(&context)?;
 
         // Check for updates
-        if let Some(update) = updates::check_for_updates(&mut context)
+        if let Some(update) = updates::check(&mut context)
         {
             eprintln!("{update}");
         }
