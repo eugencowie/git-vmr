@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+### 🚀 Features
+
+- Add global configuration file ([#56](https://github.com/eugencowie/git-vmr/pull/56))
+- Check for updates automatically ([#50](https://github.com/eugencowie/git-vmr/pull/50))
+
 ## 0.8.0
 
 ### 🚀 Features
