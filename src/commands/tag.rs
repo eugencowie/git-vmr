@@ -1,5 +1,6 @@
 use crate::git::{self};
 use crate::vmr::Vmr;
+use anstyle::{AnsiColor, Style};
 use anyhow::Result;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -66,6 +67,8 @@ pub fn tag(working_dir: &Path) -> Result<()>
 fn render_tags(repos: &[(String, Vec<String>)]) -> String
 {
     let mut output = String::new();
+    let repo_list_style =
+        Style::new().fg_color(Some(AnsiColor::BrightBlack.into()));
     let repo_count = repos.len();
     let mut tag_groups: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
 
@@ -84,7 +87,13 @@ fn render_tags(repos: &[(String, Vec<String>)]) -> String
         if tag_repos.len() != repo_count
         {
             let repo_names = tag_repos.into_iter().collect::<Vec<_>>();
-            output.push_str(&format!(" ({})", repo_names.join(", ")));
+            output.push(' ');
+            output.push_str(&format!(
+                "{}({}){}",
+                repo_list_style.render(),
+                repo_names.join(", "),
+                repo_list_style.render_reset()
+            ));
         }
 
         output.push('\n');
@@ -125,7 +134,7 @@ mod tests
         let output = render_tags(&repos);
 
         assert!(output.contains("v1.0.0\n"));
-        assert!(output.contains("v1.1.0 (frontend)\n"));
+        assert!(output.contains("v1.1.0 \x1b[90m(frontend)\x1b[0m\n"));
     }
 
     #[test]
@@ -139,7 +148,7 @@ mod tests
 
         let output = render_tags(&repos);
 
-        assert_eq!(output, "v1.2.0 (backend, frontend)\n");
+        assert_eq!(output, "v1.2.0 \x1b[90m(backend, frontend)\x1b[0m\n");
     }
 
     #[test]
@@ -157,7 +166,11 @@ mod tests
 
         assert_eq!(
             output,
-            "v1.0.0 (backend)\nv1.1.0 (frontend)\nv2.0.0 (backend)\n"
+            concat!(
+                "v1.0.0 \x1b[90m(backend)\x1b[0m\n",
+                "v1.1.0 \x1b[90m(frontend)\x1b[0m\n",
+                "v2.0.0 \x1b[90m(backend)\x1b[0m\n"
+            )
         );
     }
 
