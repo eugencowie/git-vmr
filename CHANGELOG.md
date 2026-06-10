@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+### 🐛 Bug Fixes
+
+- Fix inconsistent tag list styling ([#59](https://github.com/eugencowie/git-vmr/pull/59))
+
 ## 0.9.0
 
 ### 🚀 Features
