@@ -25,67 +25,6 @@ use clap::{ArgAction, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Subcommand)]
-pub enum WorktreeCommand
-{
-    /// Create a worktree at <path> and checkout [commit-ish] into it
-    Add
-    {
-        /// With add, create a new branch named <new-branch> starting at
-        /// [commit-ish], and check out <new-branch> into the new worktree
-        #[arg(short, value_name = "new-branch")]
-        branch: Option<String>,
-
-        #[arg(value_name = "path")]
-        path: PathBuf,
-
-        #[arg(value_name = "commit-ish")]
-        commit_ish: Option<String>
-    },
-
-    /// List details of each worktree
-    List,
-
-    /// Move a worktree to a new location
-    Move
-    {
-        /// Move a worktree even when Git would otherwise refuse. Specify twice
-        /// for cases that require two force flags.
-        #[arg(short, long, action = ArgAction::Count)]
-        force: u8,
-
-        /// Worktrees can be identified by path, either relative or absolute
-        #[arg(value_name = "worktree")]
-        path: PathBuf,
-
-        /// New location for the worktree
-        #[arg(value_name = "new-path")]
-        new_path: PathBuf
-    },
-
-    /// Remove a worktree
-    #[command(visible_alias = "rm")]
-    Remove
-    {
-        /// By default, remove refuses to remove an unclean worktree unless
-        /// --force is used. To remove a locked worktree, specify --force twice
-        #[arg(short, long, action = ArgAction::Count)]
-        force: u8,
-
-        /// Delete the branch
-        #[arg(short, long, conflicts_with = "force_delete")]
-        delete: bool,
-
-        /// Force-delete the branch
-        #[arg(short = 'D')]
-        force_delete: bool,
-
-        /// Worktrees can be identified by path, either relative or absolute
-        #[arg(value_name = "worktree")]
-        path: PathBuf
-    }
-}
-
-#[derive(Subcommand)]
 pub enum Command
 {
     /// Clone a repository into a new directory
@@ -369,8 +308,179 @@ pub enum Command
     }
 }
 
+#[derive(Subcommand)]
+pub enum WorktreeCommand
+{
+    /// Create a worktree at <path> and checkout [commit-ish] into it
+    Add
+    {
+        /// With add, create a new branch named <new-branch> starting at
+        /// [commit-ish], and check out <new-branch> into the new worktree
+        #[arg(short, value_name = "new-branch")]
+        branch: Option<String>,
+
+        #[arg(value_name = "path")]
+        path: PathBuf,
+
+        #[arg(value_name = "commit-ish")]
+        commit_ish: Option<String>
+    },
+
+    /// List details of each worktree
+    List,
+
+    /// Move a worktree to a new location
+    Move
+    {
+        /// Move a worktree even when Git would otherwise refuse. Specify twice
+        /// for cases that require two force flags.
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf,
+
+        /// New location for the worktree
+        #[arg(value_name = "new-path")]
+        new_path: PathBuf
+    },
+
+    /// Remove a worktree
+    #[command(visible_alias = "rm")]
+    Remove
+    {
+        /// By default, remove refuses to remove an unclean worktree unless
+        /// --force is used. To remove a locked worktree, specify --force twice
+        #[arg(short, long, action = ArgAction::Count)]
+        force: u8,
+
+        /// Delete the branch
+        #[arg(short, long, conflicts_with = "force_delete")]
+        delete: bool,
+
+        /// Force-delete the branch
+        #[arg(short = 'D')]
+        force_delete: bool,
+
+        /// Worktrees can be identified by path, either relative or absolute
+        #[arg(value_name = "worktree")]
+        path: PathBuf
+    }
+}
+
 impl Command
 {
+    pub fn command_name(&self) -> &'static str
+    {
+        match self
+        {
+            Self::Clone { .. } => "clone",
+            Self::Init { .. } => "init",
+            Self::Add { .. } => "add",
+            Self::Mv { .. } => "mv",
+            Self::Restore { .. } => "restore",
+            Self::Rm { .. } => "rm",
+            Self::Status => "status",
+            Self::Branch { .. } => "branch",
+            Self::Commit { .. } => "commit",
+            Self::Merge { .. } => "merge",
+            Self::Rebase { .. } => "rebase",
+            Self::Reset { .. } => "reset",
+            Self::Switch { .. } => "switch",
+            Self::Tag { .. } => "tag",
+            Self::Fetch { .. } => "fetch",
+            Self::Pull { .. } => "pull",
+            Self::Push { .. } => "push",
+            Self::Worktree { command } => match command
+            {
+                Some(WorktreeCommand::Add { .. }) => "worktree.add",
+                Some(WorktreeCommand::List) | None => "worktree.list",
+                Some(WorktreeCommand::Move { .. }) => "worktree.move",
+                Some(WorktreeCommand::Remove { .. }) => "worktree.remove"
+            },
+            Self::Foreach { .. } => "foreach"
+        }
+    }
+
+    pub fn flag_names(&self) -> Vec<&'static str>
+    {
+        let mut flags = Vec::new();
+
+        match self
+        {
+            Self::Add { force, all, chmod, .. } =>
+            {
+                push_if(&mut flags, *force, "force");
+                push_if(&mut flags, *all, "all");
+                push_if(&mut flags, chmod.is_some(), "chmod");
+            }
+            Self::Restore { worktree, staged, .. } =>
+            {
+                push_if(&mut flags, *worktree, "worktree");
+                push_if(&mut flags, *staged, "staged");
+            }
+            Self::Rm { recursive, force, dry_run, cached, .. } =>
+            {
+                push_if(&mut flags, *recursive, "recursive");
+                push_if(&mut flags, *force, "force");
+                push_if(&mut flags, *dry_run, "dry_run");
+                push_if(&mut flags, *cached, "cached");
+            }
+            Self::Branch { delete, force_delete, force, .. } =>
+            {
+                push_if(&mut flags, *delete, "delete");
+                push_if(&mut flags, *force_delete, "force_delete");
+                push_if(&mut flags, *force, "force");
+            }
+            Self::Commit { .. } => flags.push("message"),
+            Self::Reset { soft, mixed, hard, merge, keep, .. } =>
+            {
+                push_if(&mut flags, *soft, "soft");
+                push_if(&mut flags, *mixed, "mixed");
+                push_if(&mut flags, *hard, "hard");
+                push_if(&mut flags, *merge, "merge");
+                push_if(&mut flags, *keep, "keep");
+            }
+            Self::Switch { create, .. } =>
+                push_if(&mut flags, *create, "create"),
+            Self::Tag { delete, .. } => push_if(&mut flags, *delete, "delete"),
+            Self::Worktree { command } => match command
+            {
+                Some(WorktreeCommand::Add { branch, .. }) =>
+                    push_if(&mut flags, branch.is_some(), "branch"),
+                Some(WorktreeCommand::List) | None =>
+                {}
+                Some(WorktreeCommand::Move { force, .. }) =>
+                    push_if(&mut flags, *force > 0, "force"),
+                Some(WorktreeCommand::Remove {
+                    force,
+                    delete,
+                    force_delete,
+                    ..
+                }) =>
+                {
+                    push_if(&mut flags, *force > 0, "force");
+                    push_if(&mut flags, *delete, "delete");
+                    push_if(&mut flags, *force_delete, "force_delete");
+                }
+            },
+            Self::Foreach { quiet, .. } => push_if(&mut flags, *quiet, "quiet"),
+            Self::Clone { .. }
+            | Self::Init { .. }
+            | Self::Mv { .. }
+            | Self::Status
+            | Self::Merge { .. }
+            | Self::Rebase { .. }
+            | Self::Fetch { .. }
+            | Self::Pull { .. }
+            | Self::Push { .. } =>
+            {}
+        }
+
+        flags
+    }
+
     pub fn run(self, context: &CliContext) -> Result<()>
     {
         let working_dir = &context.working_dir;
@@ -486,5 +596,13 @@ impl Command
             Command::Foreach { quiet, command } =>
                 foreach::foreach(working_dir, quiet, &command),
         }
+    }
+}
+
+fn push_if(flags: &mut Vec<&'static str>, condition: bool, flag: &'static str)
+{
+    if condition
+    {
+        flags.push(flag);
     }
 }

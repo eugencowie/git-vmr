@@ -75,7 +75,7 @@ fn query_with_axoupdater() -> Result<Option<String>>
 mod tests
 {
     use super::*;
-    use crate::config::{Core, Frequency, Updates};
+    use crate::config::{Analytics, Core, Frequency, Updates};
     use crate::state::GlobalState;
     use anyhow::bail;
     use std::cell::Cell;
@@ -98,7 +98,8 @@ mod tests
             working_dir: PathBuf::new(),
             global_config: GlobalConfig {
                 core: Core::default(),
-                updates: Updates { check_frequency: frequency }
+                updates: Updates { check_frequency: frequency },
+                analytics: Analytics::default()
             },
             global_state: state
         };
