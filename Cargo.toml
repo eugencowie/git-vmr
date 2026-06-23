@@ -51,6 +51,7 @@ install-path = "CARGO_HOME"
 install-updater = false
 source-tarball = false
 bin-aliases.git-vmr = ["vv"]
+allow-dirty = ["ci"]
 
 [[bench]]
 name = "real_repos"
