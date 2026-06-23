@@ -35,7 +35,7 @@ Subprocess timing best matches the requested full command wall time.
 
 ### Decision: Keep fixtures under `target/bench-fixtures` by default
 
-The default fixture root will be inside the ignored `target/` tree, for example `target/bench-fixtures/status-50`. The benchmark may support an override such as `GIT_VMR_BENCH_FIXTURE_DIR` for users who want the clones elsewhere.
+The default fixture root will be inside the ignored `target/` tree, for example `target/bench-fixtures/status-50`. The benchmark may support an override such as `GITVMR_BENCH_FIXTURE_DIR` for users who want the clones elsewhere.
 
 Alternatives considered:
 - **Repository-local fixture directory**: easier to find, but risks accidental source control churn and pollutes the workspace.

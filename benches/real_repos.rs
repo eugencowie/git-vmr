@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use std::{env, fs, io};
 
-const FIXTURE_ENV_VAR: &str = "GIT_VMR_BENCH_FIXTURE_DIR";
+const FIXTURE_ENV_VAR: &str = "GITVMR_BENCH_FIXTURE_DIR";
 const DEFAULT_FIXTURE_DIR: &str = "target/bench-fixtures/real-repos";
 
 #[derive(Debug)]

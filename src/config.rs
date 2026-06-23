@@ -64,7 +64,7 @@ impl GlobalConfig
     {
         // Resolve config root directory
         let config_root = config_dir
-            .or_else(|| env::var_os("GIT_VMR_CONFIG_DIR").map(PathBuf::from))
+            .or_else(|| env::var_os("GITVMR_CONFIG_DIR").map(PathBuf::from))
             .or_else(dirs::config_dir)
             .context("failed to resolve user config directory")?;
 
