@@ -123,7 +123,7 @@ impl GlobalState
     {
         // Resolve state root directory
         let state_root = state_dir
-            .or_else(|| env::var_os("GIT_VMR_STATE_DIR").map(PathBuf::from))
+            .or_else(|| env::var_os("GITVMR_STATE_DIR").map(PathBuf::from))
             .or_else(dirs::state_dir)
             .or_else(dirs::data_local_dir)
             .context("failed to resolve user state directory")?;

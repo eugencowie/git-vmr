@@ -8,7 +8,7 @@ The global file must not change the meaning or lifecycle of `.gitvmr/config`. Co
 
 **Goals:**
 - Introduce a user-level `git-vmr/config.toml` global config file under the platform config directory.
-- Support `GIT_VMR_CONFIG_DIR` for tests and controlled environments.
+- Support `GITVMR_CONFIG_DIR` for tests and controlled environments.
 - Fail fast when an existing global config file cannot be parsed.
 - Treat a missing global config file as default configuration.
 - Route command dispatch through a shared CLI context that carries the invoked command name, effective working directory, and global config access.
@@ -23,7 +23,7 @@ The global file must not change the meaning or lifecycle of `.gitvmr/config`. Co
 
 1. Resolve the global config path with a platform directory helper.
 
-   The implementation will use a standard platform config directory dependency to locate the user config root, then append `git-vmr/config.toml`. This keeps behavior aligned with OS conventions instead of hard-coding home-directory paths. `GIT_VMR_CONFIG_DIR` will override the config root so tests can avoid reading a developer's real config.
+   The implementation will use a standard platform config directory dependency to locate the user config root, then append `git-vmr/config.toml`. This keeps behavior aligned with OS conventions instead of hard-coding home-directory paths. `GITVMR_CONFIG_DIR` will override the config root so tests can avoid reading a developer's real config.
 
    Alternative considered: store global config beside `.gitvmr/config`. That would not support settings shared across virtual monorepos and would blur repository-local metadata with user-level preferences.
 
@@ -49,5 +49,5 @@ The global file must not change the meaning or lifecycle of `.gitvmr/config`. Co
 
 - User has a malformed global config file → Fail fast with a parse error before running any subcommand, and cover the behavior with an integration test.
 - Platform config directory cannot be resolved → Return a startup error that identifies the config directory resolution failure.
-- Tests accidentally read a developer's real config → Centralize integration test command creation so every test command sets `GIT_VMR_CONFIG_DIR` to an isolated temporary root.
+- Tests accidentally read a developer's real config → Centralize integration test command creation so every test command sets `GITVMR_CONFIG_DIR` to an isolated temporary root.
 - New dependency expands the lockfile → Keep the dependency limited to platform config path resolution and avoid pulling in broader configuration frameworks.

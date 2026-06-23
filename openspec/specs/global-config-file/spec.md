@@ -11,7 +11,7 @@ The CLI SHALL resolve the global configuration file as `git-vmr/config.toml` und
 - **THEN** the global configuration path SHALL be `/home/user/.config/git-vmr/config.toml`
 
 #### Scenario: Config directory override is provided
-- **WHEN** `GIT_VMR_CONFIG_DIR` is set to `/tmp/git-vmr-config`
+- **WHEN** `GITVMR_CONFIG_DIR` is set to `/tmp/git-vmr-config`
 - **THEN** the global configuration path SHALL be `/tmp/git-vmr-config/git-vmr/config.toml`
 
 ### Requirement: Load missing global config as defaults

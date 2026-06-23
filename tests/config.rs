@@ -17,7 +17,7 @@ fn malformed_global_config_fails_before_subcommand_runs()
 
     git_vmr()
         .current_dir(tmp.path())
-        .env("GIT_VMR_CONFIG_DIR", &config_dir)
+        .env("GITVMR_CONFIG_DIR", &config_dir)
         .arg("status")
         .assert()
         .failure()

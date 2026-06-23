@@ -5,7 +5,7 @@ git-vmr needs a user-level configuration file so future runtime features can rea
 ## What Changes
 
 - Add a user-level global configuration file at the platform config directory under `git-vmr/config.toml`.
-- Allow tests and controlled environments to override the config root with `GIT_VMR_CONFIG_DIR`.
+- Allow tests and controlled environments to override the config root with `GITVMR_CONFIG_DIR`.
 - Load the global configuration during CLI startup and fail before command execution if the file exists but cannot be parsed.
 - Treat a missing global configuration file as default configuration.
 - Keep repository-local `.gitvmr/config` behavior unchanged for `git vmr init` and VMR metadata.

@@ -23,8 +23,8 @@ pub fn git_vmr() -> Command
     let mut command =
         Command::cargo_bin("git-vmr").expect("failed to find git-vmr binary");
     command
-        .env("GIT_VMR_CONFIG_DIR", config_dir)
-        .env("GIT_VMR_STATE_DIR", state_dir);
+        .env("GITVMR_CONFIG_DIR", config_dir)
+        .env("GITVMR_STATE_DIR", state_dir);
     command
 }
 
