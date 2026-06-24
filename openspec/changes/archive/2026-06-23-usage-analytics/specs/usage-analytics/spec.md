@@ -24,19 +24,27 @@ The CLI SHALL read usage analytics configuration from the user-level global conf
 - **THEN** usage analytics SHALL be enabled
 
 ### Requirement: Command completion events
-The CLI SHALL attempt to record a single `command_finished` usage analytics event after each parsed command invocation that reaches command dispatch. The event SHALL be attempted for commands that complete successfully and for commands that return an error after dispatch. The CLI SHALL NOT attempt usage analytics for clap help output, clap version output, clap parse errors, global configuration load failures, global state load failures, or CLI context construction failures.
+When usage analytics are enabled, the CLI SHALL attempt to record a single `command_finished` usage analytics event after each parsed command invocation that reaches command dispatch. The event SHALL be attempted for commands that complete successfully and for commands that return an error after dispatch. The CLI SHALL NOT attempt usage analytics for clap help output, clap version output, clap parse errors, global configuration load failures, global state load failures, CLI context construction failures, or dispatched commands when usage analytics are disabled.
 
 #### Scenario: Successful dispatched command records event
 - **WHEN** user runs `git-vmr status`
+- **AND** usage analytics are enabled
 - **AND** the command reaches dispatch and completes successfully
 - **THEN** the CLI SHALL attempt one `command_finished` analytics event
 - **AND** the event property `success` SHALL be `true`
 
 #### Scenario: Failed dispatched command records event
 - **WHEN** user runs `git-vmr status`
+- **AND** usage analytics are enabled
 - **AND** the command reaches dispatch and returns an error
 - **THEN** the CLI SHALL attempt one `command_finished` analytics event
 - **AND** the event property `success` SHALL be `false`
+
+#### Scenario: Disabled analytics skips dispatched command event
+- **WHEN** user runs `git-vmr status`
+- **AND** usage analytics are disabled
+- **AND** the command reaches dispatch and completes successfully
+- **THEN** the CLI SHALL NOT attempt a usage analytics event
 
 #### Scenario: Version output does not record event
 - **WHEN** user runs `git-vmr --version`
@@ -99,5 +107,5 @@ The project documentation SHALL disclose that usage analytics are enabled by def
 
 #### Scenario: Documentation lists analytics fields
 - **WHEN** user reads the analytics documentation
-- **THEN** the documentation SHALL list app-authored properties `command_name`, `success`, `duration_ms`, and boolean flag properties such as `force_flag` and `working_dir_global_flag`
+- **THEN** the documentation SHALL list app-authored properties `name`, `success`, `duration_ms`, and boolean flag properties such as `force_flag` and `working_dir_global_flag`
 - **AND** the documentation SHALL list known SDK-authored fields including app version, SDK version, operating system name, operating system version, locale, debug flag, timestamp, and session ID

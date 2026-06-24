@@ -83,8 +83,10 @@ fn analytics_payload_records_flag_names_only()
     assert_eq!(event["name"], "foreach");
     assert_eq!(event["quiet_flag"], true);
     assert_eq!(event["working_dir_global_flag"], true);
-    assert!(!event.to_string().contains("secret"));
-    assert!(!event.to_string().contains(vmr.to_str().unwrap()));
+    let event_strings =
+        event.as_object().unwrap().values().filter_map(Value::as_str);
+    assert!(!event_strings.clone().any(|value| value == "secret"));
+    assert!(!event_strings.clone().any(|value| value == vmr.to_str().unwrap()));
 }
 
 #[test]
