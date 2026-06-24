@@ -102,5 +102,5 @@ The project documentation SHALL disclose that usage analytics are enabled by def
 
 #### Scenario: Documentation lists analytics fields
 - **WHEN** user reads the analytics documentation
-- **THEN** the documentation SHALL list app-authored properties `command_name`, `success`, `duration_ms`, and boolean flag properties such as `force_flag` and `working_dir_global_flag`
+- **THEN** the documentation SHALL list app-authored properties `name`, `success`, `duration_ms`, and boolean flag properties such as `force_flag` and `working_dir_global_flag`
 - **AND** the documentation SHALL list known SDK-authored fields including app version, SDK version, operating system name, operating system version, locale, debug flag, timestamp, and session ID

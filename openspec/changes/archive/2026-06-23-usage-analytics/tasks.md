@@ -13,7 +13,7 @@
 
 ## 3. Analytics Delivery
 
-- [x] 3.1 Add temporary Git dependency on `eugencowie/aptabase-rs`.
+- [x] 3.1 Use the published crates.io `aptabase-rs` dependency.
 - [x] 3.2 Add an internal analytics module that records app-owned events through Aptabase without exposing Aptabase types to command parsing.
 - [x] 3.3 Source the Aptabase app key in a way that missing or invalid keys make analytics no-op quietly.
 - [x] 3.4 Flush one event without polling and wrap delivery in a short outer timeout.
