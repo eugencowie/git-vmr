@@ -82,6 +82,19 @@ These are common git-vmr commands used in various situations:
 
 [docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
 
+## Analytics
+
+To support early development, versions prior to `1.0` have anonymous, privacy-respecting usage analytics powered by [Aptabase](https://aptabase.com) enabled by default. Once version `1.0` is released, analytics will be disabled by default on both new and existing installations unless you have explicitly opted in.
+
+Collected data consists of a single `command_finished` event with `name`, `success`, `duration_ms`, and boolean properties for used flags such as `force_flag`. No flag values, paths, repository names, remotes, branches, commit identifiers, commit messages, shell commands, or error text are collected. The Aptabase SDK annotates each event with the app version, SDK version, operating system name, operating system version, locale, debug flag, timestamp, and session ID.
+
+To opt out, add this to your `~/.config/git-vmr/config.toml`:
+
+```toml
+[analytics]
+enabled = false
+```
+
 ## License
 
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; version 2.

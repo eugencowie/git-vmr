@@ -112,6 +112,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
+      GITVMR_APTABASE_KEY: ${{ secrets.GITVMR_APTABASE_KEY }}
     steps:
       - name: enable windows longpaths
         run: |
@@ -174,6 +175,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
+      GITVMR_APTABASE_KEY: ${{ secrets.GITVMR_APTABASE_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -1,7 +1,9 @@
+mod analytics;
 mod core;
 mod updates;
 
 use crate::cli::APP_NAME;
+pub use analytics::Analytics;
 use anyhow::{Context, Result};
 pub use core::Core;
 use serde::{Deserialize, Serialize};
@@ -26,7 +28,10 @@ pub struct GlobalConfig
     pub core: Core,
 
     /// Software updates
-    pub updates: Updates
+    pub updates: Updates,
+
+    /// Usage analytics
+    pub analytics: Analytics
 }
 
 impl GlobalConfig
@@ -151,6 +156,7 @@ mod tests
             // Assert
             assert_eq!(config.core, Core::default());
             assert_eq!(config.updates, Updates::default());
+            assert_eq!(config.analytics, Analytics::default());
         }
 
         #[test]
@@ -165,7 +171,7 @@ mod tests
             // Assert
             assert_eq!(
                 toml,
-                "[core]\nversion = 0\n\n[updates]\ncheckfrequency = \"1day\"\n"
+                "[core]\nversion = 0\n\n[updates]\ncheckfrequency = \"1day\"\n\n[analytics]\n"
             );
         }
 
@@ -174,13 +180,14 @@ mod tests
         {
             // Act
             let config: GlobalConfig = toml::from_str(
-                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"1 week\""
+                "[core]\nversion = 42\n\n[updates]\ncheckfrequency = \"1 week\"\n\n[analytics]\nenabled = false"
             )
             .unwrap();
 
             // Assert
             assert_eq!(config.core.version, 42);
             assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
+            assert!(!config.analytics.enabled());
         }
 
         #[test]
@@ -192,6 +199,7 @@ mod tests
             // Assert
             assert_eq!(config.core.version, 0);
             assert_eq!(config.updates.check_frequency, Frequency::from_days(1));
+            assert_eq!(config.analytics, Analytics::default());
         }
 
         #[test]
@@ -205,6 +213,25 @@ mod tests
             // Assert
             assert_eq!(config.core, Core::default());
             assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
+            assert_eq!(config.analytics, Analytics::default());
+        }
+
+        #[test]
+        fn from_str_deserializes_enabled_analytics()
+        {
+            let config: GlobalConfig =
+                toml::from_str("[analytics]\nenabled = true").unwrap();
+
+            assert!(config.analytics.enabled());
+        }
+
+        #[test]
+        fn from_str_deserializes_disabled_analytics()
+        {
+            let config: GlobalConfig =
+                toml::from_str("[analytics]\nenabled = false").unwrap();
+
+            assert!(!config.analytics.enabled());
         }
 
         #[test]

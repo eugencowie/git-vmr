@@ -1,13 +1,15 @@
 mod context;
 
+use crate::analytics::CommandEvent;
 use crate::commands::Command;
-use crate::updates;
+use crate::{analytics, updates};
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::Instant;
 
 pub const APP_NAME: &str = "git-vmr";
 
@@ -70,8 +72,34 @@ impl Cli
         let mut context =
             CliContext::new(&self.display_name, &self.working_dir)?;
 
-        // Run command
-        self.command.run(&context)?;
+        if context.global_config.analytics.enabled()
+        {
+            // Prepare analytics event
+            let start = Instant::now();
+            let command = self.command.command_name();
+            let flags = self.command.flag_names();
+            let global_flags = self.global_flag_names();
+
+            // Run command
+            let result = self.command.run(&context);
+
+            // Record analytics event
+            analytics::record(CommandEvent {
+                name: command,
+                success: result.is_ok(),
+                duration_ms: start.elapsed().as_millis(),
+                flags,
+                global_flags
+            });
+
+            // Return early if command fails
+            result?;
+        }
+        else
+        {
+            // Run command
+            self.command.run(&context)?;
+        }
 
         // Check for updates
         if let Some(update) = updates::check(&mut context)
@@ -87,6 +115,15 @@ impl Cli
         }
 
         Ok(())
+    }
+
+    fn global_flag_names(&self) -> Vec<&'static str>
+    {
+        match self.working_dir
+        {
+            Some(_) => vec!["working_dir"],
+            None => vec![]
+        }
     }
 }
 
@@ -170,6 +207,53 @@ mod tests
                 paths
             } if paths == [PathBuf::from("backend/src.rs")]
         ));
+    }
+
+    #[test]
+    fn captures_analytics_metadata_for_value_flags_without_values()
+    {
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "-C",
+            "/tmp",
+            "add",
+            "--chmod=+x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        assert_eq!(cli.global_flag_names(), ["working_dir"]);
+        assert_eq!(cli.command.command_name(), "add");
+        assert_eq!(cli.command.flag_names(), ["chmod"]);
+    }
+
+    #[test]
+    fn captures_analytics_metadata_for_worktree_subcommands()
+    {
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "worktree",
+            "remove",
+            "--force",
+            "--delete",
+            "../feature"
+        ])
+        .unwrap();
+
+        assert_eq!(cli.command.command_name(), "worktree.remove");
+        assert_eq!(cli.command.flag_names(), ["force", "delete"]);
+    }
+
+    #[test]
+    fn captures_analytics_metadata_for_foreach_without_command_value()
+    {
+        let cli = Cli::parse_from([
+            "git-vmr", "foreach", "--quiet", "echo", "secret"
+        ])
+        .unwrap();
+
+        assert_eq!(cli.command.command_name(), "foreach");
+        assert_eq!(cli.command.flag_names(), ["quiet"]);
     }
 
     #[test]
