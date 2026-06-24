@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0
+
+### 🚀 Features
+
+- Add anonymous, privacy-respecting usage analytics ([#61](https://github.com/eugencowie/git-vmr/pull/61))
+
+### ⚙️ Miscellaneous Tasks
+
+- Simplify workspace configuration ([#62](https://github.com/eugencowie/git-vmr/pull/62))
+
 ## 0.9.1
 
 ### 🐛 Bug Fixes
