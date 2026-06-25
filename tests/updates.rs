@@ -63,7 +63,9 @@ fn configured_never_through_global_config_skips_update_check()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
-    assert!(!state_file.exists());
+    let state = fs::read_to_string(state_file)
+        .expect("expected analytics state to be written");
+    assert!(!state.contains("last_check"));
 }
 
 #[test]
@@ -153,7 +155,7 @@ fn syntax_error_in_global_config_fails_before_subcommand_runs()
 }
 
 #[test]
-fn failed_subcommand_does_not_trigger_update_check()
+fn failed_subcommand_still_runs_update_check()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let config_dir = tmp.path().join("config");
@@ -170,7 +172,10 @@ fn failed_subcommand_does_not_trigger_update_check()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("fatal: not a virtual monorepo"));
 
-    assert!(!state_file.exists());
+    let state = fs::read_to_string(state_file)
+        .expect("expected end-of-run state to be written");
+    assert!(state.contains("[updates]"));
+    assert!(state.contains("last_check"));
 }
 
 #[test]

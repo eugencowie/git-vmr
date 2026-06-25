@@ -1,4 +1,6 @@
+use crate::cli::CliContext;
 use aptabase_rs::Builder;
+use chrono::Utc;
 use serde_json::json;
 use std::env;
 use std::fs::OpenOptions;
@@ -20,8 +22,10 @@ pub struct CommandEvent
 }
 
 /// Record a command event without affecting command behavior.
-pub fn record(event: CommandEvent)
+pub fn record(context: &mut CliContext, event: CommandEvent)
 {
+    let session_id = context.global_state.analytics.eval_session_id(Utc::now());
+
     let mut props = json!({
         "name": event.name,
         "success": event.success,
@@ -66,7 +70,9 @@ pub fn record(event: CommandEvent)
         return;
     };
 
-    let client = Builder::new(app_key, env!("CARGO_PKG_VERSION")).build();
+    let client = Builder::new(app_key, env!("CARGO_PKG_VERSION"))
+        .with_session_id(session_id)
+        .build();
     let _ = client.track_event(EVENT_NAME, Some(props));
     let _ = runtime.block_on(async {
         tokio::time::timeout(FLUSH_TIMEOUT, client.flush()).await

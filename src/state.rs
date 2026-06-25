@@ -1,6 +1,8 @@
+mod analytics;
 mod updates;
 
 use crate::cli::APP_NAME;
+pub use analytics::AnalyticsState;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
@@ -19,6 +21,9 @@ pub struct GlobalState
     /// Whether the state has unsaved changes
     #[serde(skip)]
     dirty: bool,
+
+    /// Usage analytics state
+    pub analytics: AnalyticsState,
 
     /// Software update state
     pub updates: UpdateState
@@ -80,17 +85,17 @@ impl GlobalState
         }
     }
 
-    /// Mark the state as having unsaved changes
-    pub fn mark_dirty(&mut self)
+    /// Whether the state has unsaved changes
+    fn is_dirty(&self) -> bool
     {
-        self.dirty = true;
+        self.dirty || self.analytics.is_dirty() || self.updates.is_dirty()
     }
 
     /// Save global state
     pub fn save(&mut self) -> Result<()>
     {
         // Skip save if state is not dirty
-        if !self.dirty
+        if !self.is_dirty()
         {
             return Ok(());
         }
@@ -115,6 +120,8 @@ impl GlobalState
         fs::write(path, contents)
             .with_context(|| format!("failed to write {}", path.display()))?;
         self.dirty = false;
+        self.analytics.clear_dirty();
+        self.updates.clear_dirty();
         Ok(())
     }
 
@@ -138,7 +145,7 @@ impl PartialEq for GlobalState
     fn eq(&self, other: &Self) -> bool
     {
         // Ignore file path when comparing state
-        self.updates == other.updates
+        self.analytics == other.analytics && self.updates == other.updates
     }
 }
 
@@ -164,6 +171,7 @@ mod tests
         let state = GlobalState::default();
 
         // Assert
+        assert_eq!(state.analytics, AnalyticsState::default());
         assert_eq!(state.updates, UpdateState::default());
     }
 
@@ -171,13 +179,11 @@ mod tests
     fn to_string_serializes_to_toml()
     {
         // Arrange
-        let state = GlobalState {
-            updates: UpdateState {
-                last_check: Some(now()),
-                last_available: Some("1.2.3".to_owned())
-            },
-            ..GlobalState::default()
-        };
+        let mut state = GlobalState::default();
+        state.analytics.session_id = Some("session-1".to_owned());
+        state.analytics.last_activity = Some(now());
+        state.updates.last_check = Some(now());
+        state.updates.last_available = Some("1.2.3".to_owned());
 
         // Act
         let toml = toml::to_string(&state).unwrap();
@@ -185,7 +191,7 @@ mod tests
         // Assert
         assert_eq!(
             toml,
-            "[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\"\n"
+            "[analytics]\nsession_id = \"session-1\"\nlast_activity = \"2026-06-06T12:00:00Z\"\n\n[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\"\n"
         );
     }
 
@@ -194,11 +200,13 @@ mod tests
     {
         // Act
         let state: GlobalState = toml::from_str(
-            "[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\""
+            "[analytics]\nsession_id = \"session-1\"\nlast_activity = \"2026-06-06T12:00:00Z\"\n\n[updates]\nlast_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\""
         )
         .unwrap();
 
         // Assert
+        assert_eq!(state.analytics.session_id, Some("session-1".to_owned()));
+        assert_eq!(state.analytics.last_activity, Some(now()));
         assert_eq!(state.updates.last_check, Some(now()));
         assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
     }
@@ -210,6 +218,7 @@ mod tests
         let state: GlobalState = toml::from_str("").unwrap();
 
         // Assert
+        assert_eq!(state.analytics, AnalyticsState::default());
         assert_eq!(state.updates, UpdateState::default());
     }
 
@@ -220,9 +229,9 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("state").join("state.toml");
         let mut state = GlobalState::load_from_path(&path);
-        state.updates.last_check = Some(now());
-        state.updates.last_available = Some("1.2.3".to_owned());
-        state.mark_dirty();
+        state.analytics.eval_session_id(now());
+        state.updates.set_last_check(Some(now()));
+        state.updates.set_last_available(Some("1.2.3".to_owned()));
 
         // Act
         state.save().unwrap();
@@ -262,7 +271,7 @@ mod tests
 
         // Recovery keeps the path so the invalid file can be replaced
         let mut state = state;
-        state.updates.last_available = Some("1.2.3".to_owned());
+        state.updates.set_last_available(Some("1.2.3".to_owned()));
         state.save().unwrap();
         assert_eq!(
             GlobalState::load_from_path(&path).updates.last_available,

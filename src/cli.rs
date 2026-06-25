@@ -72,7 +72,7 @@ impl Cli
         let mut context =
             CliContext::new(&self.display_name, &self.working_dir)?;
 
-        if context.global_config.analytics.enabled()
+        let result = if context.global_config.analytics.enabled()
         {
             // Prepare analytics event
             let start = Instant::now();
@@ -84,7 +84,7 @@ impl Cli
             let result = self.command.run(&context);
 
             // Record analytics event
-            analytics::record(CommandEvent {
+            analytics::record(&mut context, CommandEvent {
                 name: command,
                 success: result.is_ok(),
                 duration_ms: start.elapsed().as_millis(),
@@ -92,14 +92,13 @@ impl Cli
                 global_flags
             });
 
-            // Return early if command fails
-            result?;
+            result
         }
         else
         {
             // Run command
-            self.command.run(&context)?;
-        }
+            self.command.run(&context)
+        };
 
         // Check for updates
         if let Some(update) = updates::check(&mut context)
@@ -111,10 +110,9 @@ impl Cli
         if let Err(err) = context.save()
         {
             eprintln!("warning: {err:#}");
-            return Ok(());
         }
 
-        Ok(())
+        result
     }
 
     fn global_flag_names(&self) -> Vec<&'static str>

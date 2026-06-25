@@ -27,13 +27,11 @@ fn check_with_query(
         return None;
     }
 
-    context.global_state.updates.last_check = Some(now);
-    context.global_state.mark_dirty();
+    context.global_state.updates.set_last_check(Some(now));
     context.save().ok()?;
 
     let version = query().ok()??;
-    context.global_state.updates.last_available = Some(version.clone());
-    context.global_state.mark_dirty();
+    context.global_state.updates.set_last_available(Some(version.clone()));
 
     Some(format!("A new git-vmr version is available: {version}"))
 }
