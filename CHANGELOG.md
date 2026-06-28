@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.1
+
+### 🐛 Bug Fixes
+
+- Ensure analytics state is persisted to disk ([#64](https://github.com/eugencowie/git-vmr/pull/64))
+- Fix update message formatting ([#66](https://github.com/eugencowie/git-vmr/pull/66))
+- Handle existing inferred worktree branches ([#67](https://github.com/eugencowie/git-vmr/pull/67))
+
+### 🎨 Styling
+
+- Normalise behind-count switch output ([#68](https://github.com/eugencowie/git-vmr/pull/68))
+
 ## 0.10.0
 
 ### 🚀 Features
