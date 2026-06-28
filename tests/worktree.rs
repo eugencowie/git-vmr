@@ -316,6 +316,71 @@ fn worktree_add_creates_child_worktrees_on_inferred_branch()
 }
 
 #[test]
+fn worktree_add_checks_out_existing_local_inferred_branch()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    let backend = vmr.join("backend");
+    let frontend = vmr.join("frontend");
+    git(&backend, ["branch", "wt"]);
+    git(&frontend, ["branch", "wt"]);
+    commit_file_with_content(&backend, "after-wt.txt", "backend\n");
+    commit_file_with_content(&frontend, "after-wt.txt", "frontend\n");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(
+                "Preparing worktree (checking out 'wt') (backend, frontend)"
+            )
+            .or(predicate::str::contains(
+                "Preparing worktree (checking out 'wt') (frontend, backend)"
+            ))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&tmp.path().join("wt/backend")), "wt");
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "wt");
+    assert!(!tmp.path().join("wt/backend/after-wt.txt").exists());
+    assert!(!tmp.path().join("wt/frontend/after-wt.txt").exists());
+}
+
+#[test]
+fn worktree_add_mixes_existing_and_created_inferred_branch()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    let backend = vmr.join("backend");
+    let frontend = vmr.join("frontend");
+    git(&backend, ["branch", "wt"]);
+    commit_file_with_content(&backend, "after-wt.txt", "backend\n");
+    commit_file_with_content(&frontend, "after-wt.txt", "frontend\n");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(
+                "Preparing worktree (checking out 'wt') (backend)"
+            )
+            .and(predicate::str::contains(
+                "Preparing worktree (new branch 'wt') (frontend)"
+            ))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(current_branch(&tmp.path().join("wt/backend")), "wt");
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "wt");
+    assert!(!tmp.path().join("wt/backend/after-wt.txt").exists());
+    assert!(tmp.path().join("wt/frontend/after-wt.txt").exists());
+}
+
+#[test]
 fn worktree_add_explicit_branch_creates_child_worktrees_on_requested_branch()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -450,6 +515,54 @@ fn worktree_add_explicit_branch_creation_failures_are_reported_per_repository()
 }
 
 #[test]
+fn worktree_add_existing_inferred_branch_checked_out_elsewhere_fails()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
+    let backend = vmr.join("backend");
+    git(&backend, ["branch", "wt"]);
+    let occupied = tmp.path().join("occupied-backend");
+    git(&backend, ["worktree", "add", occupied.to_str().unwrap(), "wt"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::contains("fatal: 'wt' is already used by worktree")
+                .and(predicate::str::contains("(backend)"))
+        );
+
+    assert!(!tmp.path().join("wt/backend").exists());
+}
+
+#[test]
+fn worktree_add_bad_inferred_branch_ref_does_not_skip_remaining_repos()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    fs::write(vmr.join("backend/.git/refs/heads/wt"), "not-a-sha\n")
+        .expect("failed to corrupt branch ref");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("frontend"))
+        .stderr(
+            predicate::str::contains("failed to check branch 'wt'")
+                .and(predicate::str::contains("backend"))
+        );
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(tmp.path().join("wt/frontend").exists());
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "wt");
+}
+
+#[test]
 fn worktree_add_explicit_checked_out_branch_fails_without_creating_inferred_branch()
 
 {
@@ -527,6 +640,8 @@ fn worktree_add_best_effort_keeps_successful_child_worktrees()
     commit_file(&frontend, "README.md");
     commit_file(&tools, "README.md");
     git(&backend, ["branch", "wt"]);
+    let occupied = tmp.path().join("occupied-backend");
+    git(&backend, ["worktree", "add", occupied.to_str().unwrap(), "wt"]);
 
     git_vmr()
         .current_dir(&vmr)
@@ -539,7 +654,7 @@ fn worktree_add_best_effort_keeps_successful_child_worktrees()
                 .and(predicate::str::contains("backend").not())
         )
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'wt' already exists (backend)"
+            "fatal: 'wt' is already used by worktree"
         ));
 
     assert!(!tmp.path().join("wt/backend").exists());

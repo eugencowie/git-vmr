@@ -59,11 +59,15 @@ pub fn add(
     let vmr = Vmr::find(working_dir)?;
     let repos = vmr.repos()?;
     let target = resolve_path(working_dir, path).clean();
-    let branch = match (branch, commit_ish)
+    let mode = match (branch, commit_ish)
     {
-        (Some(branch), _) => Some(branch.to_owned()),
-        (None, Some(_)) => None,
-        (None, None) => Some(
+        (Some(branch), commit_ish) => WorktreeAddMode::NewBranch {
+            branch: branch.to_owned(),
+            commit_ish: commit_ish.map(str::to_owned)
+        },
+        (None, Some(commit_ish)) =>
+            WorktreeAddMode::CommitIsh(commit_ish.to_owned()),
+        (None, None) => WorktreeAddMode::InferredBranch(
             target
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
@@ -84,17 +88,41 @@ pub fn add(
     let results = repos
         .par_iter()
         .map(|repo| {
+            let (branch, commit_ish) = match &mode
+            {
+                WorktreeAddMode::NewBranch { branch, commit_ish } =>
+                    (Some(branch.as_str()), commit_ish.as_deref()),
+                WorktreeAddMode::CommitIsh(commit_ish) =>
+                    (None, Some(commit_ish.as_str())),
+                WorktreeAddMode::InferredBranch(branch)
+                    if git::branch_exists(&repo.path, branch)? =>
+                    (None, Some(branch.as_str())),
+                WorktreeAddMode::InferredBranch(branch) =>
+                    (Some(branch.as_str()), None),
+            };
+
             git::worktree_add(
                 &repo.name,
                 &repo.path,
                 &target.join(&repo.name),
-                branch.as_deref(),
+                branch,
                 commit_ish
             )
         })
         .collect::<Vec<_>>();
 
     git::print_results(results)
+}
+
+enum WorktreeAddMode
+{
+    NewBranch
+    {
+        branch: String,
+        commit_ish: Option<String>
+    },
+    CommitIsh(String),
+    InferredBranch(String)
 }
 
 fn aggregate_root(
