@@ -33,7 +33,7 @@ fn check_with_query(
     let version = query().ok()??;
     context.global_state.updates.set_last_available(Some(version.clone()));
 
-    Some(format!("A new git-vmr version is available: {version}"))
+    Some(format!("\nA new git-vmr version is available: {version}"))
 }
 
 /// Query for updates using axoupdater
@@ -180,7 +180,7 @@ mod tests
         // Assert
         assert_eq!(
             notice,
-            Some("A new git-vmr version is available: 1.2.3".to_owned())
+            Some("\nA new git-vmr version is available: 1.2.3".to_owned())
         );
         assert_eq!(calls.get(), 1);
         assert_eq!(
@@ -253,7 +253,7 @@ mod tests
         .unwrap();
 
         // Assert
-        assert_eq!(notice, "A new git-vmr version is available: 1.2.3");
+        assert_eq!(notice, "\nA new git-vmr version is available: 1.2.3");
     }
 
     #[test]
