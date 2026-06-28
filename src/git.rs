@@ -19,7 +19,7 @@ mod worktree;
 
 pub use add::{ChmodMode, add, add_path};
 use anyhow::{Context, Result, bail};
-pub use branch::{branch, branches, delete_branch};
+pub use branch::{branch, branch_exists, branches, delete_branch};
 pub use clone::clone;
 pub use commit::commit;
 pub use diff::is_dirty;
