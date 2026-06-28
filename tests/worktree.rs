@@ -559,6 +559,7 @@ fn worktree_add_bad_inferred_branch_ref_does_not_skip_remaining_repos()
 
     assert!(!tmp.path().join("wt/backend").exists());
     assert!(tmp.path().join("wt/frontend").exists());
+    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "wt");
 }
 
 #[test]
