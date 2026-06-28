@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Switch command reports repository-suffixed results
-For each successful child repository switch, stdout SHALL contain the selected Git success line from Git stdout or Git stderr with repository attribution rendered according to aggregate output grouping. Before grouping successful switch output, the command SHALL normalize Git behind-and-fast-forward advisory lines by removing the variable `by N commit` or `by N commits` phrase. For each failed child repository switch, stderr SHALL contain the first non-empty line from Git stderr, or Git stdout if stderr is empty, with repository attribution rendered according to aggregate output grouping.
+For each successful child repository switch, stdout SHALL contain the selected Git success line from Git stdout or Git stderr with repository attribution rendered according to aggregate output grouping. Before grouping successful switch output, the command SHALL normalize variable commit-count fragments by removing any `by N commit` or `by N commits` phrase from the selected success line. For each failed child repository switch, stderr SHALL contain the first non-empty line from Git stderr, or Git stdout if stderr is empty, with repository attribution rendered according to aggregate output grouping.
 
 #### Scenario: Successful switches print Git summary lines with repository suffixes
 - **WHEN** switching to `feature/auth` succeeds in `backend`
@@ -18,6 +18,13 @@ For each successful child repository switch, stdout SHALL contain the selected G
 - **AND** stdout SHALL identify both `backend` and `frontend` according to aggregate output grouping
 - **AND** stdout SHALL NOT contain `by 20 commits`
 - **AND** stdout SHALL NOT contain `by 6 commits`
+
+#### Scenario: Other successful commit-count advisories are normalized before grouping
+- **WHEN** switching to `develop` succeeds in child repository `backend`
+- **AND** Git prints `Your branch is ahead of 'origin/develop' by 1 commit.`
+- **AND** user runs `git vmr switch develop`
+- **THEN** stdout SHALL contain `Your branch is ahead of 'origin/develop'. (backend)`
+- **AND** stdout SHALL NOT contain `by 1 commit`
 
 #### Scenario: Failed switches are reported with repository suffixes
 - **WHEN** switching to `feature/auth` fails in `backend` with Git error `invalid reference: feature/auth`
