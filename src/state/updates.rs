@@ -9,10 +9,10 @@ pub struct UpdateState
     dirty: bool,
 
     /// Last time an update check was attempted
-    pub last_check: Option<DateTime<Utc>>,
+    last_check: Option<DateTime<Utc>>,
 
     /// Last available version reported by update checks
-    pub last_available: Option<String>
+    last_available: Option<String>
 }
 
 impl UpdateState
@@ -35,10 +35,22 @@ impl UpdateState
         })
     }
 
+    #[allow(unused)]
+    pub fn last_check(&self) -> Option<DateTime<Utc>>
+    {
+        self.last_check
+    }
+
     pub fn set_last_check(&mut self, last_check: Option<DateTime<Utc>>)
     {
         self.last_check = last_check;
         self.dirty = true;
+    }
+
+    #[allow(unused)]
+    pub fn last_available(&self) -> Option<&str>
+    {
+        self.last_available.as_deref()
     }
 
     pub fn set_last_available(&mut self, last_available: Option<String>)

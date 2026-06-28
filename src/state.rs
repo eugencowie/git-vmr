@@ -180,10 +180,10 @@ mod tests
     {
         // Arrange
         let mut state = GlobalState::default();
-        state.analytics.session_id = Some("session-1".to_owned());
-        state.analytics.last_activity = Some(now());
-        state.updates.last_check = Some(now());
-        state.updates.last_available = Some("1.2.3".to_owned());
+        state.analytics.set_session_id(Some("session-1".to_owned()));
+        state.analytics.set_last_activity(Some(now()));
+        state.updates.set_last_check(Some(now()));
+        state.updates.set_last_available(Some("1.2.3".to_owned()));
 
         // Act
         let toml = toml::to_string(&state).unwrap();
@@ -205,10 +205,10 @@ mod tests
         .unwrap();
 
         // Assert
-        assert_eq!(state.analytics.session_id, Some("session-1".to_owned()));
-        assert_eq!(state.analytics.last_activity, Some(now()));
-        assert_eq!(state.updates.last_check, Some(now()));
-        assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
+        assert_eq!(state.analytics.session_id(), Some("session-1"));
+        assert_eq!(state.analytics.last_activity(), Some(now()));
+        assert_eq!(state.updates.last_check(), Some(now()));
+        assert_eq!(state.updates.last_available(), Some("1.2.3"));
     }
 
     #[test]
@@ -274,8 +274,8 @@ mod tests
         state.updates.set_last_available(Some("1.2.3".to_owned()));
         state.save().unwrap();
         assert_eq!(
-            GlobalState::load_from_path(&path).updates.last_available,
-            Some("1.2.3".to_owned())
+            GlobalState::load_from_path(&path).updates.last_available(),
+            Some("1.2.3")
         );
     }
 

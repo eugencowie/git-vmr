@@ -153,7 +153,7 @@ mod tests
         // Act
         let notice = run_with_paths(daily(), &state_file, now(), || {
             let state = GlobalState::load_from_path(&state_file);
-            assert_eq!(state.updates.last_check, Some(now()));
+            assert_eq!(state.updates.last_check(), Some(now()));
             bail!("network failed")
         });
 
@@ -184,8 +184,8 @@ mod tests
         );
         assert_eq!(calls.get(), 1);
         assert_eq!(
-            GlobalState::load_from_path(&state_file).updates.last_available,
-            Some("1.2.3".to_owned())
+            GlobalState::load_from_path(&state_file).updates.last_available(),
+            Some("1.2.3")
         );
     }
 

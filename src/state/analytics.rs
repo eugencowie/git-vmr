@@ -10,10 +10,10 @@ pub struct AnalyticsState
     dirty: bool,
 
     /// Active analytics session ID
-    pub session_id: Option<String>,
+    session_id: Option<String>,
 
     /// Last analytics activity time
-    pub last_activity: Option<DateTime<Utc>>
+    last_activity: Option<DateTime<Utc>>
 }
 
 impl AnalyticsState
@@ -31,10 +31,33 @@ impl AnalyticsState
             _ => aptabase_rs::new_session_id()
         };
 
-        self.session_id = Some(session_id.clone());
-        self.last_activity = Some(now);
-        self.dirty = true;
+        self.set_session_id(Some(session_id.clone()));
+        self.set_last_activity(Some(now));
         session_id
+    }
+
+    #[allow(unused)]
+    pub fn session_id(&self) -> Option<&str>
+    {
+        self.session_id.as_deref()
+    }
+
+    pub fn set_session_id(&mut self, session_id: Option<String>)
+    {
+        self.session_id = session_id;
+        self.dirty = true;
+    }
+
+    #[allow(unused)]
+    pub fn last_activity(&self) -> Option<DateTime<Utc>>
+    {
+        self.last_activity
+    }
+
+    pub fn set_last_activity(&mut self, last_activity: Option<DateTime<Utc>>)
+    {
+        self.last_activity = last_activity;
+        self.dirty = true;
     }
 
     pub fn is_dirty(&self) -> bool
