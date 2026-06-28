@@ -1,6 +1,6 @@
 ## 1. Switch Output Normalization
 
-- [x] 1.1 Add a private helper in `src/git/switch.rs` that removes ` by N commit(s)` from selected successful switch messages.
+- [x] 1.1 Add a private helper in `src/git/switch.rs` that removes `by N commit(s)` from selected successful switch messages.
 - [x] 1.2 Apply the helper only to successful `git vmr switch <branch>` output before creating the success outcome.
 
 ## 2. Tests
