@@ -36,6 +36,17 @@ fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
+fn run_git(command: &mut std::process::Command)
+{
+    let output = command.output().expect("failed to run git");
+    assert!(
+        output.status.success(),
+        "git failed: {}\nstdout: {}",
+        String::from_utf8_lossy(&output.stderr),
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
 fn init_vmr(path: &Path)
 {
     fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
@@ -65,6 +76,51 @@ fn setup_repo_with_initial_commit(path: &Path)
 fn create_branch(path: &Path, branch: &str)
 {
     git(path, ["branch", branch]);
+}
+
+fn setup_repo_behind_upstream(
+    path: &Path,
+    remote: &Path,
+    seed: &Path,
+    behind_count: usize
+)
+{
+    fs::create_dir_all(remote.parent().unwrap())
+        .expect("failed to create remote parent");
+    run_git(
+        std::process::Command::new("git").arg("init").arg("--bare").arg(remote)
+    );
+    run_git(
+        std::process::Command::new("git").arg("clone").arg(remote).arg(seed)
+    );
+    git(seed, ["config", "user.email", "test@example.com"]);
+    git(seed, ["config", "user.name", "Test User"]);
+    write_commit(seed, "README.md", "initial\n", "initial");
+    git(seed, ["branch", "-M", "develop"]);
+    git(seed, ["push", "-u", "origin", "develop"]);
+    git(remote, ["symbolic-ref", "HEAD", "refs/heads/develop"]);
+    run_git(
+        std::process::Command::new("git").arg("clone").arg(remote).arg(path)
+    );
+    git(path, ["switch", "-c", "other"]);
+
+    for index in 1..=behind_count
+    {
+        write_commit(
+            seed,
+            "remote.txt",
+            &format!("remote {index}\n"),
+            &format!("remote {index}")
+        );
+    }
+
+    git(seed, ["push"]);
+    git(path, ["fetch", "origin"]);
+}
+
+fn count_occurrences(haystack: &str, needle: &str) -> usize
+{
+    haystack.match_indices(needle).count()
 }
 
 fn current_branch(path: &Path) -> String
@@ -98,6 +154,49 @@ fn switch_shared_branch_across_multiple_child_repositories()
 
     assert_eq!(current_branch(&backend), "feature/auth");
     assert_eq!(current_branch(&frontend), "feature/auth");
+}
+
+#[test]
+fn switch_normalizes_behind_counts_before_grouping_success_output()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    setup_repo_behind_upstream(
+        &backend,
+        &tmp.path().join("remotes/backend.git"),
+        &tmp.path().join("seeds/backend"),
+        20
+    );
+    setup_repo_behind_upstream(
+        &frontend,
+        &tmp.path().join("remotes/frontend.git"),
+        &tmp.path().join("seeds/frontend"),
+        6
+    );
+
+    let assert = git_vmr()
+        .current_dir(tmp.path())
+        .args(["switch", "develop"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+
+    let stdout = String::from_utf8(assert.get_output().stdout.clone()).unwrap();
+
+    assert_eq!(
+        count_occurrences(
+            &stdout,
+            "Your branch is behind 'origin/develop', and can be fast-forwarded."
+        ),
+        1
+    );
+    assert!(stdout.contains("(backend, frontend)"));
+    assert!(!stdout.contains("by 20 commits"));
+    assert!(!stdout.contains("by 6 commits"));
+    assert_eq!(current_branch(&backend), "develop");
+    assert_eq!(current_branch(&frontend), "develop");
 }
 
 #[test]
