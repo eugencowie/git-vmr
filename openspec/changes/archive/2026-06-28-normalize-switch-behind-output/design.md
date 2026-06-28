@@ -11,7 +11,7 @@ For repositories behind the same upstream by different amounts, Git emits messag
 - Group equivalent `git switch` behind-and-fast-forward advisories across repositories with different behind counts.
 - Preserve the upstream branch name and Git's fast-forward wording.
 - Keep normalization local to successful switch messages.
-- Avoid new dependencies.
+- Use a focused regex-based normalization for the variable behind-count phrase.
 
 **Non-Goals:**
 
@@ -43,7 +43,7 @@ Render them as:
 Your branch is behind '<upstream>', and can be fast-forwarded.
 ```
 
-The implementation can use standard-library string checks and splitting; no regex dependency is needed. If the message does not exactly match the expected shape, return it unchanged.
+The implementation uses a compiled `regex::Regex` to strip ` by \d+ commits?` from selected successful switch messages. This keeps normalization local to `git::switch` while preserving the upstream branch name and Git's fast-forward wording.
 
 Alternative considered: replace the number with a placeholder such as `by N commits`. Removing the phrase reads cleaner and matches the requested output merge.
 
