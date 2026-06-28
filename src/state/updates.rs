@@ -2,14 +2,17 @@ use crate::config::Frequency;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateState
 {
+    #[serde(skip)]
+    dirty: bool,
+
     /// Last time an update check was attempted
-    pub last_check: Option<DateTime<Utc>>,
+    last_check: Option<DateTime<Utc>>,
 
     /// Last available version reported by update checks
-    pub last_available: Option<String>
+    last_available: Option<String>
 }
 
 impl UpdateState
@@ -31,7 +34,52 @@ impl UpdateState
                 .is_ok_and(|elapsed| elapsed >= interval)
         })
     }
+
+    #[allow(unused)]
+    pub fn last_check(&self) -> Option<DateTime<Utc>>
+    {
+        self.last_check
+    }
+
+    pub fn set_last_check(&mut self, last_check: Option<DateTime<Utc>>)
+    {
+        self.last_check = last_check;
+        self.dirty = true;
+    }
+
+    #[allow(unused)]
+    pub fn last_available(&self) -> Option<&str>
+    {
+        self.last_available.as_deref()
+    }
+
+    pub fn set_last_available(&mut self, last_available: Option<String>)
+    {
+        self.last_available = last_available;
+        self.dirty = true;
+    }
+
+    pub fn is_dirty(&self) -> bool
+    {
+        self.dirty
+    }
+
+    pub fn clear_dirty(&mut self)
+    {
+        self.dirty = false;
+    }
 }
+
+impl PartialEq for UpdateState
+{
+    fn eq(&self, other: &Self) -> bool
+    {
+        self.last_check == other.last_check
+            && self.last_available == other.last_available
+    }
+}
+
+impl Eq for UpdateState {}
 
 #[cfg(test)]
 mod tests
@@ -64,7 +112,8 @@ mod tests
         // Arrange
         let state = UpdateState {
             last_check: Some(now()),
-            last_available: Some("1.2.3".to_owned())
+            last_available: Some("1.2.3".to_owned()),
+            ..UpdateState::default()
         };
 
         // Act
@@ -113,7 +162,8 @@ mod tests
         // Arrange
         let state = UpdateState {
             last_check: Some(now() - Duration::hours(23)),
-            last_available: None
+            last_available: None,
+            ..UpdateState::default()
         };
 
         // Act
@@ -132,7 +182,8 @@ mod tests
         // Arrange
         let state = UpdateState {
             last_check: Some(now() - Duration::days(31)),
-            last_available: None
+            last_available: None,
+            ..UpdateState::default()
         };
 
         // Act
@@ -164,7 +215,8 @@ mod tests
         // Arrange
         let state = UpdateState {
             last_check: Some(now() + Duration::hours(1)),
-            last_available: None
+            last_available: None,
+            ..UpdateState::default()
         };
 
         // Act

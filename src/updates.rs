@@ -27,13 +27,11 @@ fn check_with_query(
         return None;
     }
 
-    context.global_state.updates.last_check = Some(now);
-    context.global_state.mark_dirty();
+    context.global_state.updates.set_last_check(Some(now));
     context.save().ok()?;
 
     let version = query().ok()??;
-    context.global_state.updates.last_available = Some(version.clone());
-    context.global_state.mark_dirty();
+    context.global_state.updates.set_last_available(Some(version.clone()));
 
     Some(format!("A new git-vmr version is available: {version}"))
 }
@@ -155,7 +153,7 @@ mod tests
         // Act
         let notice = run_with_paths(daily(), &state_file, now(), || {
             let state = GlobalState::load_from_path(&state_file);
-            assert_eq!(state.updates.last_check, Some(now()));
+            assert_eq!(state.updates.last_check(), Some(now()));
             bail!("network failed")
         });
 
@@ -186,8 +184,8 @@ mod tests
         );
         assert_eq!(calls.get(), 1);
         assert_eq!(
-            GlobalState::load_from_path(&state_file).updates.last_available,
-            Some("1.2.3".to_owned())
+            GlobalState::load_from_path(&state_file).updates.last_available(),
+            Some("1.2.3")
         );
     }
 
