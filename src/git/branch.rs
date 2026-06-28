@@ -43,8 +43,19 @@ pub fn delete_branch(
 pub fn branch_exists(repo_path: &Path, branch_name: &str) -> Result<bool>
 {
     let ref_name = format!("refs/heads/{branch_name}");
-    let output = git_output(repo_path, ["show-ref", "--verify", &ref_name])?;
-    Ok(output.status.success())
+    let output = git_output(repo_path, ["show-ref", "--exists", &ref_name])?;
+
+    match output.status.code()
+    {
+        Some(0) => Ok(true),
+        Some(2) => Ok(false),
+        _ => bail!(
+            "fatal: failed to check branch '{}' in '{}': {}",
+            branch_name,
+            repo_path.display(),
+            first_non_empty_line(&output.stderr, "git show-ref failed")
+        )
+    }
 }
 
 pub fn branches(repo: &Repo) -> Result<Option<(String, RepoBranches)>>

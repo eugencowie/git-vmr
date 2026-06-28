@@ -539,6 +539,29 @@ fn worktree_add_existing_inferred_branch_checked_out_elsewhere_fails()
 }
 
 #[test]
+fn worktree_add_bad_inferred_branch_ref_does_not_skip_remaining_repos()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = init_vmr_with_repos(tmp.path(), &["backend", "frontend"]);
+    fs::write(vmr.join("backend/.git/refs/heads/wt"), "not-a-sha\n")
+        .expect("failed to corrupt branch ref");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["worktree", "add", "../wt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("frontend"))
+        .stderr(
+            predicate::str::contains("failed to check branch 'wt'")
+                .and(predicate::str::contains("backend"))
+        );
+
+    assert!(!tmp.path().join("wt/backend").exists());
+    assert!(tmp.path().join("wt/frontend").exists());
+}
+
+#[test]
 fn worktree_add_explicit_checked_out_branch_fails_without_creating_inferred_branch()
 
 {

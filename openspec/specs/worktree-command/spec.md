@@ -21,7 +21,7 @@ The `git vmr worktree add <path> [<commit-ish>]` command SHALL discover the VMR 
 - **AND** the command SHALL NOT create `../wt/docs`
 
 ### Requirement: Worktree add infers aggregate branch when commit-ish is omitted
-When `<commit-ish>` is omitted and `-b <new-branch>` is not provided, `git vmr worktree add <path>` SHALL derive an inferred aggregate branch name from the basename of the aggregate target path. For each child repository, the command SHALL check out the existing local branch with that inferred name when it exists, and SHALL create a new branch with that inferred name when it does not exist locally.
+When `<commit-ish>` is omitted and `-b <new-branch>` is not provided, `git vmr worktree add <path>` SHALL derive an inferred aggregate branch name from the basename of the aggregate target path. For each child repository, the command SHALL check out the existing local branch with that inferred name when it exists, and SHALL create a new branch with that inferred name when it does not exist locally. If inferred-branch handling fails for one child repository, the command SHALL continue attempting the remaining child repositories.
 
 #### Scenario: Omitted commit-ish creates same branch in every child worktree when absent
 - **WHEN** a VMR contains child Git repositories `backend` and `frontend`
@@ -51,10 +51,12 @@ When `<commit-ish>` is omitted and `-b <new-branch>` is not provided, `git vmr w
 - **AND** the command SHALL exit successfully when both Git worktree additions succeed
 
 #### Scenario: Existing inferred branch checked out elsewhere fails through Git
-- **WHEN** a VMR contains child Git repository `backend`
+- **WHEN** a VMR contains child Git repositories `backend` and `frontend`
 - **AND** local branch `wt` is already checked out in another worktree for `backend`
+- **AND** worktree addition can succeed in `frontend`
 - **AND** user runs `git vmr worktree add ../wt`
 - **THEN** the command SHALL attempt to check out existing local branch `wt` for `backend`
+- **AND** the command SHALL attempt inferred-branch worktree addition for `frontend`
 - **AND** the command SHALL exit with a non-zero status
 - **AND** stderr SHALL contain Git's checked-out branch failure for `backend`
 
