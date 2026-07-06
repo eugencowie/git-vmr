@@ -12,6 +12,7 @@ mod rebase;
 mod reset;
 mod restore;
 mod rm;
+mod runner;
 mod status;
 mod switch;
 mod tag;
@@ -32,10 +33,11 @@ pub use rebase::rebase;
 pub use reset::{ResetMode, reset};
 pub use restore::restore;
 pub use rm::rm;
+pub use runner::{GitRunner, SubprocessRunner};
 pub use status::status;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
+use std::process::ExitStatus;
 pub use switch::{create, switch};
 pub use tag::{delete_tag, tag, tags};
 pub use worktree::{
@@ -264,21 +266,7 @@ where
     let args =
         args.into_iter().map(|arg| arg.as_ref().to_owned()).collect::<Vec<_>>();
 
-    let output = Command::new("git")
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(repo_path)
-        .args(&args)
-        .output()
-        .with_context(|| {
-            format!("fatal: failed to invoke git for '{}'", repo_path.display())
-        })?;
-
-    Ok(GitOutput {
-        status: output.status,
-        stdout: output.stdout,
-        stderr: output.stderr
-    })
+    SubprocessRunner.run_captured(repo_path, &args)
 }
 
 pub fn git_stdout<I, S>(repo_path: &Path, args: I) -> Result<Vec<u8>>
