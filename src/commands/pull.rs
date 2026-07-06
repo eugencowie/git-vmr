@@ -1,10 +1,12 @@
 use crate::git;
+use crate::git::Git;
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
 pub fn pull(
+    git: &Git,
     working_dir: &Path,
     repository: Option<&str>,
     refspecs: &[String]
@@ -19,7 +21,7 @@ pub fn pull(
     // Pull in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::pull(&repo.name, &repo.path, repository, refspecs))
+        .map(|repo| git.pull(&repo.name, &repo.path, repository, refspecs))
         .collect::<Vec<_>>();
 
     // Print results

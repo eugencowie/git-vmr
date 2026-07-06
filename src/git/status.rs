@@ -1,36 +1,63 @@
-use crate::git::{FileChange, FileEntry, RepoStatus, git_stdout, status_head};
+use crate::git::{FileChange, FileEntry, Git, RepoStatus};
 use crate::vmr::Repo;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-pub fn status(repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
+impl Git
+{
+    pub fn status(&self, repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
+    {
+        let status_output = self
+            .stdout(&repo.path, [
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--branch",
+                "--no-ahead-behind"
+            ])
+            .with_context(|| {
+                format!(
+                    "fatal: failed to read git status for '{}'",
+                    repo.path.display()
+                )
+            })?;
+        let mut records = status_output
+            .split(|byte| *byte == 0)
+            .filter(|record| !record.is_empty());
+
+        let branch_header = records
+            .next()
+            .context("fatal: git status did not return a branch header")?;
+        let (head, initial) = self.status_head(
+            &repo.path,
+            "failed to read git status",
+            branch_header
+        )?;
+
+        let (staged_changes, unstaged_changes, untracked_files) =
+            parse_file_records(records);
+
+        Ok(Some((repo.clone(), RepoStatus {
+            head,
+            initial,
+            staged_changes,
+            unstaged_changes,
+            untracked_files
+        })))
+    }
+}
+
+type FileEntries = (Vec<FileEntry>, Vec<FileEntry>, Vec<FileEntry>);
+
+/// Parses porcelain v1 `-z` file records into staged, unstaged and untracked
+/// entries. Pure: bytes in, entries out.
+fn parse_file_records<'a>(
+    mut records: impl Iterator<Item = &'a [u8]>
+) -> FileEntries
 {
     let mut staged_changes = Vec::new();
     let mut unstaged_changes = Vec::new();
     let mut untracked_files = Vec::new();
-
-    let status_output = git_stdout(&repo.path, [
-        "status",
-        "--porcelain=v1",
-        "-z",
-        "--branch",
-        "--no-ahead-behind"
-    ])
-    .with_context(|| {
-        format!(
-            "fatal: failed to read git status for '{}'",
-            repo.path.display()
-        )
-    })?;
-    let mut records = status_output
-        .split(|byte| *byte == 0)
-        .filter(|record| !record.is_empty());
-
-    let branch_header = records
-        .next()
-        .context("fatal: git status did not return a branch header")?;
-    let (head, initial) =
-        status_head(&repo.path, "failed to read git status", branch_header)?;
 
     while let Some(record) = records.next()
     {
@@ -75,13 +102,7 @@ pub fn status(repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
         }
     }
 
-    Ok(Some((repo.clone(), RepoStatus {
-        head,
-        initial,
-        staged_changes,
-        unstaged_changes,
-        untracked_files
-    })))
+    (staged_changes, unstaged_changes, untracked_files)
 }
 
 fn parse_status_change(status: char) -> Option<FileChange>

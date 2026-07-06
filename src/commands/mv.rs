@@ -1,4 +1,4 @@
-use crate::git;
+use crate::git::Git;
 use crate::vmr::{Repo, Vmr};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn mv(
+    git: &Git,
     working_dir: &Path,
     sources: &[PathBuf],
     destination: &Path
@@ -21,12 +22,12 @@ pub fn mv(
 
     if sources.len() == 1 && sources[0].0 == destination.0
     {
-        git::mv(&sources[0].0.path, &sources[0].1, &destination.1)
+        git.mv(&sources[0].0.path, &sources[0].1, &destination.1)
     }
     else
     {
-        let plan = MovePlan::build(sources, destination)?;
-        execute_plan(plan)
+        let plan = MovePlan::build(git, sources, destination)?;
+        execute_plan(git, plan)
     }
 }
 
@@ -49,6 +50,7 @@ struct MovePlanEntry
 impl MovePlan
 {
     fn build(
+        git: &Git,
         sources: Vec<(Repo, PathBuf)>,
         destination: (Repo, PathBuf)
     ) -> Result<Self>
@@ -73,7 +75,7 @@ impl MovePlan
 
         for (source_repo, source_relative) in sources
         {
-            git::ensure_tracked(&source_repo.path, &source_relative)?;
+            git.ensure_tracked(&source_repo.path, &source_relative)?;
 
             let final_destination_relative = if multi_source
             {
@@ -125,7 +127,7 @@ impl MovePlan
     }
 }
 
-fn execute_plan(plan: MovePlan) -> Result<()>
+fn execute_plan(git: &Git, plan: MovePlan) -> Result<()>
 {
     if plan.multi_source
         && plan
@@ -138,7 +140,7 @@ fn execute_plan(plan: MovePlan) -> Result<()>
             .iter()
             .map(|entry| entry.source_relative.clone())
             .collect::<Vec<_>>();
-        return git::mv_to_directory(
+        return git.mv_to_directory(
             &plan.destination_repo.path,
             &sources,
             &plan.destination_relative
@@ -147,13 +149,13 @@ fn execute_plan(plan: MovePlan) -> Result<()>
 
     for entry in plan.entries
     {
-        mv_between_repos(entry)?;
+        mv_between_repos(git, entry)?;
     }
 
     Ok(())
 }
 
-fn mv_between_repos(entry: MovePlanEntry) -> Result<()>
+fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> Result<()>
 {
     let source_path = entry.source_repo.path.join(&entry.source_relative);
     let destination_path =
@@ -169,14 +171,14 @@ fn mv_between_repos(entry: MovePlanEntry) -> Result<()>
     })?;
 
     // Stage the source deletion and destination addition in their repositories
-    git::add_path(&entry.source_repo.path, &entry.source_relative)
+    git.add_path(&entry.source_repo.path, &entry.source_relative)
         .with_context(|| {
             format!(
                 "fatal: failed to stage source deletion in '{}'",
                 entry.source_repo.path.display()
             )
         })?;
-    git::add_path(
+    git.add_path(
         &entry.destination_repo.path,
         &entry.final_destination_relative
     )

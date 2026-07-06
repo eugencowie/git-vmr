@@ -1,10 +1,11 @@
 use crate::git;
+use crate::git::Git;
 use crate::vmr::Vmr;
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use std::path::Path;
 
-pub fn commit(working_dir: &Path, message: &str) -> Result<()>
+pub fn commit(git: &Git, working_dir: &Path, message: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -15,7 +16,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     // Filter repositories without staged changes
     let dirty_repos = repos
         .par_iter()
-        .filter_map(|repo| match git::is_dirty(&repo.path)
+        .filter_map(|repo| match git.is_dirty(&repo.path)
         {
             Ok(true) => Some(Ok(repo)),
             Ok(false) => None,
@@ -32,7 +33,7 @@ pub fn commit(working_dir: &Path, message: &str) -> Result<()>
     // Commit in each dirty repository
     let results = dirty_repos
         .par_iter()
-        .map(|repo| git::commit(&repo.name, &repo.path, message))
+        .map(|repo| git.commit(&repo.name, &repo.path, message))
         .collect::<Vec<_>>();
 
     // Print results

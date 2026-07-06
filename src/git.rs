@@ -1,49 +1,148 @@
-mod add;
 mod branch;
 mod clone;
-mod commit;
-mod diff;
-mod fetch;
-mod merge;
-mod mv;
-mod pull;
-mod push;
-mod rebase;
-mod reset;
-mod restore;
-mod rm;
+mod ops;
 mod runner;
 mod status;
-mod switch;
-mod tag;
 mod worktree;
 
-pub use add::{ChmodMode, add, add_path};
 use anyhow::{Context, Result, bail};
-pub use branch::{branch, branch_exists, branches, delete_branch};
 pub use clone::clone;
-pub use commit::commit;
-pub use diff::is_dirty;
-pub use fetch::fetch;
-pub use merge::merge;
-pub use mv::{ensure_tracked, mv, mv_to_directory};
-pub use pull::pull;
-pub use push::push;
-pub use rebase::rebase;
-pub use reset::{ResetMode, reset};
-pub use restore::restore;
-pub use rm::rm;
+pub use ops::{ChmodMode, ResetMode};
 pub use runner::{GitRunner, SubprocessRunner};
-pub use status::status;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
-pub use switch::{create, switch};
-pub use tag::{delete_tag, tag, tags};
-pub use worktree::{
-    ChildWorktreeState, worktree_add, worktree_list, worktree_move,
-    worktree_remove
-};
+pub use worktree::ChildWorktreeState;
+
+/// The deep git module: every operation is a method, and every invocation
+/// flows through the [`GitRunner`] seam owned here.
+pub struct Git
+{
+    runner: Box<dyn GitRunner>
+}
+
+impl Git
+{
+    pub fn subprocess() -> Self
+    {
+        Self { runner: Box::new(SubprocessRunner) }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with(runner: impl GitRunner + 'static) -> Self
+    {
+        Self { runner: Box::new(runner) }
+    }
+
+    pub(crate) fn output<I, S>(
+        &self,
+        repo_path: &Path,
+        args: I
+    ) -> Result<GitOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>
+    {
+        let args = args
+            .into_iter()
+            .map(|arg| arg.as_ref().to_owned())
+            .collect::<Vec<_>>();
+
+        self.runner.run_captured(repo_path, &args)
+    }
+
+    pub(crate) fn stdout<I, S>(
+        &self,
+        repo_path: &Path,
+        args: I
+    ) -> Result<Vec<u8>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>
+    {
+        let args = args
+            .into_iter()
+            .map(|arg| arg.as_ref().to_owned())
+            .collect::<Vec<_>>();
+        let args_display = format_git_args(&args);
+        let output = self.runner.run_captured(repo_path, &args)?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "git {} failed for '{}': {}",
+                args_display,
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(output.stdout)
+    }
+
+    pub(crate) fn path_output<I, S, P>(
+        &self,
+        repo_path: &Path,
+        args: I,
+        paths: P
+    ) -> Result<GitOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+        P: IntoIterator,
+        P::Item: AsRef<Path>
+    {
+        let args = args
+            .into_iter()
+            .map(|arg| arg.as_ref().to_owned())
+            .chain(
+                paths
+                    .into_iter()
+                    .map(|path| path.as_ref().as_os_str().to_owned())
+            )
+            .collect::<Vec<_>>();
+        self.output(repo_path, args)
+    }
+
+    pub(crate) fn status_head(
+        &self,
+        repo_path: &Path,
+        context: &str,
+        header: &[u8]
+    ) -> Result<(Head, bool)>
+    {
+        // Decode and validate branch header.
+        let header = String::from_utf8_lossy(header);
+        let header = header
+            .strip_prefix("## ")
+            .context("fatal: git status branch header had unexpected format")?;
+
+        if let Some(branch) = header.strip_prefix("No commits yet on ")
+        {
+            return Ok((Head::Branch(branch.to_owned()), true));
+        }
+
+        if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
+        {
+            let hash = String::from_utf8_lossy(
+                &self
+                    .stdout(repo_path, ["rev-parse", "--short", "HEAD"])
+                    .with_context(|| {
+                        format!(
+                            "fatal: {context} for '{}'",
+                            repo_path.display()
+                        )
+                    })?
+            )
+            .trim()
+            .to_owned();
+            return Ok((Head::Detached(hash), false));
+        }
+
+        let branch = header.split("...").next().unwrap_or(header).to_owned();
+        Ok((Head::Branch(branch), false))
+    }
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Head
@@ -258,61 +357,6 @@ pub(crate) fn command_result(
     }
 }
 
-pub fn git_output<I, S>(repo_path: &Path, args: I) -> Result<GitOutput>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>
-{
-    let args =
-        args.into_iter().map(|arg| arg.as_ref().to_owned()).collect::<Vec<_>>();
-
-    SubprocessRunner.run_captured(repo_path, &args)
-}
-
-pub fn git_stdout<I, S>(repo_path: &Path, args: I) -> Result<Vec<u8>>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>
-{
-    let args =
-        args.into_iter().map(|arg| arg.as_ref().to_owned()).collect::<Vec<_>>();
-    let args_display = format_git_args(&args);
-    let output = git_output(repo_path, args)?;
-
-    if !output.status.success()
-    {
-        bail!(
-            "git {} failed for '{}': {}",
-            args_display,
-            repo_path.display(),
-            stderr(&output)
-        );
-    }
-
-    Ok(output.stdout)
-}
-
-pub(crate) fn git_path_output<I, S, P>(
-    repo_path: &Path,
-    args: I,
-    paths: P
-) -> Result<GitOutput>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-    P: IntoIterator,
-    P::Item: AsRef<Path>
-{
-    let args = args
-        .into_iter()
-        .map(|arg| arg.as_ref().to_owned())
-        .chain(
-            paths.into_iter().map(|path| path.as_ref().as_os_str().to_owned())
-        )
-        .collect::<Vec<_>>();
-    git_output(repo_path, args)
-}
-
 pub(crate) fn stderr(output: &GitOutput) -> String
 {
     String::from_utf8_lossy(&output.stderr).trim().to_owned()
@@ -348,40 +392,6 @@ pub(crate) fn first_non_empty_line_with_fallback(
     {
         primary_line
     }
-}
-
-pub(crate) fn status_head(
-    repo_path: &Path,
-    context: &str,
-    header: &[u8]
-) -> Result<(Head, bool)>
-{
-    // Decode and validate branch header.
-    let header = String::from_utf8_lossy(header);
-    let header = header
-        .strip_prefix("## ")
-        .context("fatal: git status branch header had unexpected format")?;
-
-    if let Some(branch) = header.strip_prefix("No commits yet on ")
-    {
-        return Ok((Head::Branch(branch.to_owned()), true));
-    }
-
-    if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
-    {
-        let hash = String::from_utf8_lossy(
-            &git_stdout(repo_path, ["rev-parse", "--short", "HEAD"])
-                .with_context(|| {
-                    format!("fatal: {context} for '{}'", repo_path.display())
-                })?
-        )
-        .trim()
-        .to_owned();
-        return Ok((Head::Detached(hash), false));
-    }
-
-    let branch = header.split("...").next().unwrap_or(header).to_owned();
-    Ok((Head::Branch(branch), false))
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use crate::git::{self};
+use crate::git::{self, Git};
 use crate::vmr::Vmr;
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-pub fn create(working_dir: &Path, tag_name: &str) -> Result<()>
+pub fn create(git: &Git, working_dir: &Path, tag_name: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -17,14 +17,14 @@ pub fn create(working_dir: &Path, tag_name: &str) -> Result<()>
     // Create tag in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::tag(&repo.name, &repo.path, tag_name))
+        .map(|repo| git.tag(&repo.name, &repo.path, tag_name))
         .collect::<Vec<_>>();
 
     // Print results
     git::print_results(results)
 }
 
-pub fn delete(working_dir: &Path, tag_name: &str) -> Result<()>
+pub fn delete(git: &Git, working_dir: &Path, tag_name: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -35,14 +35,14 @@ pub fn delete(working_dir: &Path, tag_name: &str) -> Result<()>
     // Delete tag in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::delete_tag(&repo.name, &repo.path, tag_name))
+        .map(|repo| git.delete_tag(&repo.name, &repo.path, tag_name))
         .collect::<Vec<_>>();
 
     // Print results
     git::print_results(results)
 }
 
-pub fn tag(working_dir: &Path) -> Result<()>
+pub fn tag(git: &Git, working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -53,7 +53,7 @@ pub fn tag(working_dir: &Path) -> Result<()>
     // Collect tag information from repositories
     let mut tags = repos
         .par_iter()
-        .filter_map(|repo| git::tags(repo).transpose())
+        .filter_map(|repo| git.tags(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Keep repository order deterministic

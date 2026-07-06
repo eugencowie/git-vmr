@@ -1,10 +1,11 @@
 use crate::git;
+use crate::git::Git;
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
-pub fn switch(working_dir: &Path, branch_name: &str) -> Result<()>
+pub fn switch(git: &Git, working_dir: &Path, branch_name: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -15,14 +16,14 @@ pub fn switch(working_dir: &Path, branch_name: &str) -> Result<()>
     // Switch in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::switch(&repo.name, &repo.path, branch_name))
+        .map(|repo| git.switch(&repo.name, &repo.path, branch_name))
         .collect::<Vec<_>>();
 
     // Print results
     git::print_results(results)
 }
 
-pub fn create(working_dir: &Path, branch_name: &str) -> Result<()>
+pub fn create(git: &Git, working_dir: &Path, branch_name: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -33,7 +34,7 @@ pub fn create(working_dir: &Path, branch_name: &str) -> Result<()>
     // Create and switch in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::create(&repo.name, &repo.path, branch_name))
+        .map(|repo| git.create(&repo.name, &repo.path, branch_name))
         .collect::<Vec<_>>();
 
     // Print results

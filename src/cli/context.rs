@@ -1,4 +1,5 @@
 use crate::config::GlobalConfig;
+use crate::git::Git;
 use crate::state::GlobalState;
 use anyhow::{Context, Result, bail};
 use std::env;
@@ -16,7 +17,10 @@ pub struct CliContext
     pub global_config: GlobalConfig,
 
     /// Global runtime state
-    pub global_state: GlobalState
+    pub global_state: GlobalState,
+
+    /// Git operations, running through the subprocess adapter
+    pub git: Git
 }
 
 impl CliContext
@@ -32,7 +36,8 @@ impl CliContext
             display_name: display_name.to_owned(),
             working_dir: Self::resolve_working_dir(working_dir)?,
             global_config: GlobalConfig::load()?,
-            global_state: GlobalState::load()?
+            global_state: GlobalState::load()?,
+            git: Git::subprocess()
         })
     }
 
