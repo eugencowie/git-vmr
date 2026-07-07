@@ -86,6 +86,12 @@ _Avoid_: formatting, displaying, output (for the act of rendering)
 The parenthesised list of child repo names — "(backend, frontend)" — appended to a message or heading that does not apply to every child repo.
 _Avoid_: repo annotation, repo tag
 
+### Analytics
+
+**Event metadata**:
+The record of what was invoked: the dotted command name and the names of flags explicitly given on the command line, derived generically from the CLI definition. Names only, never values; positionals excluded.
+_Avoid_: telemetry payload, event props, flag list
+
 ### Persistence
 
 **FileStore**:
