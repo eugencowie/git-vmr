@@ -6,6 +6,8 @@ mod git;
 mod render;
 mod state;
 mod store;
+#[cfg(test)]
+mod test_support;
 mod updates;
 mod vmr;
 mod workspace;

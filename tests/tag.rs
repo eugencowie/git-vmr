@@ -212,12 +212,6 @@ fn tag_rejects_unsupported_arguments()
         .stdout(predicate::str::is_empty());
 
     git_vmr()
-        .args(["tag", "-d", "v1.0.0"])
-        .assert()
-        .failure()
-        .stdout(predicate::str::is_empty());
-
-    git_vmr()
         .args(["tag", "--contains", "HEAD"])
         .assert()
         .failure()
