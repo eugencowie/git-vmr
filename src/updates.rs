@@ -89,21 +89,24 @@ mod tests
     ) -> Option<String>
     {
         use crate::config::GlobalConfig;
-        use std::path::PathBuf;
 
-        let (state, _) = FileStore::load_or_default(state_file.to_path_buf());
-        let mut context = CliContext {
-            git: crate::git::Git::subprocess(),
-            display_name: "git vmr".to_owned(),
-            working_dir: PathBuf::new(),
-            global_config: FileStore::new(PathBuf::new(), GlobalConfig {
-                core: Core::default(),
-                updates: Updates { check_frequency: frequency },
-                analytics: Analytics::default()
-            }),
-            global_state: state,
-            warnings: vec![]
-        };
+        // Write the desired global config where the context will load it
+        let config_file = state_file.with_file_name("config.toml");
+        FileStore::new(config_file.clone(), GlobalConfig {
+            core: Core::default(),
+            updates: Updates { check_frequency: frequency },
+            analytics: Analytics::default()
+        })
+        .write()
+        .unwrap();
+
+        let mut context = CliContext::new(
+            "git vmr",
+            &None,
+            config_file,
+            state_file.to_path_buf()
+        )
+        .unwrap();
         let notice = check_with_query(&mut context, now, query);
         context.save().ok()?;
         notice
