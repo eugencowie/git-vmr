@@ -74,6 +74,7 @@ impl Vmr
 
     pub fn route_paths(
         &self,
+        repos: &[Repo],
         working_dir: &Path,
         paths: &[PathBuf]
     ) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
@@ -84,9 +85,10 @@ impl Vmr
         for path in paths
         {
             let normalized = resolve_path(working_dir, path).clean();
-            let routed = self.route_path(&normalized).with_context(|| {
-                format!("error: failed to route '{}'", path.display())
-            })?;
+            let routed =
+                self.route_path(repos, &normalized).with_context(|| {
+                    format!("error: failed to route '{}'", path.display())
+                })?;
 
             for (repo_path, repo_relative_path) in routed
             {
@@ -99,6 +101,7 @@ impl Vmr
 
     pub fn route_single_path(
         &self,
+        repos: &[Repo],
         working_dir: &Path,
         path: &Path
     ) -> Result<(Repo, PathBuf)>
@@ -115,7 +118,7 @@ impl Vmr
         }
 
         // Reuse normal child repository ownership checks
-        self.route_path(&normalized)
+        self.route_path(repos, &normalized)
             .with_context(|| {
                 format!("error: failed to route '{}'", path.display())
             })?
@@ -124,21 +127,19 @@ impl Vmr
             .context("error: path did not route to a child repository")
     }
 
-    fn route_path(&self, path: &Path) -> Result<Vec<(Repo, PathBuf)>>
+    fn route_path(
+        &self,
+        repos: &[Repo],
+        path: &Path
+    ) -> Result<Vec<(Repo, PathBuf)>>
     {
         // Expand the aggregate VMR root view across child repositories
         if path == self.path
         {
-            let mut repos = Vec::new();
-
-            for repo in self.repos()?
-            {
-                repos.push((repo, PathBuf::from(".")));
-            }
-
-            // Keep repository order deterministic
-            repos.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
-            return Ok(repos);
+            return Ok(repos
+                .iter()
+                .map(|repo| (repo.clone(), PathBuf::from(".")))
+                .collect());
         }
 
         // Ensure path stays inside the VMR root
@@ -173,14 +174,18 @@ impl Vmr
             );
         }
 
-        // Require explicit paths to be owned by child Git repositories
+        // Require explicit paths to be owned by snapshotted child repositories
         let repo_path = self.path.join(repo_name);
-        let repo = Repo::find(repo_path).with_context(|| {
-            format!(
-                "error: '{}' is not owned by a child Git repository",
-                path.display()
-            )
-        })?;
+        let repo = repos
+            .iter()
+            .find(|repo| repo.path == repo_path)
+            .cloned()
+            .with_context(|| {
+                format!(
+                    "error: '{}' is not owned by a child Git repository",
+                    path.display()
+                )
+            })?;
         // Build path relative to owning repository
         let mut repo_relative_path = PathBuf::new();
         for component in components
@@ -296,7 +301,9 @@ mod tests
         let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed = vmr.route_path(&tmp.path().join("backend")).unwrap();
+        let routed = vmr
+            .route_path(&vmr.repos().unwrap(), &tmp.path().join("backend"))
+            .unwrap();
 
         // Assert
         assert_eq!(routed, vec![(
@@ -313,8 +320,12 @@ mod tests
         let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed =
-            vmr.route_path(&tmp.path().join("backend/src/main.rs")).unwrap();
+        let routed = vmr
+            .route_path(
+                &vmr.repos().unwrap(),
+                &tmp.path().join("backend/src/main.rs")
+            )
+            .unwrap();
 
         // Assert
         assert_eq!(routed, vec![(
@@ -331,7 +342,7 @@ mod tests
         let vmr = Vmr::new(tmp.path());
 
         // Act
-        let routed = vmr.route_path(tmp.path()).unwrap();
+        let routed = vmr.route_path(&vmr.repos().unwrap(), tmp.path()).unwrap();
 
         // Assert
         assert_eq!(routed, vec![
@@ -372,7 +383,10 @@ mod tests
 
         // Act
         let err = vmr
-            .route_path(&tmp.path().join("../outside.txt").clean())
+            .route_path(
+                &vmr.repos().unwrap(),
+                &tmp.path().join("../outside.txt").clean()
+            )
             .expect_err("path should fail");
 
         // Assert
@@ -388,7 +402,10 @@ mod tests
 
         // Act
         let err = vmr
-            .route_path(&tmp.path().join(".gitvmr/config"))
+            .route_path(
+                &vmr.repos().unwrap(),
+                &tmp.path().join(".gitvmr/config")
+            )
             .expect_err("path should fail");
 
         // Assert
@@ -404,7 +421,10 @@ mod tests
 
         // Act
         let err = vmr
-            .route_path(&tmp.path().join("docs/readme.md"))
+            .route_path(
+                &vmr.repos().unwrap(),
+                &tmp.path().join("docs/readme.md")
+            )
             .expect_err("path should fail");
 
         // Assert
@@ -420,7 +440,7 @@ mod tests
 
         // Act
         let err = vmr
-            .route_path(&tmp.path().join("README.md"))
+            .route_path(&vmr.repos().unwrap(), &tmp.path().join("README.md"))
             .expect_err("path should fail");
 
         // Assert
@@ -436,7 +456,7 @@ mod tests
 
         // Act
         let routed = vmr
-            .route_paths(tmp.path(), &[
+            .route_paths(&vmr.repos().unwrap(), tmp.path(), &[
                 PathBuf::from("backend/src/main.rs"),
                 PathBuf::from("backend/lib.rs"),
                 PathBuf::from("frontend/app.rs")
@@ -462,7 +482,11 @@ mod tests
 
         // Act
         let routed = vmr
-            .route_single_path(tmp.path(), Path::new("backend/src/main.rs"))
+            .route_single_path(
+                &vmr.repos().unwrap(),
+                tmp.path(),
+                Path::new("backend/src/main.rs")
+            )
             .expect("path should route");
 
         // Assert
@@ -481,7 +505,11 @@ mod tests
 
         // Act
         let err = vmr
-            .route_single_path(tmp.path(), Path::new("."))
+            .route_single_path(
+                &vmr.repos().unwrap(),
+                tmp.path(),
+                Path::new(".")
+            )
             .expect_err("VMR root should fail");
 
         // Assert

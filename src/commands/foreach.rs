@@ -1,6 +1,5 @@
-use crate::vmr::{Repo, Vmr};
+use crate::workspace::{Repo, Workspace};
 use anyhow::{Result, bail};
-use rayon::prelude::*;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -38,19 +37,17 @@ impl ChildStatus
 }
 
 pub fn foreach(
+    workspace: &Workspace,
     working_dir: &Path,
     quiet: bool,
     command: &[String]
 ) -> Result<()>
 {
-    let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
     let command = command.join(" ");
+    let root = workspace.root();
 
-    let results = repos
-        .par_iter()
-        .map(|repo| run_child(repo, &vmr, working_dir, &command))
-        .collect::<Result<Vec<_>>>()?;
+    let results = workspace
+        .map(|_git, repo| run_child(repo, root, working_dir, &command))?;
 
     render_results(&results, quiet);
 
@@ -76,12 +73,12 @@ pub fn foreach(
 
 fn run_child(
     repo: &Repo,
-    vmr: &Vmr,
+    vmr_root: &Path,
     working_dir: &Path,
     command: &str
 ) -> Result<ChildResult>
 {
-    let sm_path = repo.path.strip_prefix(&vmr.path).unwrap_or(&repo.path);
+    let sm_path = repo.path.strip_prefix(vmr_root).unwrap_or(&repo.path);
     let mut displaypath = pathdiff::diff_paths(&repo.path, working_dir)
         .unwrap_or(repo.path.clone());
     if displaypath.as_os_str().is_empty()
@@ -97,7 +94,7 @@ fn run_child(
         .env("name", &repo.name)
         .env("sm_path", sm_path)
         .env("displaypath", displaypath)
-        .env("toplevel", &vmr.path)
+        .env("toplevel", vmr_root)
         .output()?;
 
     let status = if output.status.success()

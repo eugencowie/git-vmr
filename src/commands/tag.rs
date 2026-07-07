@@ -1,63 +1,28 @@
-use crate::git::{self, Git};
-use crate::vmr::Vmr;
+use crate::workspace::Workspace;
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
-use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
-pub fn create(git: &Git, working_dir: &Path, tag_name: &str) -> Result<()>
+pub fn create(workspace: &Workspace, tag_name: &str) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Create tag in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| git.tag(&repo.name, &repo.path, tag_name))
-        .collect::<Vec<_>>();
-
-    // Print results
-    git::print_results(results)
+    // Create tag in each child repository
+    workspace.run(|git, repo| git.tag(&repo.name, &repo.path, tag_name))
 }
 
-pub fn delete(git: &Git, working_dir: &Path, tag_name: &str) -> Result<()>
+pub fn delete(workspace: &Workspace, tag_name: &str) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Delete tag in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| git.delete_tag(&repo.name, &repo.path, tag_name))
-        .collect::<Vec<_>>();
-
-    // Print results
-    git::print_results(results)
+    // Delete tag in each child repository
+    workspace.run(|git, repo| git.delete_tag(&repo.name, &repo.path, tag_name))
 }
 
-pub fn tag(git: &Git, working_dir: &Path) -> Result<()>
+pub fn tag(workspace: &Workspace) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Collect tag information from repositories
-    let mut tags = repos
-        .par_iter()
-        .filter_map(|repo| git.tags(repo).transpose())
-        .collect::<Result<Vec<_>>>()?;
-
-    // Keep repository order deterministic
-    tags.sort_by(|(a, _), (b, _)| a.cmp(b));
+    // Collect tag information from child repositories, in repo order
+    let tags = workspace
+        .map(|git, repo| git.tags(repo))?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     // Print results
     anstream::print!("{}", render_tags(&tags));
