@@ -1,4 +1,5 @@
 use crate::git::ChmodMode;
+use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ pub fn add(
     all: bool,
     force: bool,
     chmod: Option<ChmodMode>
-) -> Result<()>
+) -> Result<Rendered>
 {
     // `add -A` with no paths stages the entire VMR
     let scope = if paths.is_empty() && all

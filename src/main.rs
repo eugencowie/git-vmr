@@ -3,6 +3,7 @@ mod cli;
 mod commands;
 mod config;
 mod git;
+mod render;
 mod state;
 mod updates;
 mod vmr;

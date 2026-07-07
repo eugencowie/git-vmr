@@ -1,3 +1,4 @@
+use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
@@ -5,7 +6,7 @@ pub fn fetch(
     workspace: &Workspace,
     repository: Option<&str>,
     refspecs: &[String]
-) -> Result<()>
+) -> Result<Rendered>
 {
     // Fetch in each child repository
     workspace.run(|git, repo| {

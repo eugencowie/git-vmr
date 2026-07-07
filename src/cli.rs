@@ -3,7 +3,7 @@ mod error;
 
 use crate::analytics::CommandEvent;
 use crate::commands::Command;
-use crate::{analytics, updates};
+use crate::{analytics, render, updates};
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
@@ -101,6 +101,9 @@ impl Cli
             // Run command
             self.command.run(&context)
         };
+
+        // Print rendered command output at the single choke point
+        let result = render::emit(result);
 
         // Check for updates
         if let Some(update) = updates::check(&mut context)

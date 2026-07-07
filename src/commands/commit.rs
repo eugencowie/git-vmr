@@ -1,7 +1,8 @@
+use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::{Result, bail};
 
-pub fn commit(workspace: &Workspace, message: &str) -> Result<()>
+pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
 {
     // Filter child repositories without staged changes
     let dirty_repos = workspace

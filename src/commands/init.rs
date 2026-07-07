@@ -1,9 +1,10 @@
+use crate::render::Rendered;
 use crate::vmr::{InitOutcome, Vmr};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::Path;
 
-pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
+pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<Rendered>
 {
     // Resolve init target directory
     let target_dir = match directory
@@ -32,22 +33,17 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
         )
     })?;
 
-    match Vmr::init(&target_dir)?
+    let message = match Vmr::init(&target_dir)?
     {
         InitOutcome::Created =>
-        {
-            println!("Created .gitvmr in {}", target_dir.display());
-        }
-        InitOutcome::Reinitialized =>
-        {
-            println!(
-                "Reinitialized existing virtual monorepo in {}/",
-                target_dir.join(".gitvmr").display()
-            );
-        }
-    }
+            format!("Created .gitvmr in {}\n", target_dir.display()),
+        InitOutcome::Reinitialized => format!(
+            "Reinitialized existing virtual monorepo in {}/\n",
+            target_dir.join(".gitvmr").display()
+        )
+    };
 
-    Ok(())
+    Ok(message.into())
 }
 
 #[cfg(test)]
