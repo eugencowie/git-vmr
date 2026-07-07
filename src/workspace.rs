@@ -1,8 +1,7 @@
 use crate::git::{Git, GitCommandResult, RepoMessage, RepoOutcome};
 use crate::vmr::Vmr;
-pub use crate::vmr::{Repo, resolve_path};
+pub use crate::vmr::{Repo, resolve_target};
 use anyhow::{Result, bail};
-use path_clean::PathClean;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -117,7 +116,7 @@ impl<'a> Workspace<'a>
     /// Whether a user-supplied path resolves to the aggregate path.
     pub fn is_aggregate(&self, working_dir: &Path, path: &Path) -> bool
     {
-        resolve_path(working_dir, path).clean() == self.vmr.path
+        resolve_target(working_dir, path) == self.vmr.path
     }
 
     fn route(

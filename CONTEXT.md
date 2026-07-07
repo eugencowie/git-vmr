@@ -18,6 +18,10 @@ _Avoid_: VMR (when the fixed, opened view is meant), context, session
 A Git repository living directly inside a VMR, operated on as part of the whole.
 _Avoid_: submodule, subrepo, member, project
 
+**VMR root**:
+The directory bearing the `.gitvmr` marker: the main root of a VMR, or a worktree root.
+_Avoid_: boundary, top level
+
 **Working dir**:
 The directory a command is invoked from, or the override given with `-C`. Determines how user-supplied paths are interpreted.
 _Avoid_: cwd, current directory
@@ -29,12 +33,26 @@ Deciding which child repo owns a user-supplied path, and what that path is relat
 _Avoid_: mapping, dispatching, resolving
 
 **Aggregate path**:
-A path that expands to more than one child repo — the VMR root itself, as in `add -A`.
-_Avoid_: root path, wildcard path
+A path that expands to more than one child repo — the VMR root itself, as in `add -A`. "Aggregate" is reserved for this routing sense alone.
+_Avoid_: root path, wildcard path, aggregate worktree (say worktree root)
 
 **Scope**:
 What a path-taking command operates over: explicit paths, or the entire VMR via the aggregate path.
 _Avoid_: target, selection
+
+**Target**:
+A user-supplied path resolved against the working dir and normalized — the only form in which user paths reach the filesystem or routing.
+_Avoid_: raw path, input path
+
+### Worktrees
+
+**Worktree root**:
+A sibling VMR root materialized by `worktree add`, holding one linked child worktree per child repo.
+_Avoid_: aggregate worktree, aggregate directory
+
+**Materialize / dissolve**:
+The worktree-root lifecycle: materializing creates the directory and its marker; dissolving removes the marker and the directory if empty.
+_Avoid_: create/cleanup (for this lifecycle)
 
 ### Running git
 

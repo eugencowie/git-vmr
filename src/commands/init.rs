@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::vmr::{InitOutcome, Vmr};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::Path;
@@ -32,30 +32,20 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
         )
     })?;
 
-    // Construct path to config file
-    let vmr_dir = target_dir.join(".gitvmr");
-    let config_path = vmr_dir.join("config");
-
-    // Check if config file already exists
-    if config_path.is_file()
+    match Vmr::init(&target_dir)?
     {
-        println!(
-            "Reinitialized existing virtual monorepo in {}/",
-            vmr_dir.display()
-        );
-        return Ok(());
+        InitOutcome::Created =>
+        {
+            println!("Created .gitvmr in {}", target_dir.display());
+        }
+        InitOutcome::Reinitialized =>
+        {
+            println!(
+                "Reinitialized existing virtual monorepo in {}/",
+                target_dir.join(".gitvmr").display()
+            );
+        }
     }
-
-    // Create VMR directory
-    fs::create_dir_all(&vmr_dir)
-        .context("fatal: failed to create .gitvmr directory")?;
-
-    // Create config file
-    let config = toml::to_string(&Config::default())
-        .context("fatal: failed to serialize config")?;
-    fs::write(&config_path, config)
-        .context("fatal: failed to write .gitvmr/config")?;
-    println!("Created .gitvmr in {}", target_dir.display());
 
     Ok(())
 }
@@ -64,6 +54,7 @@ pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<()>
 mod tests
 {
     use super::*;
+    use crate::config::Config;
     use std::fs;
 
     #[test]
