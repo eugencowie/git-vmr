@@ -1,28 +1,14 @@
-use crate::git;
-use crate::git::Git;
-use crate::vmr::Vmr;
+use crate::workspace::Workspace;
 use anyhow::{Result, bail};
-use rayon::prelude::*;
-use std::path::Path;
 
-pub fn commit(git: &Git, working_dir: &Path, message: &str) -> Result<()>
+pub fn commit(workspace: &Workspace, message: &str) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Filter repositories without staged changes
-    let dirty_repos = repos
-        .par_iter()
-        .filter_map(|repo| match git.is_dirty(&repo.path)
-        {
-            Ok(true) => Some(Ok(repo)),
-            Ok(false) => None,
-            Err(error) => Some(Err(error))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    // Filter child repositories without staged changes
+    let dirty_repos = workspace
+        .map(|git, repo| Ok(git.is_dirty(&repo.path)?.then(|| repo.clone())))?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     // Check if there are no dirty repositories
     if dirty_repos.is_empty()
@@ -31,11 +17,79 @@ pub fn commit(git: &Git, working_dir: &Path, message: &str) -> Result<()>
     }
 
     // Commit in each dirty repository
-    let results = dirty_repos
-        .par_iter()
-        .map(|repo| git.commit(&repo.name, &repo.path, message))
-        .collect::<Vec<_>>();
+    workspace.run_in(&dirty_repos, |git, repo| {
+        git.commit(&repo.name, &repo.path, message)
+    })
+}
 
-    // Print results
-    git::print_results(results)
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::{Git, ScriptedFake};
+    use std::ffi::OsString;
+    use std::fs;
+    use std::sync::Arc;
+
+    fn vmr_fixture() -> tempfile::TempDir
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir_all(tmp.path().join("backend/.git")).unwrap();
+        fs::create_dir_all(tmp.path().join("frontend/.git")).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn bails_when_no_child_repo_has_staged_changes()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake =
+            ScriptedFake::new().on(["diff", "--cached", "--quiet"], 0, "", "");
+        let git = Git::with(fake);
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let err = commit(&workspace, "message").unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "error: nothing to commit, working tree clean"
+        );
+    }
+
+    #[test]
+    fn commits_in_dirty_child_repos()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = Arc::new(
+            ScriptedFake::new()
+                .on(["diff", "--cached", "--quiet"], 1, "", "")
+                .on(["commit", "-m", "message"], 0, "committed", "")
+        );
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = commit(&workspace, "message");
+
+        // Assert
+        assert!(result.is_ok());
+        let mut commits = fake
+            .calls()
+            .into_iter()
+            .filter(|invocation| {
+                invocation.args.first() == Some(&OsString::from("commit"))
+            })
+            .map(|invocation| invocation.path)
+            .collect::<Vec<_>>();
+        commits.sort();
+        assert_eq!(commits, vec![
+            tmp.path().join("backend"),
+            tmp.path().join("frontend")
+        ]);
+    }
 }

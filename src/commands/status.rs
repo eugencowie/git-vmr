@@ -1,8 +1,7 @@
-use crate::git::{self, FileChange, FileEntry, Git, Head, RepoStatus};
-use crate::vmr::{Repo, Vmr};
+use crate::git::{self, FileChange, FileEntry, Head, RepoStatus};
+use crate::workspace::{Repo, Workspace};
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
-use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -51,22 +50,18 @@ impl StatusStyles
     }
 }
 
-pub fn status(git: &Git, display_name: &str, working_dir: &Path) -> Result<()>
+pub fn status(
+    workspace: &Workspace,
+    display_name: &str,
+    working_dir: &Path
+) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Collect status information from repositories
-    let mut statuses = repos
-        .par_iter()
-        .filter_map(|repo| git.status(repo).transpose())
-        .collect::<Result<Vec<_>>>()?;
-
-    // Keep status order deterministic
-    statuses.sort_by(|(a, _), (b, _)| a.name.cmp(&b.name));
+    // Collect status information from child repositories, in repo order
+    let statuses = workspace
+        .map(|git, repo| git.status(repo))?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     // Render status output
     anstream::print!("{}", render_status(&statuses, display_name, working_dir));
@@ -575,7 +570,9 @@ mod tests
         init_git_repo(&tmp.path().join("backend"));
 
         // Act
-        let result = status(&Git::subprocess(), DISPLAY_NAME, tmp.path());
+        let git = crate::git::Git::subprocess();
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let result = status(&workspace, DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(result.is_ok());
