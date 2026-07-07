@@ -1,11 +1,21 @@
 mod repo;
 
+use crate::config::Config;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 pub use repo::Repo;
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
+
+/// Whether `Vmr::init` created a new VMR root or found an existing one.
+#[derive(Debug, Eq, PartialEq)]
+pub enum InitOutcome
+{
+    Created,
+    Reinitialized
+}
 
 #[derive(Debug)]
 pub struct Vmr
@@ -25,9 +35,7 @@ impl Vmr
         // Search working directory and ancestors
         for dir in working_dir.ancestors()
         {
-            // Check for existence as marker can be directory or file (e.g.
-            // worktree)
-            if dir.join(".gitvmr").exists()
+            if Vmr::is_root(dir)
             {
                 return Ok(Vmr::new(dir));
             }
@@ -37,6 +45,93 @@ impl Vmr
         bail!(
             "fatal: not a virtual monorepo (or any of the parent directories): .gitvmr"
         )
+    }
+
+    /// Whether a directory is a VMR root, of either kind: a main root
+    /// (marker directory) or a worktree root (marker file).
+    pub fn is_root(dir: &Path) -> bool
+    {
+        dir.join(".gitvmr").exists()
+    }
+
+    /// Initializes a main VMR root: a `.gitvmr` marker directory holding
+    /// the default VMR config.
+    pub fn init(target_dir: &Path) -> Result<InitOutcome>
+    {
+        let vmr_dir = target_dir.join(".gitvmr");
+        let config_path = vmr_dir.join("config");
+
+        if config_path.is_file()
+        {
+            return Ok(InitOutcome::Reinitialized);
+        }
+
+        fs::create_dir_all(&vmr_dir)
+            .context("fatal: failed to create .gitvmr directory")?;
+
+        let config = toml::to_string(&Config::default())
+            .context("fatal: failed to serialize config")?;
+        fs::write(&config_path, config)
+            .context("fatal: failed to write .gitvmr/config")?;
+
+        Ok(InitOutcome::Created)
+    }
+
+    /// Materializes a worktree root: the target directory with a `.gitvmr`
+    /// marker file.
+    pub fn create_worktree_root(target: &Path) -> Result<()>
+    {
+        fs::create_dir_all(target).with_context(|| {
+            format!(
+                "fatal: failed to create worktree target '{}'",
+                target.display()
+            )
+        })?;
+
+        fs::write(target.join(".gitvmr"), "").with_context(|| {
+            format!(
+                "fatal: failed to create VMR marker in '{}'",
+                target.display()
+            )
+        })
+    }
+
+    /// Dissolves a worktree root: removes the marker of either kind, then
+    /// the directory itself if it is empty.
+    pub fn remove_worktree_root(target: &Path) -> Result<()>
+    {
+        let marker = target.join(".gitvmr");
+        if marker.exists()
+        {
+            let removal = if marker.is_dir()
+            {
+                fs::remove_dir(&marker)
+            }
+            else
+            {
+                fs::remove_file(&marker)
+            };
+            removal.with_context(|| {
+                format!(
+                    "fatal: failed to remove VMR marker '{}'",
+                    marker.display()
+                )
+            })?;
+        }
+
+        match fs::remove_dir(target)
+        {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) if error.kind() == ErrorKind::DirectoryNotEmpty =>
+                Ok(()),
+            Err(error) => Err(error).with_context(|| {
+                format!(
+                    "fatal: failed to remove empty worktree directory '{}'",
+                    target.display()
+                )
+            })
+        }
     }
 
     pub fn repos(&self) -> Result<Vec<Repo>>
@@ -84,7 +179,7 @@ impl Vmr
         // Resolve and route every path before mutating any repository
         for path in paths
         {
-            let normalized = resolve_path(working_dir, path).clean();
+            let normalized = resolve_target(working_dir, path);
             let routed =
                 self.route_path(repos, &normalized).with_context(|| {
                     format!("error: failed to route '{}'", path.display())
@@ -107,7 +202,7 @@ impl Vmr
     ) -> Result<(Repo, PathBuf)>
     {
         // Resolve one operand without allowing aggregate VMR root expansion
-        let normalized = resolve_path(working_dir, path).clean();
+        let normalized = resolve_target(working_dir, path);
 
         if normalized == self.path
         {
@@ -201,10 +296,20 @@ impl Vmr
     }
 }
 
-pub fn resolve_path(working_dir: &Path, path: &Path) -> PathBuf
+/// Resolves a user-supplied path against the effective working directory
+/// and normalizes it lexically. The only way user paths become filesystem
+/// paths.
+pub fn resolve_target(working_dir: &Path, path: &Path) -> PathBuf
 {
-    // Interpret relative paths against effective working directory
-    if path.is_absolute() { path.to_path_buf() } else { working_dir.join(path) }
+    let resolved = if path.is_absolute()
+    {
+        path.to_path_buf()
+    }
+    else
+    {
+        working_dir.join(path)
+    };
+    resolved.clean()
 }
 
 #[cfg(test)]
@@ -297,16 +402,159 @@ mod tests
     }
 
     #[test]
-    fn resolves_relative_paths_against_working_dir()
+    fn resolves_relative_paths_against_working_dir_and_normalizes()
     {
         // Act
-        let path = resolve_path(
+        let path = resolve_target(
             Path::new("/tmp/vmr/frontend"),
             Path::new("../backend/a.rs")
         );
 
         // Assert
-        assert_eq!(path, PathBuf::from("/tmp/vmr/frontend/../backend/a.rs"));
+        assert_eq!(path, PathBuf::from("/tmp/vmr/backend/a.rs"));
+    }
+
+    #[test]
+    fn resolve_target_keeps_absolute_paths()
+    {
+        // Act
+        let path = resolve_target(
+            Path::new("/tmp/vmr/frontend"),
+            Path::new("/tmp/vmr/backend/../backend/a.rs")
+        );
+
+        // Assert
+        assert_eq!(path, PathBuf::from("/tmp/vmr/backend/a.rs"));
+    }
+
+    #[test]
+    fn is_root_accepts_marker_directory_and_file()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path().join("main");
+        fs::create_dir_all(main_root.join(".gitvmr")).unwrap();
+        let worktree_root = tmp.path().join("worktree");
+        fs::create_dir_all(&worktree_root).unwrap();
+        fs::write(worktree_root.join(".gitvmr"), "").unwrap();
+        let plain = tmp.path().join("plain");
+        fs::create_dir_all(&plain).unwrap();
+
+        // Assert
+        assert!(Vmr::is_root(&main_root));
+        assert!(Vmr::is_root(&worktree_root));
+        assert!(!Vmr::is_root(&plain));
+    }
+
+    #[test]
+    fn init_creates_marker_directory_with_config()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let outcome = Vmr::init(tmp.path()).unwrap();
+
+        // Assert
+        assert_eq!(outcome, InitOutcome::Created);
+        assert!(tmp.path().join(".gitvmr").is_dir());
+        assert!(tmp.path().join(".gitvmr/config").is_file());
+    }
+
+    #[test]
+    fn init_detects_an_existing_root()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        Vmr::init(tmp.path()).unwrap();
+        let config =
+            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
+
+        // Act
+        let outcome = Vmr::init(tmp.path()).unwrap();
+
+        // Assert
+        assert_eq!(outcome, InitOutcome::Reinitialized);
+        assert_eq!(
+            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap(),
+            config
+        );
+    }
+
+    #[test]
+    fn create_worktree_root_materializes_directory_and_marker_file()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("feature");
+
+        // Act
+        Vmr::create_worktree_root(&target).unwrap();
+
+        // Assert
+        assert!(target.is_dir());
+        assert!(target.join(".gitvmr").is_file());
+        assert!(Vmr::is_root(&target));
+    }
+
+    #[test]
+    fn remove_worktree_root_removes_marker_file_and_empty_directory()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("feature");
+        Vmr::create_worktree_root(&target).unwrap();
+
+        // Act
+        Vmr::remove_worktree_root(&target).unwrap();
+
+        // Assert
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn remove_worktree_root_removes_marker_directory()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("feature");
+        fs::create_dir_all(target.join(".gitvmr")).unwrap();
+
+        // Act
+        Vmr::remove_worktree_root(&target).unwrap();
+
+        // Assert
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn remove_worktree_root_keeps_non_empty_directories()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("feature");
+        Vmr::create_worktree_root(&target).unwrap();
+        fs::write(target.join("keep.txt"), "contents").unwrap();
+
+        // Act
+        Vmr::remove_worktree_root(&target).unwrap();
+
+        // Assert
+        assert!(!target.join(".gitvmr").exists());
+        assert!(target.join("keep.txt").exists());
+    }
+
+    #[test]
+    fn remove_worktree_root_tolerates_missing_target()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Act
+        let result = Vmr::remove_worktree_root(&tmp.path().join("missing"));
+
+        // Assert
+        assert!(result.is_ok());
     }
 
     #[test]
