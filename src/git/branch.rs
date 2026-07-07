@@ -148,3 +148,65 @@ impl Git
         Ok(Some((repo.name.clone(), tags)))
     }
 }
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::ScriptedFake;
+    use std::path::PathBuf;
+
+    fn repo() -> Repo
+    {
+        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
+    }
+
+    #[test]
+    fn branches_resolves_detached_head_through_rev_parse_fallback()
+    {
+        // Arrange
+        let git = Git::with(
+            ScriptedFake::new()
+                .on(
+                    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+                    0,
+                    "develop\nmain\n",
+                    ""
+                )
+                .on(["symbolic-ref", "--quiet", "--short", "HEAD"], 1, "", "")
+                .on(["rev-parse", "--short", "HEAD"], 0, "abc1234\n", "")
+        );
+
+        // Act
+        let (name, branches) = git.branches(&repo()).unwrap().unwrap();
+
+        // Assert
+        assert_eq!(name, "backend");
+        assert_eq!(branches.branches, vec!["develop", "main"]);
+        assert!(
+            matches!(&branches.head, Head::Detached(hash) if hash == "abc1234")
+        );
+    }
+
+    #[test]
+    fn branch_exists_maps_show_ref_exit_codes()
+    {
+        for (code, expected) in [(0, true), (2, false)]
+        {
+            // Arrange
+            let git = Git::with(ScriptedFake::new().on(
+                ["show-ref", "--exists", "refs/heads/main"],
+                code,
+                "",
+                ""
+            ));
+
+            // Act
+            let exists =
+                git.branch_exists(Path::new("/vmr/backend"), "main").unwrap();
+
+            // Assert
+            assert_eq!(exists, expected);
+        }
+    }
+}

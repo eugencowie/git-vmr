@@ -6,8 +6,9 @@ mod status;
 mod worktree;
 
 use anyhow::{Context, Result, bail};
-pub use clone::clone;
 pub use ops::{ChmodMode, ResetMode};
+#[cfg(test)]
+pub(crate) use runner::scripted::ScriptedFake;
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -158,7 +159,7 @@ pub struct RepoBranches
     pub head: Head
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileChange
 {
     NewFile,
@@ -169,7 +170,7 @@ pub enum FileChange
     Copied
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileEntry
 {
     pub path: PathBuf,

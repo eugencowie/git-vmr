@@ -18,7 +18,11 @@ fn main() -> ExitCode
     // Run command and handle errors
     if let Err(e) = cli.run()
     {
-        eprintln!("{e:#}");
+        // A silent exit means git already reported the failure on stderr
+        if e.downcast_ref::<commands::clone::SilentExit>().is_none()
+        {
+            eprintln!("{e:#}");
+        }
         return ExitCode::FAILURE;
     }
 

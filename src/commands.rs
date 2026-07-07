@@ -1,6 +1,6 @@
 mod add;
 mod branch;
-mod clone;
+pub mod clone;
 mod commit;
 mod fetch;
 mod foreach;
@@ -487,8 +487,12 @@ impl Command
 
         match self
         {
-            Command::Clone { repository, directory } =>
-                clone::clone(working_dir, &repository, directory.as_deref()),
+            Command::Clone { repository, directory } => clone::clone(
+                &context.git,
+                working_dir,
+                &repository,
+                directory.as_deref()
+            ),
 
             Command::Init { directory } =>
                 init::init(working_dir, directory.as_deref()),

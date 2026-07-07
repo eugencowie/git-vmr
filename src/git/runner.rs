@@ -17,13 +17,6 @@ pub trait GitRunner: Send + Sync
 
     /// Runs git with inherited stdio, for operations that prompt the user or
     /// stream progress. Git reports its own errors on stderr in this mode.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "no caller until clone runs through the seam"
-        )
-    )]
     fn run_interactive(
         &self,
         working_dir: &Path,
@@ -224,6 +217,27 @@ pub(crate) mod scripted
                 args
             );
             Ok(exit_status(status))
+        }
+    }
+
+    impl GitRunner for std::sync::Arc<ScriptedFake>
+    {
+        fn run_captured(
+            &self,
+            repo_path: &Path,
+            args: &[OsString]
+        ) -> Result<GitOutput>
+        {
+            self.as_ref().run_captured(repo_path, args)
+        }
+
+        fn run_interactive(
+            &self,
+            working_dir: &Path,
+            args: &[OsString]
+        ) -> Result<ExitStatus>
+        {
+            self.as_ref().run_interactive(working_dir, args)
         }
     }
 

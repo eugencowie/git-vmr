@@ -781,6 +781,102 @@ mod tests
     }
 
     #[test]
+    fn fetch_with_no_output_is_a_quiet_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(["fetch"], 0, "", ""));
+
+        // Act
+        let outcome =
+            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+
+        // Assert
+        assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn is_dirty_maps_diff_exit_codes()
+    {
+        for (code, expected) in [(0, false), (1, true)]
+        {
+            // Arrange
+            let git = Git::with(ScriptedFake::new().on(
+                ["diff", "--cached", "--quiet"],
+                code,
+                "",
+                ""
+            ));
+
+            // Act
+            let dirty = git.is_dirty(Path::new("/vmr/backend")).unwrap();
+
+            // Assert
+            assert_eq!(dirty, expected);
+        }
+    }
+
+    #[test]
+    fn switch_normalizes_behind_count_in_success_message()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["switch", "develop"],
+            0,
+            "Your branch is behind 'origin/develop' by 3 commits, and can be fast-forwarded.\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .switch("backend", Path::new("/vmr/backend"), "develop")
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(
+            message.message,
+            "Your branch is behind 'origin/develop', and can be fast-forwarded."
+        );
+    }
+
+    #[test]
+    fn rm_reports_stdout_only_for_dry_runs()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["rm", "--dry-run", "--", "old.rs"],
+            0,
+            "rm 'old.rs'\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .rm(
+                "backend",
+                Path::new("/vmr/backend"),
+                &[PathBuf::from("old.rs")],
+                false,
+                false,
+                true,
+                false
+            )
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "rm 'old.rs'");
+    }
+
+    #[test]
     fn commit_reports_first_stdout_line_through_the_seam()
     {
         // Arrange
