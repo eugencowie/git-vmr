@@ -7,9 +7,8 @@ pub use analytics::Analytics;
 use anyhow::{Context, Result};
 pub use core::Core;
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::env;
+use std::path::PathBuf;
 pub use updates::{Frequency, Updates};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,36 +35,8 @@ pub struct GlobalConfig
 
 impl GlobalConfig
 {
-    /// Load global configuration
-    pub fn load() -> Result<Self>
-    {
-        // Resolve config path
-        let config_path = Self::resolve_path(None)?;
-
-        // Load config from path
-        Self::load_from_path(&config_path)
-    }
-
-    /// Load global configuration from path
-    fn load_from_path(path: &Path) -> Result<Self>
-    {
-        // Read and parse config file
-        match fs::read_to_string(path)
-        {
-            Ok(contents) => toml::from_str(&contents)
-                .with_context(|| format!("failed to parse {}", path.display())),
-
-            // Missing global config uses defaults
-            Err(err) if err.kind() == ErrorKind::NotFound =>
-                Ok(Self::default()),
-
-            Err(err) => Err(err)
-                .with_context(|| format!("failed to read {}", path.display()))
-        }
-    }
-
     /// Resolve global configuration file path
-    fn resolve_path(config_dir: Option<PathBuf>) -> Result<PathBuf>
+    pub fn resolve_path(config_dir: Option<PathBuf>) -> Result<PathBuf>
     {
         // Resolve config root directory
         let config_root = config_dir
@@ -232,37 +203,6 @@ mod tests
                 toml::from_str("[analytics]\nenabled = false").unwrap();
 
             assert!(!config.analytics.enabled());
-        }
-
-        #[test]
-        fn load_missing_file_returns_default()
-        {
-            // Arrange
-            let tmp = tempfile::tempdir().unwrap();
-
-            // Act
-            let config =
-                GlobalConfig::load_from_path(&tmp.path().join("missing.toml"))
-                    .unwrap();
-
-            // Assert
-            assert_eq!(config, GlobalConfig::default());
-        }
-
-        #[test]
-        fn load_rejects_malformed_file()
-        {
-            // Arrange
-            let tmp = tempfile::tempdir().unwrap();
-            let path = tmp.path().join("config.toml");
-            fs::write(&path, "[updates]\ncheckfrequency = \"daily\"\n")
-                .unwrap();
-
-            // Act
-            let err = GlobalConfig::load_from_path(&path).unwrap_err();
-
-            // Assert
-            assert!(err.to_string().contains("failed to parse"));
         }
 
         #[test]

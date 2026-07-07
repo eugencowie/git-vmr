@@ -87,3 +87,25 @@ _Avoid_: formatting, displaying, output (for the act of rendering)
 The parenthesised list of child repo names — "(backend, frontend)" — appended
 to a message or heading that does not apply to every child repo.
 _Avoid_: repo annotation, repo tag
+
+### Persistence
+
+**FileStore**:
+The single owner of one persistent TOML file: it holds the file's contents in
+memory, knows the file's path, and is the only thing that reads or writes it.
+_Avoid_: store (unqualified), persistence layer, repository
+
+**Global config**:
+User-level, read-only configuration from the user's config directory. Strict:
+a malformed file is an error, a missing one means defaults.
+_Avoid_: settings
+
+**VMR config**:
+Per-VMR configuration living inside the main root's `.gitvmr` marker
+directory; created with defaults by init and never overwritten by it.
+_Avoid_: local config, repo config
+
+**Global state**:
+User-level mutable bookkeeping (analytics session, update checks) from the
+user's state directory. Forgiving: a malformed file is replaced with defaults.
+_Avoid_: cache, app data

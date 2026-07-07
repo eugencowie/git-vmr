@@ -74,6 +74,12 @@ impl Cli
         let mut context =
             CliContext::new(&self.display_name, &self.working_dir)?;
 
+        // Report context load warnings without failing the command
+        for warning in &context.warnings
+        {
+            eprintln!("warning: {warning}");
+        }
+
         let result = if context.global_config.analytics.enabled()
         {
             // Prepare analytics event

@@ -5,6 +5,7 @@ mod config;
 mod git;
 mod render;
 mod state;
+mod store;
 mod updates;
 mod vmr;
 mod workspace;

@@ -92,7 +92,7 @@ fn invalid_update_state_warns_and_uses_defaults()
         .success()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("warning: failed to parse"))
-        .stderr(predicate::str::contains("using default state"));
+        .stderr(predicate::str::contains("using defaults"));
 
     let state = fs::read_to_string(state_file)
         .expect("expected invalid state to be replaced");

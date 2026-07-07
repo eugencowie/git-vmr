@@ -1,6 +1,7 @@
 use crate::config::GlobalConfig;
 use crate::git::Git;
 use crate::state::GlobalState;
+use crate::store::FileStore;
 use anyhow::{Context, Result, bail};
 use std::env;
 use std::path::PathBuf;
@@ -14,10 +15,13 @@ pub struct CliContext
     pub working_dir: PathBuf,
 
     /// Global configuration
-    pub global_config: GlobalConfig,
+    pub global_config: FileStore<GlobalConfig>,
 
     /// Global runtime state
-    pub global_state: GlobalState,
+    pub global_state: FileStore<GlobalState>,
+
+    /// Warnings raised while loading context data
+    pub warnings: Vec<String>,
 
     /// Git operations adapter
     pub git: Git
@@ -31,12 +35,17 @@ impl CliContext
         working_dir: &Option<PathBuf>
     ) -> Result<Self>
     {
+        let global_config = FileStore::load(GlobalConfig::resolve_path(None)?)?;
+        let (global_state, state_warning) =
+            FileStore::load_or_default(GlobalState::resolve_path(None)?);
+
         // Resolve inputs needed by commands
         Ok(Self {
             display_name: display_name.to_owned(),
             working_dir: Self::resolve_working_dir(working_dir)?,
-            global_config: GlobalConfig::load()?,
-            global_state: GlobalState::load()?,
+            global_config,
+            global_state,
+            warnings: state_warning.into_iter().collect(),
             git: Git::subprocess()
         })
     }
