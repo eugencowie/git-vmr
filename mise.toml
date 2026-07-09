@@ -2,6 +2,7 @@
 actionlint = "latest"
 cargo-binstall = "latest"
 cargo-dist = "latest"
+"cargo:cargo-edit" = "latest"
 "cargo:oranda" = "latest"
 gh = "latest"
 git-cliff = "latest"
