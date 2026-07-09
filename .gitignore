@@ -37,6 +37,7 @@ mise/*.local.toml
 # https://github.com/github/gitignore/blob/main/Global/Agents.gitignore
 #
 
+.agents/
 GEMINI.md
 WARP.md
 CRUSH.md
