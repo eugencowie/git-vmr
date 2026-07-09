@@ -13,7 +13,7 @@ This project uses mise to manage the development environment.
 
 ### Issue tracker
 
-Tickets live as local Markdown files in `docs/specs/`. See `docs/agents/issue-tracker.md`.
+Tickets live as local Markdown files in `openspec/specs/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
