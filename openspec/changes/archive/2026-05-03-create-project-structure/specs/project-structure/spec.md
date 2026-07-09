@@ -32,7 +32,7 @@ The repository SHALL configure local tools and named tasks for formatting,
 linting, testing, and aggregate CI validation through `mise`.
 
 #### Scenario: Run the aggregate local validation task
-- **WHEN** a developer runs `mise run ci`
+- **WHEN** a developer runs `mise run check`
 - **THEN** `mise` runs the formatting check, Clippy validation, and test suite
 
 ### Requirement: Project formatting policy

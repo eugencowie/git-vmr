@@ -13,7 +13,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 Single-context repo:
 
-```
+```text
 /
 ├── CONTEXT.md
 ├── docs/decisions/
@@ -24,7 +24,7 @@ Single-context repo:
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an ticket title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+When your output names a domain concept (in a ticket title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
 
 If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 
