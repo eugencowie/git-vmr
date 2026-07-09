@@ -21,11 +21,11 @@ description = "Run tests"
 run = "cargo test"
 
 [tasks.format]
-description = "Apply formatting"
+description = "Fix formatting issues"
 run = "cargo +nightly fmt"
 
 [tasks.lint]
-description = "Apply linting"
+description = "Fix linting issues"
 run = "cargo clippy --all-targets --fix"
 
 [tasks.check]
