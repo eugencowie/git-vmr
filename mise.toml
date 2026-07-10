@@ -12,18 +12,43 @@ release-plz = "latest"
 rust = "nightly"
 shellcheck = "latest"
 
-[tasks]
-format = "cargo +nightly fmt"
-lint = "cargo clippy --all-targets"
-test = "cargo test"
-changelog = "git cliff --bump"
-release = "release-plz update"
-dist = "dist plan"
-site = ["oranda build", "node .github/scripts/rewrite-install-commands.mjs"]
+[tasks.build]
+description = "Build project"
+run = "cargo build"
+
+[tasks.test]
+description = "Run tests"
+run = "cargo test"
+
+[tasks.format]
+description = "Fix formatting issues"
+run = "cargo +nightly fmt"
+
+[tasks.lint]
+description = "Fix linting issues"
+run = "cargo clippy --all-targets --fix"
+
+[tasks.check]
+description = "Check formatting/linting/tests"
+run = ["cargo +nightly fmt --check", "cargo clippy --all-targets", "cargo test"]
+
+[tasks.changelog]
+description = "Update changelog"
+run = "git cliff --bump"
+
+[tasks.release]
+description = "Perform release process locally"
+run = "release-plz update"
+
+[tasks.dist]
+description = "Plan distribution process"
+run = "dist plan"
+
+[tasks.site]
+description = "Build website"
+run = ["oranda build", "node .github/scripts/rewrite-install-commands.mjs"]
 
 [tasks.serve]
+description = "Build and serve website"
 depends = ["site"]
 run = "oranda serve"
-
-[tasks.ci]
-depends = ["format --check", "lint", "test"]
