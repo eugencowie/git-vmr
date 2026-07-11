@@ -1,6 +1,6 @@
 mod add;
 mod branch;
-pub mod clone;
+mod clone;
 mod commit;
 mod fetch;
 mod foreach;

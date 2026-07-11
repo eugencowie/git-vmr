@@ -7,7 +7,7 @@ mod state;
 mod updates;
 mod vmr;
 
-use cli::Cli;
+use cli::{Cli, SilentError};
 use std::process::ExitCode;
 
 fn main() -> ExitCode
@@ -19,10 +19,11 @@ fn main() -> ExitCode
     if let Err(e) = cli.run()
     {
         // A silent exit means git already reported the failure on stderr
-        if e.downcast_ref::<commands::clone::SilentExit>().is_none()
+        if !e.is::<SilentError>()
         {
             eprintln!("{e:#}");
         }
+
         return ExitCode::FAILURE;
     }
 

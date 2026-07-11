@@ -1,22 +1,7 @@
+use crate::cli::SilentError;
 use crate::git::Git;
 use anyhow::Result;
-use std::fmt;
 use std::path::Path;
-
-/// A failure git has already reported on stderr itself: exit non-zero
-/// without printing a second error line.
-#[derive(Debug)]
-pub struct SilentExit;
-
-impl fmt::Display for SilentExit
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-    {
-        f.write_str("git clone failed")
-    }
-}
-
-impl std::error::Error for SilentExit {}
 
 pub fn clone(
     git: &Git,
@@ -29,7 +14,7 @@ pub fn clone(
 
     if !status.success()
     {
-        return Err(anyhow::Error::new(SilentExit));
+        return Err(SilentError.into());
     }
 
     Ok(())
@@ -97,6 +82,6 @@ mod tests
                 .unwrap_err();
 
         // Assert
-        assert!(error.downcast_ref::<SilentExit>().is_some());
+        assert!(error.is::<SilentError>());
     }
 }

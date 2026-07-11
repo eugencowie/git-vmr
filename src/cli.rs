@@ -1,4 +1,5 @@
 mod context;
+mod error;
 
 use crate::analytics::CommandEvent;
 use crate::commands::Command;
@@ -6,6 +7,7 @@ use crate::{analytics, updates};
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
+pub use error::SilentError;
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
