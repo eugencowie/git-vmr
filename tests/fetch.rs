@@ -172,7 +172,10 @@ fn fetch_forwards_repository_and_refspec_arguments()
         .args(["fetch", "origin", "release:refs/remotes/origin/release"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(
+            predicate::str::contains("From ")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "origin/release"), head(&source, "release"));
@@ -196,7 +199,10 @@ fn fetch_treats_single_positional_argument_as_repository()
         .args(["fetch", "main"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(
+            predicate::str::contains("From ")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "main/master"), head(&source, "master"));
@@ -258,7 +264,7 @@ fn fetch_failure_does_not_stop_successful_repositories()
         .failure()
         .stdout(predicate::str::contains("(frontend)"))
         .stderr(predicate::str::contains(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(backend)\x1b[0m"
+            "fatal: 'origin' does not appear to be a git repository (backend)"
         ));
 
     assert_eq!(
@@ -295,7 +301,7 @@ fn fetch_reports_success_failure_and_failure_order_with_repository_suffixes()
                 .and(predicate::str::contains("(backend)"))
         )
         .stderr(predicate::str::starts_with(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: 'origin' does not appear to be a git repository (alpha, zeta)\n"
         ));
 }
 
@@ -318,7 +324,10 @@ fn fetch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .arg("fetch")
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend, frontend)"))
+        .stdout(
+            predicate::str::contains("From ")
+                .and(predicate::str::contains("(backend, frontend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     write_commit(&source, "README.md", "updated twice\n", "update twice");
@@ -329,7 +338,10 @@ fn fetch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .arg("fetch")
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend, frontend)"))
+        .stdout(
+            predicate::str::contains("From ")
+                .and(predicate::str::contains("(backend, frontend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "origin/master"), head(&source, "master"));

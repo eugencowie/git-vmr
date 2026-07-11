@@ -1,5 +1,5 @@
 use crate::git::{self, FileChange, FileEntry, Head, RepoStatus};
-use crate::render::{CHANGED, STAGED, paint, repo_list_suffix};
+use crate::render::{CHANGED, STAGED, SuffixPolicy, paint, repo_list_suffix};
 use crate::workspace::Repo;
 use anstyle::Style;
 use std::collections::BTreeMap;
@@ -38,27 +38,22 @@ pub fn status(
         }
     }
 
-    let largest_committed_branch = largest_committed_branch(&branch_groups);
-
     // Render branch groups
-    for ((branch, initial), repos) in branch_groups
+    for ((branch, _), repos) in branch_groups
     {
         let repo_names = repos
             .iter()
             .map(|(repo, _)| repo.name.as_str())
             .collect::<Vec<_>>();
-        if !initial && largest_committed_branch == Some(branch)
-        {
-            output.push_str(&format!("On branch {}\n", branch));
-        }
-        else
-        {
-            output.push_str(&format!(
-                "On branch {} {}\n",
-                branch,
-                repo_list_suffix(&repo_names)
-            ));
-        }
+        output.push_str(&format!(
+            "On branch {}{}\n",
+            branch,
+            repo_list_suffix(
+                &repo_names,
+                statuses.len(),
+                SuffixPolicy::Truncated
+            )
+        ));
 
         render_group(&mut output, &repos, display_name, working_dir);
     }
@@ -67,9 +62,13 @@ pub fn status(
     for (repo, hash, status) in detached
     {
         output.push_str(&format!(
-            "HEAD detached at {} {}\n",
+            "HEAD detached at {}{}\n",
             hash,
-            repo_list_suffix(&[repo.name.as_str()])
+            repo_list_suffix(
+                &[repo.name.as_str()],
+                statuses.len(),
+                SuffixPolicy::Truncated
+            )
         ));
         render_group(&mut output, &[(repo, status)], display_name, working_dir);
     }
@@ -80,37 +79,6 @@ pub fn status(
     }
 
     output
-}
-
-fn largest_committed_branch<'a>(
-    branch_groups: &BTreeMap<(&'a str, bool), Vec<(&Repo, &RepoStatus)>>
-) -> Option<&'a str>
-{
-    let mut largest = None;
-    let mut largest_size = 0;
-    let mut tie = false;
-
-    for ((branch, initial), repos) in branch_groups
-    {
-        if *initial
-        {
-            continue;
-        }
-
-        let size = repos.len();
-        if size > largest_size
-        {
-            largest = Some(*branch);
-            largest_size = size;
-            tie = false;
-        }
-        else if size == largest_size
-        {
-            tie = true;
-        }
-    }
-
-    if tie { None } else { largest }
 }
 
 fn render_group(
@@ -316,7 +284,7 @@ mod tests
     }
 
     #[test]
-    fn renders_largest_branch_group_without_repo_names()
+    fn renders_every_partial_branch_group_with_repo_names()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
@@ -333,8 +301,7 @@ mod tests
         let output = status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
-        assert!(output.contains("On branch develop\n"));
-        assert!(!output.contains(
+        assert!(output.contains(
             "On branch develop \u{1b}[90m(backend, docs, frontend)\u{1b}[0m"
         ));
         assert!(output.contains(
@@ -342,6 +309,30 @@ mod tests
         ));
         assert!(
             output.contains("On branch bug-fix \u{1b}[90m(tools)\u{1b}[0m")
+        );
+    }
+
+    #[test]
+    fn truncates_long_branch_group_repo_names()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let statuses = vec![
+            (repo(tmp.path(), "a"), repo_status("develop")),
+            (repo(tmp.path(), "b"), repo_status("develop")),
+            (repo(tmp.path(), "c"), repo_status("develop")),
+            (repo(tmp.path(), "d"), repo_status("develop")),
+            (repo(tmp.path(), "e"), repo_status("develop")),
+            (repo(tmp.path(), "f"), repo_status("bug-fix")),
+        ];
+
+        // Act
+        let output = status(&statuses, DISPLAY_NAME, tmp.path());
+
+        // Assert
+        assert!(
+            output
+                .contains("On branch develop \u{1b}[90m(a, b, c, +2)\u{1b}[0m")
         );
     }
 
@@ -358,10 +349,32 @@ mod tests
         let output = status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
-        assert!(output.contains("HEAD detached at "));
-        assert!(output.contains("a1b2c3d"));
-        assert!(output.contains("\u{1b}[90m(tools)\u{1b}[0m"));
+        assert!(output.contains("HEAD detached at a1b2c3d\n"));
+        assert!(!output.contains("(tools)"));
         assert!(!output.contains("\u{1b}[33m"));
+    }
+
+    #[test]
+    fn renders_detached_head_with_repo_names_when_not_all_repos_detached()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let mut detached_status = repo_status("main");
+        detached_status.head = Head::Detached("a1b2c3d".to_owned());
+        let statuses = vec![
+            (repo(tmp.path(), "backend"), repo_status("main")),
+            (repo(tmp.path(), "tools"), detached_status),
+        ];
+
+        // Act
+        let output = status(&statuses, DISPLAY_NAME, tmp.path());
+
+        // Assert
+        assert!(
+            output.contains(
+                "HEAD detached at a1b2c3d \u{1b}[90m(tools)\u{1b}[0m\n"
+            )
+        );
     }
 
     #[test]
@@ -377,8 +390,8 @@ mod tests
         let output = status(&statuses, DISPLAY_NAME, tmp.path());
 
         // Assert
-        assert!(output.contains("master"));
-        assert!(output.contains("\u{1b}[90m(new-repo)\u{1b}[0m"));
+        assert!(output.contains("On branch master\n"));
+        assert!(!output.contains("(new-repo)"));
         assert!(output.contains("\nNo commits yet\n"));
     }
 
@@ -399,7 +412,8 @@ mod tests
 
         // Assert
         assert!(output.contains(
-            "On branch master\n\nnothing to commit, working tree clean\n\n"
+            "On branch master \u{1b}[90m(committed)\u{1b}[0m\n\n\
+             nothing to commit, working tree clean\n\n"
         ));
         assert!(output.contains(
             "On branch master \u{1b}[90m(new-repo)\u{1b}[0m\n\nNo commits yet\n"

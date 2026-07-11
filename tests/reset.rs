@@ -99,8 +99,7 @@ fn reset_applies_across_multiple_child_repositories_and_skips_non_git_children()
         .success()
         .stdout(
             predicate::str::contains("Unstaged changes after reset:")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -171,8 +170,7 @@ fn reset_without_commit_lets_git_use_default_target()
         .success()
         .stdout(
             predicate::str::contains("HEAD is now at")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -230,7 +228,10 @@ fn reset_delegates_rejected_working_tree_state_to_git()
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("(backend)"));
+        .stderr(
+            predicate::str::contains("error:")
+                .and(predicate::str::contains("(backend)").not())
+        );
 }
 
 #[test]
@@ -278,7 +279,7 @@ fn reset_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .failure()
         .stdout(predicate::str::contains("HEAD is now at").and(predicate::str::contains("(beta)")))
         .stderr(predicate::str::starts_with(
-            "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. (alpha, zeta)\n"
         ));
 }
 
@@ -301,8 +302,7 @@ fn reset_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Unstaged changes after reset:")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
     assert_eq!(head(&backend), backend_target);
@@ -321,8 +321,7 @@ fn reset_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Unstaged changes after reset:")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
     assert_eq!(head(&backend), backend_target);

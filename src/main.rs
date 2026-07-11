@@ -26,7 +26,7 @@ fn main() -> ExitCode
         // A silent error should not be displayed
         if !e.is::<SilentError>()
         {
-            eprintln!("{e:#}");
+            anstream::eprintln!("{e:#}");
         }
 
         return ExitCode::FAILURE;

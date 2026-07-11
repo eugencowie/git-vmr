@@ -116,8 +116,7 @@ fn merge_clean_branch_across_multiple_child_repositories()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -150,7 +149,8 @@ fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("(backend)")
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend)").not())
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -173,7 +173,6 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
     create_mergeable_branch(&tools, "feature/auth");
 
     git_vmr()
-        .env("CLICOLOR_FORCE", "1")
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])
         .assert()
@@ -183,7 +182,7 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "merge: feature/auth - not something we can merge \x1b[90m(frontend)\x1b[0m"
+            "merge: feature/auth - not something we can merge (frontend)"
         ));
 
     assert!(branch_contains_head(&backend, "feature/auth"));
@@ -256,6 +255,7 @@ fn merge_reports_colored_repository_suffixes_and_orders_failures_by_repository_n
     create_mergeable_branch(&beta, "feature/auth");
 
     git_vmr()
+        .env_remove("NO_COLOR")
         .env("CLICOLOR_FORCE", "1")
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])

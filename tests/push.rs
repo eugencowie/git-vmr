@@ -151,7 +151,7 @@ fn push_forwards_repository_and_refspec_arguments()
         .args(["push", "origin", "release:refs/heads/release"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(predicate::str::contains("(backend)").not())
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&remote, "release"), head(&backend, "release"));
@@ -174,7 +174,7 @@ fn push_treats_single_positional_argument_as_repository()
         .args(["push", "main"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(predicate::str::contains("(backend)").not())
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&remote, "master"), head(&backend, "master"));
@@ -219,7 +219,7 @@ fn push_failure_does_not_stop_successful_repositories()
         .failure()
         .stdout(predicate::str::contains("(frontend)"))
         .stderr(predicate::str::contains(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(backend)\x1b[0m"
+            "fatal: 'origin' does not appear to be a git repository (backend)"
         ));
 
     assert_eq!(head(&frontend_remote, "master"), head(&frontend, "master"));
@@ -254,7 +254,7 @@ fn push_reports_success_failure_and_failure_order_with_repository_suffixes()
                 .and(predicate::str::contains("(backend)"))
         )
         .stderr(predicate::str::starts_with(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: 'origin' does not appear to be a git repository (alpha, zeta)\n"
         ));
 }
 
@@ -275,7 +275,10 @@ fn push_delegates_missing_upstream_and_rejected_pushes_to_git_without_rollback()
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("(backend)"));
+        .stderr(
+            predicate::str::contains("upstream")
+                .and(predicate::str::contains("(backend)").not())
+        );
 
     let (frontend_remote, frontend) =
         setup_remote_and_clone(tmp.path(), "frontend", "README.md");

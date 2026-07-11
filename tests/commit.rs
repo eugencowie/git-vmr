@@ -123,7 +123,8 @@ fn commit_skips_non_git_children_and_clean_child_repositories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Update backend (backend)")
+            predicate::str::contains("Update backend")
+                .and(predicate::str::contains("(backend)").not())
                 .and(predicate::str::contains("frontend").not())
                 .and(predicate::str::contains("docs").not())
         )
@@ -148,7 +149,10 @@ fn commit_accepts_short_and_long_message_options_and_requires_one()
         .args(["commit", "-m", "Short message"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Short message (backend)"))
+        .stdout(
+            predicate::str::contains("Short message")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
     assert_eq!(last_commit_subject(&backend), "Short message");
 
@@ -158,7 +162,10 @@ fn commit_accepts_short_and_long_message_options_and_requires_one()
         .args(["commit", "--message", "Long message"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Long message (backend)"))
+        .stdout(
+            predicate::str::contains("Long message")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
     assert_eq!(last_commit_subject(&backend), "Long message");
 
@@ -172,7 +179,7 @@ fn commit_accepts_short_and_long_message_options_and_requires_one()
 }
 
 #[test]
-fn commit_preserves_initial_commit_summary_line_with_repository_suffix()
+fn commit_preserves_initial_commit_summary_line()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path());
@@ -187,7 +194,8 @@ fn commit_preserves_initial_commit_summary_line_with_repository_suffix()
         .success()
         .stdout(
             predicate::str::contains("(root-commit)")
-                .and(predicate::str::contains("Initial import (backend)"))
+                .and(predicate::str::contains("Initial import"))
+                .and(predicate::str::contains("(backend)").not())
         )
         .stderr(predicate::str::is_empty());
 }
@@ -220,9 +228,7 @@ fn commit_partial_failures_still_attempt_later_repositories()
             predicate::str::contains("Implement new feature (frontend)")
                 .and(predicate::str::contains("Implement new feature (tools)"))
         )
-        .stderr(predicate::str::contains(
-            "pre-commit hook declined \x1b[90m(backend)\x1b[0m"
-        ));
+        .stderr(predicate::str::contains("pre-commit hook declined (backend)"));
 
     assert_eq!(last_commit_subject(&frontend), "Implement new feature");
     assert_eq!(last_commit_subject(&tools), "Implement new feature");
@@ -251,8 +257,8 @@ fn commit_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "alpha rejected \x1b[90m(alpha)\x1b[0m\n\
-             zeta rejected \x1b[90m(zeta)\x1b[0m\n"
+            "alpha rejected (alpha)\n\
+             zeta rejected (zeta)\n"
         ));
 }
 
@@ -297,7 +303,10 @@ fn commit_uses_nested_working_dir_and_global_c_option_for_discovery()
         .args(["commit", "-m", "Nested commit"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Nested commit (backend)"))
+        .stdout(
+            predicate::str::contains("Nested commit")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
     assert_eq!(last_commit_subject(&backend), "Nested commit");
 
@@ -308,7 +317,10 @@ fn commit_uses_nested_working_dir_and_global_c_option_for_discovery()
         .args(["commit", "-m", "C option commit"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("C option commit (backend)"))
+        .stdout(
+            predicate::str::contains("C option commit")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
     assert_eq!(last_commit_subject(&backend), "C option commit");
 }

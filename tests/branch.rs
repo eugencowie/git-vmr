@@ -178,9 +178,10 @@ fn branch_reports_detached_head_repositories()
         .arg("branch")
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!(
-            "* (HEAD detached at {hash}) (frontend)"
-        )))
+        .stdout(
+            predicate::str::contains(format!("* (HEAD detached at {hash})"))
+                .and(predicate::str::contains("(frontend)").not())
+        )
         .stderr(predicate::str::is_empty());
 }
 
@@ -275,7 +276,7 @@ fn branch_create_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
+            "fatal: a branch named 'feature/auth' already exists (backend)"
         ));
 
     assert!(branch_exists(&frontend, "feature/auth"));
@@ -283,7 +284,7 @@ fn branch_create_partial_failure_does_not_stop_other_repositories()
 }
 
 #[test]
-fn branch_create_reports_failures_with_repository_suffixes()
+fn branch_create_omits_repository_suffix_when_every_repo_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     fs::create_dir(tmp.path().join(".gitvmr"))
@@ -301,8 +302,9 @@ fn branch_create_reports_failures_with_repository_suffixes()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
+                "fatal: a branch named 'feature/auth' already exists"
             )
+            .and(predicate::str::contains("(backend)").not())
             .and(
                 predicate::str::contains("fatal: failed to create branch")
                     .not()
@@ -317,10 +319,13 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
     fs::create_dir(tmp.path().join(".gitvmr"))
         .expect("failed to create marker");
     let alpha = tmp.path().join("alpha");
+    let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
     init_repo(&alpha);
+    init_repo(&clean);
     init_repo(&zeta);
     commit_file(&alpha, "README.md");
+    commit_file(&clean, "README.md");
     commit_file(&zeta, "README.md");
     git(&alpha, ["branch", "feature/auth"]);
     git(&zeta, ["branch", "feature/auth"]);
@@ -332,7 +337,7 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: a branch named 'feature/auth' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
         ));
 }
 
@@ -358,7 +363,7 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth")
-                .and(predicate::str::contains("(backend, frontend)"))
+                .and(predicate::str::contains("(backend, frontend)").not())
                 .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::is_empty());
@@ -384,7 +389,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "error: the branch 'feature/auth' is not fully merged \x1b[90m(backend)\x1b[0m"
+            "error: the branch 'feature/auth' is not fully merged"
         ));
 
     git_vmr()
@@ -394,7 +399,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains(" (backend)").not())
                 .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::is_empty());
@@ -421,7 +426,7 @@ fn branch_delete_skips_non_git_child_directories()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains(" (backend)").not())
                 .and(predicate::str::contains("(was").not())
                 .and(predicate::str::contains("docs").not())
         )
@@ -461,7 +466,7 @@ fn branch_delete_partial_failure_does_not_stop_other_repositories()
                 .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::contains(
-            "error: the branch 'feature/auth' is not fully merged \x1b[90m(backend)\x1b[0m"
+            "error: the branch 'feature/auth' is not fully merged (backend)"
         ));
 
     assert!(branch_exists(&backend, "feature/auth"));
@@ -491,7 +496,7 @@ fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: branch 'feature/auth' not found \x1b[90m(backend)\x1b[0m"
+                "error: branch 'feature/auth' not found (backend)"
             )
             .and(predicate::str::contains(
                 "error: cannot delete branch 'feature/auth' used by worktree at"
@@ -507,19 +512,22 @@ fn branch_delete_reports_multiple_failures_in_repository_name_order()
     fs::create_dir(tmp.path().join(".gitvmr"))
         .expect("failed to create marker");
     let alpha = tmp.path().join("alpha");
+    let has_branch = tmp.path().join("has-branch");
     let zeta = tmp.path().join("zeta");
     init_repo(&alpha);
+    init_repo(&has_branch);
     init_repo(&zeta);
     commit_file(&alpha, "README.md");
+    commit_file(&has_branch, "README.md");
     commit_file(&zeta, "README.md");
+    git(&has_branch, ["branch", "feature/auth"]);
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["branch", "-d", "feature/auth"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "error: branch 'feature/auth' not found \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "error: branch 'feature/auth' not found (alpha, zeta)\n"
         ));
 }

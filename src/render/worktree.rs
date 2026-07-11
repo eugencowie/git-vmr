@@ -1,5 +1,5 @@
 use crate::git::{self, ChildWorktreeState};
-use crate::render::repo_list_suffix;
+use crate::render::{SuffixPolicy, repo_list_suffix};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -51,15 +51,9 @@ fn render_group(
     for (state, mut repos) in state_groups
     {
         repos.sort();
-        let suffix = if repos == repo_names
-        {
-            String::new()
-        }
-        else
-        {
-            let repo_names: Vec<_> = repos.iter().map(String::as_str).collect();
-            format!(" {}", repo_list_suffix(&repo_names))
-        };
+        let repos = repos.iter().map(String::as_str).collect::<Vec<_>>();
+        let suffix =
+            repo_list_suffix(&repos, repo_names.len(), SuffixPolicy::Truncated);
 
         lines.push(format!("{}{}", state.render(), suffix));
     }
