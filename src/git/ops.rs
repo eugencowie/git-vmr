@@ -10,7 +10,7 @@ use crate::git::{
 use anyhow::{Context, Result, bail};
 use regex::Regex;
 use std::ffi::OsString;
-use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::LazyLock;
@@ -34,9 +34,9 @@ impl ChmodMode
     }
 }
 
-impl fmt::Display for ChmodMode
+impl Display for ChmodMode
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
         f.write_str(self.as_git_value())
     }
@@ -705,7 +705,8 @@ impl Git
             repo_name,
             &output,
             |output| {
-                first_non_empty_line(&output.stdout, "git tag failed").into()
+                first_non_empty_line(&output.stdout, "git tag delete succeeded")
+                    .into()
             },
             |output| first_non_empty_line(&output.stderr, "git tag failed")
         )
@@ -792,6 +793,31 @@ mod tests
 
         // Assert
         assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn delete_tag_with_no_output_reports_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["tag", "-d", "v1.0.0"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .delete_tag("backend", Path::new("/vmr/backend"), "v1.0.0")
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "git tag delete succeeded");
     }
 
     #[test]

@@ -43,7 +43,7 @@ The per-repo result of a git operation: success (with an optional message) or fa
 _Avoid_: result, status, exit
 
 **Result aggregation**:
-Grouping repo outcomes with identical messages so a command reports once per message across many child repos, not once per repo.
+Grouping repo outcomes with identical messages, so a command reports once per message across many child repos, not once per repo.
 _Avoid_: output grouping, deduplication
 
 **Head**:

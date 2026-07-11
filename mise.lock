@@ -54,6 +54,7 @@ url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.20.1/ca
 [tools.cargo-binstall."platforms.linux-x64"]
 checksum = "sha256:f12954bc382e1d0b2df3fbfb217a05d92c25570e4517841e0613499a24f4594e"
 url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.20.1/cargo-binstall-x86_64-unknown-linux-musl.tgz"
+provenance = "github-attestations"
 
 [tools.cargo-binstall."platforms.linux-x64-musl"]
 checksum = "sha256:f12954bc382e1d0b2df3fbfb217a05d92c25570e4517841e0613499a24f4594e"
@@ -243,6 +244,7 @@ url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438408619"
 checksum = "sha256:e0f8af62d0f267d22baa5bcefe6d5dda3a097ccc60de794b759fe03159923244"
 url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-linux-amd64.tar.gz"
 url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438406829"
+provenance = "github-attestations"
 
 [tools.pandoc."platforms.linux-x64-musl"]
 checksum = "sha256:e0f8af62d0f267d22baa5bcefe6d5dda3a097ccc60de794b759fe03159923244"
