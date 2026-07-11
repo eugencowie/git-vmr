@@ -1,4 +1,7 @@
-use crate::git::{Git, GitCommandResult, command_result, first_non_empty_line};
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
+};
+use crate::git::{Git, GitCommandResult};
 use std::path::Path;
 
 impl Git
@@ -14,9 +17,13 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |_| None,
-            |output| first_non_empty_line(&output.stderr, "git tag failed")
+            SuccessReport::Quiet,
+            FailureReport::Line {
+                from: Streams::StderrOnly,
+                fallback: "git tag failed"
+            }
         )
     }
 
@@ -31,12 +38,16 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                first_non_empty_line(&output.stdout, "git tag delete succeeded")
-                    .into()
+            SuccessReport::Line {
+                from: Streams::StdoutOnly,
+                on_empty: OnEmpty::Text("git tag deleted")
             },
-            |output| first_non_empty_line(&output.stderr, "git tag failed")
+            FailureReport::Line {
+                from: Streams::StderrOnly,
+                fallback: "git tag failed"
+            }
         )
     }
 }
@@ -49,20 +60,15 @@ mod tests
     use crate::git::runner::scripted::ScriptedFake;
 
     #[test]
-    fn delete_tag_with_no_output_reports_success()
+    fn delete_tag_with_no_output_reports_the_deleted_fallback()
     {
         // Arrange
-        let git = Git::with(ScriptedFake::new().on(
-            ["tag", "-d", "v1.0.0"],
-            0,
-            "",
-            ""
-        ));
+        let git =
+            Git::with(ScriptedFake::new().on(["tag", "-d", "v1"], 0, "", ""));
 
         // Act
-        let outcome = git
-            .delete_tag("backend", Path::new("/vmr/backend"), "v1.0.0")
-            .unwrap();
+        let outcome =
+            git.delete_tag("backend", Path::new("/vmr/backend"), "v1").unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
@@ -70,6 +76,6 @@ mod tests
         {
             panic!("expected success with message");
         };
-        assert_eq!(message.message, "git tag delete succeeded");
+        assert_eq!(message.message, "git tag deleted");
     }
 }

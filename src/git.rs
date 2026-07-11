@@ -8,6 +8,7 @@ mod mv;
 mod pull;
 mod push;
 mod rebase;
+mod report;
 mod reset;
 mod restore;
 mod rm;
@@ -219,6 +220,26 @@ pub enum RepoOutcome
     Failure(RepoMessage)
 }
 
+impl RepoOutcome
+{
+    /// Applies `map` to the success message, if there is one; failures and
+    /// quiet successes pass through unchanged.
+    pub(crate) fn map_success_message(
+        self,
+        map: impl FnOnce(String) -> String
+    ) -> Self
+    {
+        match self
+        {
+            Self::Success(Some(message)) => Self::Success(Some(RepoMessage {
+                repo: message.repo,
+                message: map(message.message)
+            })),
+            other => other
+        }
+    }
+}
+
 pub type GitCommandResult = Result<RepoOutcome>;
 
 pub(crate) fn git_style_path(path: &Path) -> String
@@ -244,27 +265,6 @@ pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
     RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
 }
 
-pub(crate) fn command_result(
-    repo_name: &str,
-    output: &GitOutput,
-    success_message: impl FnOnce(&GitOutput) -> Option<String>,
-    failure_message: impl FnOnce(&GitOutput) -> String
-) -> GitCommandResult
-{
-    if output.status.success()
-    {
-        Ok(match success_message(output)
-        {
-            Some(message) => crate::git::success_message(repo_name, message),
-            None => quiet_success()
-        })
-    }
-    else
-    {
-        Ok(crate::git::failure_message(repo_name, failure_message(output)))
-    }
-}
-
 pub(crate) fn stderr(output: &GitOutput) -> String
 {
     String::from_utf8_lossy(&output.stderr).trim().to_owned()
@@ -273,33 +273,6 @@ pub(crate) fn stderr(output: &GitOutput) -> String
 fn format_git_args(args: &[OsString]) -> String
 {
     args.iter().map(|arg| arg.to_string_lossy()).collect::<Vec<_>>().join(" ")
-}
-
-pub(crate) fn first_non_empty_line(bytes: &[u8], fallback: &str) -> String
-{
-    let text = String::from_utf8_lossy(bytes);
-    text.lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or(fallback)
-        .to_owned()
-}
-
-pub(crate) fn first_non_empty_line_with_fallback(
-    primary: &[u8],
-    secondary: &[u8],
-    fallback: &str
-) -> String
-{
-    let primary_line = first_non_empty_line(primary, "");
-
-    if primary_line.is_empty()
-    {
-        first_non_empty_line(secondary, fallback)
-    }
-    else
-    {
-        primary_line
-    }
 }
 
 #[cfg(test)]

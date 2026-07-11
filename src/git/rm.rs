@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line, stderr
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -44,28 +45,24 @@ impl Git
         args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
         let output = self.output(repo_path, args)?;
 
+        let success = if dry_run
+        {
+            SuccessReport::Line {
+                from: Streams::StdoutOnly,
+                on_empty: OnEmpty::Quiet
+            }
+        }
+        else
+        {
+            SuccessReport::Quiet
+        };
+
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                if dry_run
-                {
-                    let message = first_non_empty_line(&output.stdout, "");
-
-                    if message.is_empty() { None } else { Some(message) }
-                }
-                else
-                {
-                    None
-                }
-            },
-            |output| {
-                format!(
-                    "git rm failed for '{}': {}",
-                    repo_path.display(),
-                    stderr(output)
-                )
-            }
+            success,
+            FailureReport::Detailed { command: "rm" }
         )
     }
 }

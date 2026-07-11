@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use std::ffi::OsString;
 use std::path::Path;
 
@@ -27,22 +28,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                let message = first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    ""
-                );
-
-                if message.is_empty() { None } else { Some(message) }
+            SuccessReport::Line {
+                from: Streams::StderrThenStdout,
+                on_empty: OnEmpty::Quiet
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git fetch failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git fetch failed"
             }
         )
     }
@@ -67,5 +61,29 @@ mod tests
 
         // Assert
         assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn fetch_success_reports_stderr_before_stdout()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["fetch"],
+            0,
+            "stdout chatter\n",
+            "From origin\n"
+        ));
+
+        // Act
+        let outcome =
+            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "From origin");
     }
 }

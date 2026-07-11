@@ -75,6 +75,10 @@ _Avoid_: mock git, stub
 The per-repo result of a git operation: success (with an optional message) or failure (with one). The unit that result aggregation consumes.
 _Avoid_: result, status, exit
 
+**Report policy**:
+The declarative per-operation rule for how a repo outcome's message is produced: which output streams are read in which order, and whether an empty result means quiet success or a canned fallback.
+_Avoid_: message extraction, message rules, output handling
+
 **Result aggregation**:
 Grouping repo outcomes with identical messages, so a command reports once per message across many child repos, not once per repo.
 _Avoid_: output grouping, deduplication

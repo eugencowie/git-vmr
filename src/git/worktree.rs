@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -53,15 +54,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                Some(first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git worktree add succeeded"
-                ))
+            SuccessReport::Line {
+                from: Streams::StderrThenStdout,
+                on_empty: OnEmpty::Text("git worktree add succeeded")
             },
-            failure_line
+            FailureReport::LastStderrLine {
+                fallback: "git worktree add failed"
+            }
         )
     }
 
@@ -87,29 +88,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                let message = first_non_empty_line_with_fallback(
-                    &output.stdout,
-                    &output.stderr,
-                    "git worktree remove succeeded"
-                );
-
-                if message == "git worktree remove succeeded"
-                {
-                    None
-                }
-                else
-                {
-                    Some(message)
-                }
+            SuccessReport::Line {
+                from: Streams::StdoutThenStderr,
+                on_empty: OnEmpty::Quiet
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git worktree remove failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git worktree remove failed"
             }
         )
     }
@@ -137,29 +124,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                let message = first_non_empty_line_with_fallback(
-                    &output.stdout,
-                    &output.stderr,
-                    "git worktree move succeeded"
-                );
-
-                if message == "git worktree move succeeded"
-                {
-                    None
-                }
-                else
-                {
-                    Some(message)
-                }
+            SuccessReport::Line {
+                from: Streams::StdoutThenStderr,
+                on_empty: OnEmpty::Quiet
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git worktree move failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git worktree move failed"
             }
         )
     }
@@ -182,11 +155,8 @@ impl Git
             bail!(
                 "fatal: failed to list worktrees for '{}': {}",
                 repo_name,
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git worktree list failed"
-                )
+                Streams::StderrThenStdout
+                    .first_line(&output, "git worktree list failed")
             );
         }
 
@@ -318,27 +288,92 @@ impl WorktreeRecord
     }
 }
 
-fn failure_line(output: &crate::git::GitOutput) -> String
-{
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    stderr
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| {
-            first_non_empty_line_with_fallback(
-                &output.stdout,
-                &output.stderr,
-                "git worktree add failed"
-            )
-        })
-}
-
 #[cfg(test)]
 mod tests
 {
     use super::*;
+    use crate::git::{RepoOutcome, ScriptedFake};
+
+    #[test]
+    fn worktree_remove_with_no_output_is_a_quiet_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "remove", "/wt/backend"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_remove(
+                "backend",
+                Path::new("/vmr/backend"),
+                Path::new("/wt/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn worktree_remove_reports_gits_own_output_when_present()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "remove", "/wt/backend"],
+            0,
+            "Removing worktree\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_remove(
+                "backend",
+                Path::new("/vmr/backend"),
+                Path::new("/wt/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "Removing worktree");
+    }
+
+    #[test]
+    fn worktree_move_with_no_output_is_a_quiet_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "move", "/wt/backend", "/wt2/backend"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_move(
+                "backend",
+                Path::new("/vmr/backend"),
+                Path::new("/wt/backend"),
+                Path::new("/wt2/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
 
     #[test]
     fn parses_branch_detached_flags_and_unknown_fields()
