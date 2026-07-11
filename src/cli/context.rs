@@ -19,7 +19,7 @@ pub struct CliContext
     /// Global runtime state
     pub global_state: GlobalState,
 
-    /// Git operations, running through the subprocess adapter
+    /// Git operations adapter
     pub git: Git
 }
 

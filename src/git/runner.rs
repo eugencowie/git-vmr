@@ -103,7 +103,8 @@ pub(crate) mod scripted
 
     /// The scripted fake: answers each expected invocation with a canned
     /// exit code and output, panics on an unexpected one, and records what
-    /// was run.
+    /// was run. Rules are reusable; tests that care about invocation count
+    /// or order must assert against [`ScriptedFake::calls`].
     #[derive(Default)]
     pub(crate) struct ScriptedFake
     {
@@ -261,6 +262,10 @@ pub(crate) mod scripted
             use std::os::windows::process::ExitStatusExt;
             ExitStatus::from_raw(code as u32)
         }
+        #[cfg(not(any(unix, windows)))]
+        {
+            compile_error!("exit_status is not implemented for this platform");
+        }
     }
 }
 
@@ -351,6 +356,22 @@ mod tests
         assert_eq!(calls[0].args, args(["fetch"]));
         assert_eq!(calls[1].path, PathBuf::from("/vmr"));
         assert_eq!(calls[1].args, args(["clone", "url"]));
+    }
+
+    #[test]
+    fn scripted_fake_records_repeated_invocations()
+    {
+        // Arrange
+        let fake = ScriptedFake::new().on(["fetch"], 0, "", "");
+
+        // Act
+        fake.run_captured(Path::new("/vmr/backend"), &args(["fetch"])).unwrap();
+        fake.run_captured(Path::new("/vmr/backend"), &args(["fetch"])).unwrap();
+
+        // Assert
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 2);
+        assert!(calls.iter().all(|call| call.args == args(["fetch"])));
     }
 
     #[test]
