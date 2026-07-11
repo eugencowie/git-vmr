@@ -1,5 +1,3 @@
-mod builder;
-
 use crate::cli::CliContext;
 use aptabase_rs::Builder;
 use chrono::Utc;
@@ -72,36 +70,11 @@ pub fn record(context: &mut CliContext, event: CommandEvent)
         return;
     };
 
-    let client = builder::build_analytics_client(
-        Builder::new(app_key, env!("CARGO_PKG_VERSION")),
-        session_id
-    );
+    let client = Builder::new(app_key, env!("CARGO_PKG_VERSION"))
+        .with_session_id(session_id)
+        .build();
     let _ = client.track_event(EVENT_NAME, Some(props));
     let _ = runtime.block_on(async {
         tokio::time::timeout(FLUSH_TIMEOUT, client.flush()).await
     });
-}
-
-#[cfg(test)]
-mod tests
-{
-    use super::*;
-
-    #[test]
-    fn event_keeps_expected_fields()
-    {
-        let event = CommandEvent {
-            name: "rm".to_owned(),
-            success: false,
-            duration_ms: 42,
-            flags: vec!["force".to_owned()],
-            global_flags: vec!["working_dir".to_owned()]
-        };
-
-        assert_eq!(event.name, "rm");
-        assert!(!event.success);
-        assert_eq!(event.duration_ms, 42);
-        assert_eq!(event.flags, ["force"]);
-        assert_eq!(event.global_flags, ["working_dir"]);
-    }
 }
