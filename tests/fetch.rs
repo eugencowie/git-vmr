@@ -1,70 +1,14 @@
 mod common;
 
-use common::git_vmr;
+use common::{git, git_output, git_vmr, init_repo, init_vmr, write_commit};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
 
-fn git(dir: &Path, args: &[&str])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed in '{}'\nstderr: {}\nstdout: {}",
-        args,
-        dir.display(),
-        String::from_utf8_lossy(&output.stderr),
-        String::from_utf8_lossy(&output.stdout)
-    );
-}
-
-fn git_output(dir: &Path, args: &[&str]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed in '{}'\nstderr: {}\nstdout: {}",
-        args,
-        dir.display(),
-        String::from_utf8_lossy(&output.stderr),
-        String::from_utf8_lossy(&output.stdout)
-    );
-
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
-}
-
-fn init_vmr(path: &Path)
-{
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, &["init"]);
-    git(path, &["config", "user.email", "test@example.com"]);
-    git(path, &["config", "user.name", "Test User"]);
-}
-
-fn write_commit(path: &Path, file: &str, content: &str, message: &str)
-{
-    fs::write(path.join(file), content).expect("failed to write file");
-    git(path, &["add", file]);
-    git(path, &["commit", "-m", message]);
-}
-
 fn clone_repo(source: &Path, destination: &Path)
 {
     let parent = destination.parent().expect("clone destination has parent");
-    git(parent, &[
+    git(parent, [
         "clone",
         source.to_str().expect("source path should be UTF-8"),
         destination
@@ -84,7 +28,7 @@ fn setup_remote_repo(path: &Path, file: &str) -> std::path::PathBuf
 
 fn head(path: &Path, rev: &str) -> String
 {
-    git_output(path, &["rev-parse", rev])
+    git_output(path, ["rev-parse", rev])
 }
 
 fn ref_exists(path: &Path, rev: &str) -> bool
@@ -164,7 +108,7 @@ fn fetch_forwards_repository_and_refspec_arguments()
     let backend = vmr.join("backend");
     clone_repo(&source, &backend);
 
-    git(&source, &["checkout", "-b", "release"]);
+    git(&source, ["checkout", "-b", "release"]);
     write_commit(&source, "release.txt", "release\n", "release");
 
     git_vmr()
@@ -191,7 +135,7 @@ fn fetch_treats_single_positional_argument_as_repository()
     init_vmr(&vmr);
     let backend = vmr.join("backend");
     clone_repo(&source, &backend);
-    git(&backend, &["remote", "rename", "origin", "main"]);
+    git(&backend, ["remote", "rename", "origin", "main"]);
     write_commit(&source, "README.md", "updated\n", "update");
 
     git_vmr()
@@ -254,7 +198,7 @@ fn fetch_failure_does_not_stop_successful_repositories()
     let frontend = vmr.join("frontend");
     clone_repo(&backend_source, &backend);
     clone_repo(&frontend_source, &frontend);
-    git(&backend, &["remote", "remove", "origin"]);
+    git(&backend, ["remote", "remove", "origin"]);
     write_commit(&frontend_source, "README.md", "updated\n", "update");
 
     git_vmr()
@@ -287,8 +231,8 @@ fn fetch_reports_success_failure_and_failure_order_with_repository_suffixes()
     clone_repo(&source, &alpha);
     clone_repo(&source, &backend);
     clone_repo(&source, &zeta);
-    git(&alpha, &["remote", "remove", "origin"]);
-    git(&zeta, &["remote", "remove", "origin"]);
+    git(&alpha, ["remote", "remove", "origin"]);
+    git(&zeta, ["remote", "remove", "origin"]);
     write_commit(&source, "README.md", "updated\n", "update");
 
     git_vmr()

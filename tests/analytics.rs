@@ -1,16 +1,11 @@
 mod common;
 
 use assert_cmd::Command;
-use common::git_vmr;
+use common::{git_vmr, init_vmr};
 use predicates::prelude::*;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-fn init_vmr(path: &Path)
-{
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
-}
 
 fn git_vmr_with_state(config_dir: &Path, state_dir: &Path) -> Command
 {

@@ -1,14 +1,8 @@
 mod common;
 
-use common::git_vmr;
+use common::{git_vmr, init_vmr};
 use predicates::prelude::*;
 use std::fs;
-use std::path::Path;
-
-fn init_vmr(path: &Path)
-{
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
-}
 
 #[test]
 fn successful_subcommand_triggers_due_update_check()

@@ -1,53 +1,9 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("git output should be utf8")
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn staged_names(repo: &Path) -> String
 {
@@ -79,7 +35,7 @@ fn add_stages_file_from_vmr_root()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
-    assert_eq!(staged_names(&backend), "src.rs\n");
+    assert_eq!(staged_names(&backend), "src.rs");
 }
 
 #[test]
@@ -107,8 +63,8 @@ fn add_stages_paths_across_multiple_repositories()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
-    assert_eq!(staged_names(&backend), "src.rs\n");
-    assert_eq!(staged_names(&frontend), "app.rs\n");
+    assert_eq!(staged_names(&backend), "src.rs");
+    assert_eq!(staged_names(&frontend), "app.rs");
 }
 
 #[test]
@@ -141,7 +97,7 @@ fn add_stages_from_child_repo_and_with_working_dir_argument()
         .assert()
         .success();
 
-    assert_eq!(staged_names(&backend), "lib.rs\nsrc.rs\n");
+    assert_eq!(staged_names(&backend), "lib.rs\nsrc.rs");
 }
 
 #[test]
@@ -171,8 +127,8 @@ fn add_dot_stages_all_repos_from_root_and_current_subtree_from_child()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
-    assert_eq!(staged_names(&backend), "root.rs\n");
-    assert_eq!(staged_names(&frontend), "src/app.rs\n");
+    assert_eq!(staged_names(&backend), "root.rs");
+    assert_eq!(staged_names(&frontend), "src/app.rs");
 
     git(&backend, ["reset"]);
     git(&frontend, ["reset"]);
@@ -186,7 +142,7 @@ fn add_dot_stages_all_repos_from_root_and_current_subtree_from_child()
         .success();
 
     assert_eq!(staged_names(&backend), "");
-    assert_eq!(staged_names(&frontend), "src/app.rs\nsrc/other.rs\n");
+    assert_eq!(staged_names(&frontend), "src/app.rs\nsrc/other.rs");
 }
 
 #[test]
@@ -283,7 +239,7 @@ fn assert_add_all_stages_every_repo(flag: &str)
         backend_diff.contains("M\told.rs"),
         "unexpected diff: {backend_diff}"
     );
-    assert_eq!(staged_status(&frontend), "D\tapp.rs\n");
+    assert_eq!(staged_status(&frontend), "D\tapp.rs");
 }
 
 #[test]
@@ -316,8 +272,8 @@ fn add_all_without_pathspecs_stages_every_repo_from_child()
 
     git_vmr().current_dir(&frontend).args(["add", "-A"]).assert().success();
 
-    assert_eq!(staged_status(&backend), "M\told.rs\n");
-    assert_eq!(staged_status(&frontend), "A\tnew.rs\n");
+    assert_eq!(staged_status(&backend), "M\told.rs");
+    assert_eq!(staged_status(&frontend), "A\tnew.rs");
 }
 
 #[test]
@@ -345,8 +301,8 @@ fn add_all_with_pathspecs_preserves_routed_scoping()
         .assert()
         .success();
 
-    assert_eq!(staged_names(&backend), "old.rs\n");
-    assert_eq!(staged_names(&frontend), "app.rs\n");
+    assert_eq!(staged_names(&backend), "old.rs");
+    assert_eq!(staged_names(&frontend), "app.rs");
 }
 
 fn assert_force_stages_ignored_file(flag: &str)
@@ -368,7 +324,7 @@ fn assert_force_stages_ignored_file(flag: &str)
         .assert()
         .success();
 
-    assert_eq!(staged_names(&backend), "generated.log\n");
+    assert_eq!(staged_names(&backend), "generated.log");
 }
 
 #[test]
@@ -400,7 +356,7 @@ fn add_chmod_updates_executable_bit_in_index()
         .success();
     assert_eq!(
         git_output(&backend, ["diff", "--cached", "--summary"]),
-        " mode change 100644 => 100755 script.sh\n"
+        "mode change 100644 => 100755 script.sh"
     );
 
     git(&backend, ["commit", "-m", "chmod"]);
@@ -411,7 +367,7 @@ fn add_chmod_updates_executable_bit_in_index()
         .success();
     assert_eq!(
         git_output(&backend, ["diff", "--cached", "--summary"]),
-        " mode change 100755 => 100644 script.sh\n"
+        "mode change 100755 => 100644 script.sh"
     );
 }
 

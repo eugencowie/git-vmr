@@ -377,6 +377,8 @@ mod tests
         assert!(format!("{err:#}").contains("not a virtual monorepo"));
     }
 
+    // Deliberately richer than test_support::vmr_fixture: discovery tests
+    // need non-Git children (docs, README.md) to assert they are skipped.
     fn vmr_fixture() -> tempfile::TempDir
     {
         // Arrange fixture with Git and non-Git children
