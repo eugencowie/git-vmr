@@ -1,10 +1,11 @@
-use crate::git::{self, ResetMode};
+use crate::git::{self, Git, ResetMode};
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::Path;
 
 pub fn reset(
+    git: &Git,
     working_dir: &Path,
     mode: Option<ResetMode>,
     commit: Option<&str>
@@ -19,7 +20,7 @@ pub fn reset(
     // Reset each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::reset(&repo.name, &repo.path, mode, commit))
+        .map(|repo| git.reset(&repo.name, &repo.path, mode, commit))
         .collect::<Vec<_>>();
 
     // Print results

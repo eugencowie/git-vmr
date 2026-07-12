@@ -1,4 +1,4 @@
-use crate::git::{self, FileChange, FileEntry, Head, RepoStatus};
+use crate::git::{self, FileChange, FileEntry, Git, Head, RepoStatus};
 use crate::vmr::{Repo, Vmr};
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
@@ -51,7 +51,7 @@ impl StatusStyles
     }
 }
 
-pub fn status(display_name: &str, working_dir: &Path) -> Result<()>
+pub fn status(git: &Git, display_name: &str, working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -62,7 +62,7 @@ pub fn status(display_name: &str, working_dir: &Path) -> Result<()>
     // Collect status information from repositories
     let mut statuses = repos
         .par_iter()
-        .filter_map(|repo| git::status(repo).transpose())
+        .filter_map(|repo| git.status(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Keep status order deterministic
@@ -575,7 +575,7 @@ mod tests
         init_git_repo(&tmp.path().join("backend"));
 
         // Act
-        let result = status(DISPLAY_NAME, tmp.path());
+        let result = status(&Git::subprocess(), DISPLAY_NAME, tmp.path());
 
         // Assert
         assert!(result.is_ok());

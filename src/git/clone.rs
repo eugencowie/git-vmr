@@ -1,44 +1,29 @@
-use anyhow::{Context, Result};
+use crate::git::Git;
+use anyhow::Result;
+use std::ffi::OsString;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::ExitStatus;
 
-pub fn clone(
-    working_dir: &Path,
-    repository: &str,
-    directory: Option<&Path>
-) -> Result<()>
+impl Git
 {
-    let mut command = Command::new("git");
-
-    command
-        .arg("-C")
-        .arg(working_dir)
-        .arg("clone")
-        .arg(repository)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
-
-    if let Some(directory) = directory
+    /// Runs git clone with inherited stdio so credential prompts and
+    /// progress reach the user. Git reports its own errors on stderr; the
+    /// caller decides what a non-success exit status means.
+    pub fn clone(
+        &self,
+        working_dir: &Path,
+        repository: &str,
+        directory: Option<&Path>
+    ) -> Result<ExitStatus>
     {
-        command.arg(directory);
+        let mut args =
+            vec![OsString::from("clone"), OsString::from(repository)];
+
+        if let Some(directory) = directory
+        {
+            args.push(directory.as_os_str().to_owned());
+        }
+
+        self.runner.run_interactive(working_dir, &args)
     }
-
-    let status = command.status().with_context(|| {
-        format!(
-            "fatal: failed to invoke git clone '{}'{} from '{}'",
-            repository,
-            directory
-                .map(|directory| format!(" into '{}'", directory.display()))
-                .unwrap_or_default(),
-            working_dir.display()
-        )
-    })?;
-
-    if !status.success()
-    {
-        std::process::exit(1);
-    }
-
-    Ok(())
 }

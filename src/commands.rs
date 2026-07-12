@@ -483,56 +483,70 @@ impl Command
 
     pub fn run(self, context: &CliContext) -> Result<()>
     {
+        let display_name = &context.display_name;
         let working_dir = &context.working_dir;
+        let git = &context.git;
 
         match self
         {
-            Command::Clone { repository, directory } =>
-                clone::clone(working_dir, &repository, directory.as_deref()),
+            Command::Clone { repository, directory } => clone::clone(
+                git,
+                working_dir,
+                &repository,
+                directory.as_deref()
+            ),
 
             Command::Init { directory } =>
                 init::init(working_dir, directory.as_deref()),
 
             Command::Add { paths, all, force, chmod } =>
-                add::add(working_dir, &paths, all, force, chmod),
+                add::add(git, working_dir, &paths, all, force, chmod),
 
             Command::Mv { sources, destination } =>
-                mv::mv(working_dir, &sources, &destination),
+                mv::mv(git, working_dir, &sources, &destination),
 
             Command::Restore { paths, staged, worktree } =>
-                restore::restore(working_dir, &paths, worktree, staged),
+                restore::restore(git, working_dir, &paths, worktree, staged),
 
-            Command::Rm { paths, recursive, force, dry_run, cached } =>
-                rm::rm(working_dir, &paths, recursive, force, dry_run, cached),
+            Command::Rm { paths, recursive, force, dry_run, cached } => rm::rm(
+                git,
+                working_dir,
+                &paths,
+                recursive,
+                force,
+                dry_run,
+                cached
+            ),
 
-            Command::Status =>
-                status::status(&context.display_name, working_dir),
+            Command::Status => status::status(git, display_name, working_dir),
 
             Command::Branch { delete, force_delete, force, branch_name } =>
                 match branch_name
                 {
                     Some(branch_name) if delete || force_delete =>
                         branch::delete(
+                            git,
                             working_dir,
                             &branch_name,
                             force || force_delete
                         ),
                     Some(branch_name) =>
-                        branch::branch(working_dir, &branch_name),
-                    None => branch::branches(working_dir)
+                        branch::branch(git, working_dir, &branch_name),
+                    None => branch::branches(git, working_dir)
                 },
 
             Command::Commit { message } =>
-                commit::commit(working_dir, &message),
+                commit::commit(git, working_dir, &message),
 
             Command::Merge { commit_ish } =>
-                merge::merge(working_dir, &commit_ish),
+                merge::merge(git, working_dir, &commit_ish),
 
             Command::Rebase { upstream } =>
-                rebase::rebase(working_dir, &upstream),
+                rebase::rebase(git, working_dir, &upstream),
 
             Command::Reset { soft, mixed, hard, merge, keep, commit } =>
                 reset::reset(
+                    git,
                     working_dir,
                     ResetMode::from_arg(soft, mixed, hard, merge, keep),
                     commit.as_deref()
@@ -540,40 +554,44 @@ impl Command
 
             Command::Switch { create, branch_name } => match create
             {
-                true => switch::create(working_dir, &branch_name),
-                false => switch::switch(working_dir, &branch_name)
+                true => switch::create(git, working_dir, &branch_name),
+                false => switch::switch(git, working_dir, &branch_name)
             },
 
             Command::Tag { delete, tag_name } => match (tag_name, delete)
             {
-                (Some(tag_name), true) => tag::delete(working_dir, &tag_name),
-                (Some(tag_name), false) => tag::create(working_dir, &tag_name),
-                (None, false) => tag::tag(working_dir),
+                (Some(tag_name), true) =>
+                    tag::delete(git, working_dir, &tag_name),
+                (Some(tag_name), false) =>
+                    tag::create(git, working_dir, &tag_name),
+                (None, false) => tag::tag(git, working_dir),
                 _ => unreachable!()
             },
 
             Command::Fetch { repository, refspecs } =>
-                fetch::fetch(working_dir, repository.as_deref(), &refspecs),
+                fetch::fetch(git, working_dir, repository.as_deref(), &refspecs),
 
             Command::Pull { repository, refspecs } =>
-                pull::pull(working_dir, repository.as_deref(), &refspecs),
+                pull::pull(git, working_dir, repository.as_deref(), &refspecs),
 
             Command::Push { repository, refspecs } =>
-                push::push(working_dir, repository.as_deref(), &refspecs),
+                push::push(git, working_dir, repository.as_deref(), &refspecs),
 
             Command::Worktree { command } => match command
                 .unwrap_or(WorktreeCommand::List)
             {
                 WorktreeCommand::Add { branch, path, commit_ish } =>
                     worktree::add(
+                        git,
                         working_dir,
                         &path,
                         branch.as_deref(),
                         commit_ish.as_deref()
                     ),
-                WorktreeCommand::List => worktree::list(working_dir),
+                WorktreeCommand::List => worktree::list(git, working_dir),
                 WorktreeCommand::Move { force, path, new_path } =>
                     worktree::move_worktree(
+                        git,
                         working_dir,
                         &path,
                         &new_path,
@@ -585,6 +603,7 @@ impl Command
                     force_delete,
                     path
                 } => worktree::remove(
+                    git,
                     working_dir,
                     &path,
                     force,

@@ -1,7 +1,7 @@
 ---
 disclosure-default: ai-assisted
-models-used: [gpt-5.5]
-providers: [OpenAI]
+models-used: [claude-fable-5, gpt-5.5]
+providers: [Anthropic, OpenAI]
 scope: |
   Specifications are typically AI-generated with manual review.
   Application code is typically AI-assisted.

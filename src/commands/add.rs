@@ -1,10 +1,11 @@
-use crate::git::{self, ChmodMode};
+use crate::git::{self, ChmodMode, Git};
 use crate::vmr::Vmr;
 use anyhow::Result;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn add(
+    git: &Git,
     working_dir: &Path,
     paths: &[PathBuf],
     all: bool,
@@ -33,7 +34,7 @@ pub fn add(
     let results = routed
         .par_iter()
         .map(|(repo_path, repo_paths)| {
-            git::add(
+            git.add(
                 &repo_path.name,
                 &repo_path.path,
                 repo_paths,

@@ -92,6 +92,7 @@ mod tests
 
         let state = crate::state::GlobalState::load_from_path(state_file);
         let mut context = CliContext {
+            git: crate::git::Git::subprocess(),
             display_name: "git vmr".to_owned(),
             working_dir: PathBuf::new(),
             global_config: GlobalConfig {

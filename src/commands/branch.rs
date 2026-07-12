@@ -1,4 +1,4 @@
-use crate::git::{self, Head, RepoBranches};
+use crate::git::{self, Git, Head, RepoBranches};
 use crate::vmr::Vmr;
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
@@ -38,7 +38,7 @@ impl BranchStyles
     }
 }
 
-pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
+pub fn branch(git: &Git, working_dir: &Path, branch_name: &str) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -49,15 +49,19 @@ pub fn branch(working_dir: &Path, branch_name: &str) -> Result<()>
     // Branch in each repository
     let results = repos
         .par_iter()
-        .map(|repo| git::branch(&repo.name, &repo.path, branch_name))
+        .map(|repo| git.branch(&repo.name, &repo.path, branch_name))
         .collect::<Vec<_>>();
 
     // Print results
     git::print_results(results)
 }
 
-pub fn delete(working_dir: &Path, branch_name: &str, force: bool)
--> Result<()>
+pub fn delete(
+    git: &Git,
+    working_dir: &Path,
+    branch_name: &str,
+    force: bool
+) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -69,7 +73,7 @@ pub fn delete(working_dir: &Path, branch_name: &str, force: bool)
     let results = repos
         .par_iter()
         .map(|repo| {
-            git::delete_branch(&repo.name, &repo.path, branch_name, force)
+            git.delete_branch(&repo.name, &repo.path, branch_name, force)
         })
         .collect::<Vec<_>>();
 
@@ -77,7 +81,7 @@ pub fn delete(working_dir: &Path, branch_name: &str, force: bool)
     git::print_results(results)
 }
 
-pub fn branches(working_dir: &Path) -> Result<()>
+pub fn branches(git: &Git, working_dir: &Path) -> Result<()>
 {
     // Find virtual monorepo
     let vmr = Vmr::find(working_dir)?;
@@ -88,7 +92,7 @@ pub fn branches(working_dir: &Path) -> Result<()>
     // Collect branch information from repositories
     let mut branches = repos
         .par_iter()
-        .filter_map(|repo| git::branches(repo).transpose())
+        .filter_map(|repo| git.branches(repo).transpose())
         .collect::<Result<Vec<_>>>()?;
 
     // Keep branch order deterministic

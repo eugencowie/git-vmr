@@ -1,4 +1,5 @@
 use crate::git;
+use crate::git::Git;
 use crate::vmr::Vmr;
 use anyhow::{Result, bail};
 use path_clean::PathClean;
@@ -6,6 +7,7 @@ use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn rm(
+    git: &Git,
     working_dir: &Path,
     paths: &[PathBuf],
     recursive: bool,
@@ -31,7 +33,7 @@ pub fn rm(
     let results = routed
         .par_iter()
         .map(|(repo_path, repo_paths)| {
-            git::rm(
+            git.rm(
                 &repo_path.name,
                 &repo_path.path,
                 repo_paths,
