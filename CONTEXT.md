@@ -54,8 +54,12 @@ _Avoid_: plan (unqualified), rename plan
 ### Worktrees
 
 **Worktree root**:
-A sibling VMR root materialized by `worktree add`, holding one linked child worktree per child repo.
+A sibling VMR root materialized by `worktree add`, holding one child worktree per child repo at `<root>/<child repo name>`. The layout works both ways: a directory named after a child repo whose parent is a VMR root is that root's child worktree.
 _Avoid_: aggregate worktree, aggregate directory
+
+**Child worktree**:
+The worktree a worktree root holds for one child repo, living at `<root>/<child repo name>`.
+_Avoid_: linked worktree, sub-worktree
 
 **Materialize / dissolve**:
 The worktree-root lifecycle: materializing creates the directory and its marker; dissolving removes the marker and the directory if empty.

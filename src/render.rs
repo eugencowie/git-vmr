@@ -17,7 +17,7 @@ pub(crate) use outcomes::outcomes_in_scope;
 pub use status::status;
 use std::fmt;
 pub use tag::tags;
-pub use worktree::{WorktreeRootEntry, worktree_list};
+pub use worktree::worktree_list;
 
 /// Rendered terminal text for one command, per stream. Commands return this
 /// instead of printing.

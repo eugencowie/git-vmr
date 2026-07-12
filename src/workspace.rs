@@ -1,3 +1,5 @@
+pub mod worktree_root;
+
 use crate::git::{Git, GitCommandResult};
 use crate::render::{self, Rendered};
 use crate::vmr::Vmr;

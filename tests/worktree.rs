@@ -1084,7 +1084,7 @@ fn worktree_remove_force_delete_skips_branch_for_failed_child_removal()
 }
 
 #[test]
-fn worktree_remove_delete_failure_keeps_worktree_root()
+fn worktree_remove_delete_failure_cleans_worktree_root()
 {
     let fixture = TestVmr::with_repos(&["backend"]);
     let vmr = fixture.path();
@@ -1108,8 +1108,8 @@ fn worktree_remove_delete_failure_keeps_worktree_root()
         );
 
     assert!(!fixture.sibling("wt/backend").exists());
-    assert!(fixture.sibling("wt/.gitvmr").exists());
-    assert!(fixture.sibling("wt").exists());
+    assert!(!fixture.sibling("wt/.gitvmr").exists());
+    assert!(!fixture.sibling("wt").exists());
     assert!(branch_exists(&vmr.join("backend"), "wt"));
 }
 

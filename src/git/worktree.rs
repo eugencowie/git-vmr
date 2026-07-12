@@ -11,10 +11,7 @@ pub struct ChildWorktree
 {
     pub path: PathBuf,
     pub head: String,
-    pub state: ChildWorktreeState,
-    pub bare: bool,
-    pub locked: bool,
-    pub prunable: bool
+    pub state: ChildWorktreeState
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -201,22 +198,6 @@ fn parse_worktree_list(
                     .to_owned()
             );
         }
-        else if field == b"detached"
-        {
-            current.detached = true;
-        }
-        else if field == b"bare"
-        {
-            current.bare = true;
-        }
-        else if field.starts_with(b"locked")
-        {
-            current.locked = true;
-        }
-        else if field.starts_with(b"prunable")
-        {
-            current.prunable = true;
-        }
     }
 
     if !current.is_empty()
@@ -232,24 +213,14 @@ struct WorktreeRecord
 {
     path: Option<PathBuf>,
     head: Option<String>,
-    branch: Option<String>,
-    detached: bool,
-    bare: bool,
-    locked: bool,
-    prunable: bool
+    branch: Option<String>
 }
 
 impl WorktreeRecord
 {
     fn is_empty(&self) -> bool
     {
-        self.path.is_none()
-            && self.head.is_none()
-            && self.branch.is_none()
-            && !self.detached
-            && !self.bare
-            && !self.locked
-            && !self.prunable
+        self.path.is_none() && self.head.is_none() && self.branch.is_none()
     }
 
     fn finish(self, repo_name: &str) -> Result<ChildWorktree>
@@ -262,21 +233,13 @@ impl WorktreeRecord
                 "fatal: malformed worktree list for '{repo_name}': missing HEAD"
             )
         })?;
-        let state = match (self.branch, self.detached)
+        let state = match self.branch
         {
-            (Some(branch), _) => ChildWorktreeState::Branch(branch),
-            (None, true) => ChildWorktreeState::Detached,
-            (None, false) => ChildWorktreeState::Detached
+            Some(branch) => ChildWorktreeState::Branch(branch),
+            None => ChildWorktreeState::Detached
         };
 
-        Ok(ChildWorktree {
-            path,
-            head,
-            state,
-            bare: self.bare,
-            locked: self.locked,
-            prunable: self.prunable
-        })
+        Ok(ChildWorktree { path, head, state })
     }
 }
 
@@ -368,7 +331,7 @@ mod tests
     }
 
     #[test]
-    fn parses_branch_detached_flags_and_unknown_fields()
+    fn parses_branch_detached_and_unknown_fields()
     {
         let entries = parse_worktree_list(
             "backend",
@@ -382,10 +345,8 @@ mod tests
             entries[0].state,
             ChildWorktreeState::Branch("main".to_owned())
         );
-        assert!(!entries[0].locked);
+        assert_eq!(entries[1].head, "abcdef1234567890");
         assert_eq!(entries[1].state, ChildWorktreeState::Detached);
-        assert!(entries[1].locked);
-        assert!(entries[1].prunable);
     }
 
     #[test]

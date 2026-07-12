@@ -1,16 +1,8 @@
 use crate::git::{self, ChildWorktreeState};
 use crate::render::{SuffixPolicy, repo_list_suffix};
+use crate::workspace::worktree_root::WorktreeRootEntry;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-
-/// One child repo's entry under a worktree root, as gathered for listing.
-#[derive(Clone, Eq, PartialEq)]
-pub struct WorktreeRootEntry
-{
-    pub repo: String,
-    pub head: String,
-    pub state: ChildWorktreeState
-}
 
 /// Renders the worktree list: one block per worktree root, entries grouped
 /// by state with a repo-list suffix when a state is not shared by all repos.
