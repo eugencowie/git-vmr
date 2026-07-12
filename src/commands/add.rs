@@ -1,11 +1,10 @@
-use crate::git::{self, ChmodMode, Git};
-use crate::vmr::Vmr;
+use crate::git::ChmodMode;
+use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
-use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
 pub fn add(
-    git: &Git,
+    workspace: &Workspace,
     working_dir: &Path,
     paths: &[PathBuf],
     all: bool,
@@ -13,37 +12,96 @@ pub fn add(
     chmod: Option<ChmodMode>
 ) -> Result<()>
 {
-    // Find VMR root and route requested paths
-    let vmr = Vmr::find(working_dir)?;
-    let routing_working_dir =
-        if paths.is_empty() && all { &vmr.path } else { working_dir };
-    let paths = if paths.is_empty() && all
+    // `add -A` with no paths stages the entire VMR
+    let scope = if paths.is_empty() && all
     {
-        vec![PathBuf::from(".")]
+        Scope::EntireVmr
     }
     else
     {
-        paths.to_vec()
+        Scope::Paths(paths.to_vec())
     };
-    let routed = vmr
-        .route_paths(routing_working_dir, &paths)?
-        .into_iter()
-        .collect::<Vec<_>>();
 
-    // Stage paths in each child repository
-    let results = routed
-        .par_iter()
-        .map(|(repo_path, repo_paths)| {
-            git.add(
-                &repo_path.name,
-                &repo_path.path,
-                repo_paths,
-                all,
-                force,
-                chmod
-            )
-        })
-        .collect::<Vec<_>>();
+    // Stage routed paths in each owning child repository
+    workspace.run_routed(working_dir, scope, |git, repo, repo_paths| {
+        git.add(&repo.name, &repo.path, repo_paths, all, force, chmod)
+    })
+}
 
-    git::print_results(results)
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::{Git, ScriptedFake};
+    use std::fs;
+    use std::sync::Arc;
+
+    fn vmr_fixture() -> tempfile::TempDir
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir_all(tmp.path().join("backend/.git")).unwrap();
+        fs::create_dir_all(tmp.path().join("frontend/.git")).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn add_all_without_paths_stages_the_entire_vmr()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(
+            ["add", "--all", "--", "."],
+            0,
+            "",
+            ""
+        ));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = add(&workspace, tmp.path(), &[], true, false, None);
+
+        // Assert
+        assert!(result.is_ok());
+        let mut paths = fake
+            .calls()
+            .into_iter()
+            .map(|invocation| invocation.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths, vec![
+            tmp.path().join("backend"),
+            tmp.path().join("frontend")
+        ]);
+    }
+
+    #[test]
+    fn explicit_paths_only_stage_in_the_owning_child_repo()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(
+            ["add", "--", "src/main.rs"],
+            0,
+            "",
+            ""
+        ));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let paths = vec![PathBuf::from("backend/src/main.rs")];
+
+        // Act
+        let result = add(&workspace, tmp.path(), &paths, false, false, None);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(
+            fake.calls()
+                .into_iter()
+                .map(|invocation| invocation.path)
+                .collect::<Vec<_>>(),
+            vec![tmp.path().join("backend")]
+        );
+    }
 }

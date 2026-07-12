@@ -6,6 +6,7 @@ mod git;
 mod state;
 mod updates;
 mod vmr;
+mod workspace;
 
 use cli::{Cli, SilentError};
 use std::process::ExitCode;

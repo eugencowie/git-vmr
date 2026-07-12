@@ -1,24 +1,24 @@
 use crate::git::Git;
-use crate::vmr::{Repo, Vmr};
+use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn mv(
-    git: &Git,
+    workspace: &Workspace,
     working_dir: &Path,
     sources: &[PathBuf],
     destination: &Path
 ) -> Result<()>
 {
-    // Find VMR root and route all operands before moving anything
-    let vmr = Vmr::find(working_dir)?;
+    // Route all operands before moving anything
+    let git = workspace.git();
     let sources = sources
         .iter()
-        .map(|source| vmr.route_single_path(working_dir, source))
+        .map(|source| workspace.route_single(working_dir, source))
         .collect::<Result<Vec<_>>>()?;
-    let destination = vmr.route_single_path(working_dir, destination)?;
+    let destination = workspace.route_single(working_dir, destination)?;
 
     if sources.len() == 1 && sources[0].0 == destination.0
     {

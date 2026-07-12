@@ -20,6 +20,7 @@ mod worktree;
 
 use crate::cli::CliContext;
 use crate::git::{ChmodMode, ResetMode};
+use crate::workspace::Workspace;
 use anyhow::Result;
 use clap::{ArgAction, Subcommand};
 use std::path::PathBuf;
@@ -483,12 +484,12 @@ impl Command
 
     pub fn run(self, context: &CliContext) -> Result<()>
     {
-        let display_name = &context.display_name;
         let working_dir = &context.working_dir;
         let git = &context.git;
 
         match self
         {
+            // Clone and init run before a VMR exists
             Command::Clone { repository, directory } => clone::clone(
                 git,
                 working_dir,
@@ -499,17 +500,43 @@ impl Command
             Command::Init { directory } =>
                 init::init(working_dir, directory.as_deref()),
 
+            // Every other command runs inside an opened workspace
+            command =>
+            {
+                let workspace = Workspace::find(git, working_dir)?;
+                command.run_in_workspace(&workspace, context)
+            }
+        }
+    }
+
+    fn run_in_workspace(
+        self,
+        workspace: &Workspace,
+        context: &CliContext
+    ) -> Result<()>
+    {
+        let working_dir = &context.working_dir;
+
+        match self
+        {
+            Command::Clone { .. } | Command::Init { .. } => unreachable!(),
+
             Command::Add { paths, all, force, chmod } =>
-                add::add(git, working_dir, &paths, all, force, chmod),
+                add::add(workspace, working_dir, &paths, all, force, chmod),
 
             Command::Mv { sources, destination } =>
-                mv::mv(git, working_dir, &sources, &destination),
+                mv::mv(workspace, working_dir, &sources, &destination),
 
-            Command::Restore { paths, staged, worktree } =>
-                restore::restore(git, working_dir, &paths, worktree, staged),
+            Command::Restore { paths, staged, worktree } => restore::restore(
+                workspace,
+                working_dir,
+                &paths,
+                worktree,
+                staged
+            ),
 
             Command::Rm { paths, recursive, force, dry_run, cached } => rm::rm(
-                git,
+                workspace,
                 working_dir,
                 &paths,
                 recursive,
@@ -518,80 +545,76 @@ impl Command
                 cached
             ),
 
-            Command::Status => status::status(git, display_name, working_dir),
+            Command::Status =>
+                status::status(workspace, &context.display_name, working_dir),
 
             Command::Branch { delete, force_delete, force, branch_name } =>
                 match branch_name
                 {
                     Some(branch_name) if delete || force_delete =>
                         branch::delete(
-                            git,
-                            working_dir,
+                            workspace,
                             &branch_name,
                             force || force_delete
                         ),
                     Some(branch_name) =>
-                        branch::branch(git, working_dir, &branch_name),
-                    None => branch::branches(git, working_dir)
+                        branch::branch(workspace, &branch_name),
+                    None => branch::branches(workspace)
                 },
 
-            Command::Commit { message } =>
-                commit::commit(git, working_dir, &message),
+            Command::Commit { message } => commit::commit(workspace, &message),
 
             Command::Merge { commit_ish } =>
-                merge::merge(git, working_dir, &commit_ish),
+                merge::merge(workspace, &commit_ish),
 
             Command::Rebase { upstream } =>
-                rebase::rebase(git, working_dir, &upstream),
+                rebase::rebase(workspace, &upstream),
 
             Command::Reset { soft, mixed, hard, merge, keep, commit } =>
                 reset::reset(
-                    git,
-                    working_dir,
+                    workspace,
                     ResetMode::from_arg(soft, mixed, hard, merge, keep),
                     commit.as_deref()
                 ),
 
             Command::Switch { create, branch_name } => match create
             {
-                true => switch::create(git, working_dir, &branch_name),
-                false => switch::switch(git, working_dir, &branch_name)
+                true => switch::create(workspace, &branch_name),
+                false => switch::switch(workspace, &branch_name)
             },
 
             Command::Tag { delete, tag_name } => match (tag_name, delete)
             {
-                (Some(tag_name), true) =>
-                    tag::delete(git, working_dir, &tag_name),
-                (Some(tag_name), false) =>
-                    tag::create(git, working_dir, &tag_name),
-                (None, false) => tag::tag(git, working_dir),
+                (Some(tag_name), true) => tag::delete(workspace, &tag_name),
+                (Some(tag_name), false) => tag::create(workspace, &tag_name),
+                (None, false) => tag::tag(workspace),
                 _ => unreachable!()
             },
 
             Command::Fetch { repository, refspecs } =>
-                fetch::fetch(git, working_dir, repository.as_deref(), &refspecs),
+                fetch::fetch(workspace, repository.as_deref(), &refspecs),
 
             Command::Pull { repository, refspecs } =>
-                pull::pull(git, working_dir, repository.as_deref(), &refspecs),
+                pull::pull(workspace, repository.as_deref(), &refspecs),
 
             Command::Push { repository, refspecs } =>
-                push::push(git, working_dir, repository.as_deref(), &refspecs),
+                push::push(workspace, repository.as_deref(), &refspecs),
 
             Command::Worktree { command } => match command
                 .unwrap_or(WorktreeCommand::List)
             {
                 WorktreeCommand::Add { branch, path, commit_ish } =>
                     worktree::add(
-                        git,
+                        workspace,
                         working_dir,
                         &path,
                         branch.as_deref(),
                         commit_ish.as_deref()
                     ),
-                WorktreeCommand::List => worktree::list(git, working_dir),
+                WorktreeCommand::List => worktree::list(workspace),
                 WorktreeCommand::Move { force, path, new_path } =>
                     worktree::move_worktree(
-                        git,
+                        workspace,
                         working_dir,
                         &path,
                         &new_path,
@@ -603,7 +626,7 @@ impl Command
                     force_delete,
                     path
                 } => worktree::remove(
-                    git,
+                    workspace,
                     working_dir,
                     &path,
                     force,
@@ -613,7 +636,7 @@ impl Command
             },
 
             Command::Foreach { quiet, command } =>
-                foreach::foreach(working_dir, quiet, &command),
+                foreach::foreach(workspace, working_dir, quiet, &command),
         }
     }
 }

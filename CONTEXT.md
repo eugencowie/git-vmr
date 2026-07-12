@@ -7,8 +7,12 @@ A Git CLI wrapper for treating multiple independent repositories as a single uni
 ### Workspace
 
 **VMR**:
-A virtual monorepo — a directory that groups independent Git repositories into one workspace, identified by a `.gitvmr` marker.
-_Avoid_: workspace, monorepo, root repo
+A virtual monorepo — a directory on disk that groups independent Git repositories, identified by a `.gitvmr` marker.
+_Avoid_: monorepo, root repo
+
+**Workspace**:
+A VMR opened by one command: the child repos discovered at that moment, held fixed for the duration of the command, plus the means to run git across them. The disk can change mid-command; the workspace cannot.
+_Avoid_: VMR (when the fixed, opened view is meant), context, session
 
 **Child repo**:
 A Git repository living directly inside a VMR, operated on as part of the whole.
@@ -27,6 +31,10 @@ _Avoid_: mapping, dispatching, resolving
 **Aggregate path**:
 A path that expands to more than one child repo — the VMR root itself, as in `add -A`.
 _Avoid_: root path, wildcard path
+
+**Scope**:
+What a path-taking command operates over: explicit paths, or the entire VMR via the aggregate path.
+_Avoid_: target, selection
 
 ### Running git
 

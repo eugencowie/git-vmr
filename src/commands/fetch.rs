@@ -1,29 +1,80 @@
-use crate::git;
-use crate::git::Git;
-use crate::vmr::Vmr;
+use crate::workspace::Workspace;
 use anyhow::Result;
-use rayon::prelude::*;
-use std::path::Path;
 
 pub fn fetch(
-    git: &Git,
-    working_dir: &Path,
+    workspace: &Workspace,
     repository: Option<&str>,
     refspecs: &[String]
 ) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
+    // Fetch in each child repository
+    workspace.run(|git, repo| {
+        git.fetch(&repo.name, &repo.path, repository, refspecs)
+    })
+}
 
-    // Get list of repositories
-    let repos = vmr.repos()?;
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::{Git, ScriptedFake};
+    use std::fs;
+    use std::sync::Arc;
 
-    // Fetch in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| git.fetch(&repo.name, &repo.path, repository, refspecs))
-        .collect::<Vec<_>>();
+    fn vmr_fixture() -> tempfile::TempDir
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir_all(tmp.path().join("backend/.git")).unwrap();
+        fs::create_dir_all(tmp.path().join("frontend/.git")).unwrap();
+        tmp
+    }
 
-    // Print results
-    git::print_results(results)
+    #[test]
+    fn fetches_in_every_child_repo()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(["fetch"], 0, "", ""));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = fetch(&workspace, None, &[]);
+
+        // Assert
+        assert!(result.is_ok());
+        let mut paths = fake
+            .calls()
+            .into_iter()
+            .map(|invocation| invocation.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths, vec![
+            tmp.path().join("backend"),
+            tmp.path().join("frontend")
+        ]);
+    }
+
+    #[test]
+    fn passes_repository_and_refspecs_through_to_git()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(
+            ["fetch", "origin", "main"],
+            0,
+            "",
+            ""
+        ));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = fetch(&workspace, Some("origin"), &["main".to_owned()]);
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(fake.calls().len(), 2);
+    }
 }
