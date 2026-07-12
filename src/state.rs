@@ -5,23 +5,14 @@ use crate::cli::APP_NAME;
 pub use analytics::AnalyticsState;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
-use std::{env, fs};
+use std::env;
+use std::path::PathBuf;
 pub use updates::UpdateState;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlobalState
 {
-    /// Path to the state file
-    #[serde(skip)]
-    path: Option<PathBuf>,
-
-    /// Whether the state has unsaved changes
-    #[serde(skip)]
-    dirty: bool,
-
     /// Usage analytics state
     pub analytics: AnalyticsState,
 
@@ -31,102 +22,8 @@ pub struct GlobalState
 
 impl GlobalState
 {
-    /// Load global state
-    pub fn load() -> Result<Self>
-    {
-        // Resolve state path
-        let state_path = Self::resolve_path(None)?;
-
-        // Load state from path
-        Ok(Self::load_from_path(&state_path))
-    }
-
-    /// Load global state from path
-    pub fn load_from_path(path: &Path) -> Self
-    {
-        // Read and parse state file
-        match fs::read_to_string(path)
-        {
-            Ok(contents) =>
-            {
-                let mut state: Self = match toml::from_str(&contents)
-                {
-                    Ok(state) => state,
-                    Err(err) =>
-                    {
-                        eprintln!(
-                            "warning: failed to parse {}: {err:#}; using default state",
-                            path.display()
-                        );
-                        Self { dirty: true, ..Self::default() }
-                    }
-                };
-                state.path = Some(path.to_owned());
-                state
-            }
-
-            // Missing global state uses defaults
-            Err(err) if err.kind() == ErrorKind::NotFound =>
-                Self { path: Some(path.to_path_buf()), ..Self::default() },
-
-            // Any other error prints warning and uses defaults
-            Err(err) =>
-            {
-                eprintln!(
-                    "warning: failed to read {}: {err:#}; using default state",
-                    path.display()
-                );
-                Self {
-                    path: Some(path.to_path_buf()),
-                    dirty: true,
-                    ..Self::default()
-                }
-            }
-        }
-    }
-
-    /// Whether the state has unsaved changes
-    fn is_dirty(&self) -> bool
-    {
-        self.dirty || self.analytics.is_dirty() || self.updates.is_dirty()
-    }
-
-    /// Save global state
-    pub fn save(&mut self) -> Result<()>
-    {
-        // Skip save if state is not dirty
-        if !self.is_dirty()
-        {
-            return Ok(());
-        }
-
-        // Get resolved state path
-        let path = self.path.as_deref().context(
-            "failed to write global state before resolving state path"
-        )?;
-
-        // Create parent directory if needed
-        if let Some(parent) = path.parent()
-        {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create {}", parent.display())
-            })?;
-        }
-
-        // Serialize and write state file
-        let contents = toml::to_string(self).with_context(|| {
-            format!("failed to serialize {}", path.display())
-        })?;
-        fs::write(path, contents)
-            .with_context(|| format!("failed to write {}", path.display()))?;
-        self.dirty = false;
-        self.analytics.clear_dirty();
-        self.updates.clear_dirty();
-        Ok(())
-    }
-
     /// Resolve global state file path
-    fn resolve_path(state_dir: Option<PathBuf>) -> Result<PathBuf>
+    pub fn resolve_path(state_dir: Option<PathBuf>) -> Result<PathBuf>
     {
         // Resolve state root directory
         let state_root = state_dir
@@ -139,17 +36,6 @@ impl GlobalState
         Ok(state_root.join(APP_NAME).join("state.toml"))
     }
 }
-
-impl PartialEq for GlobalState
-{
-    fn eq(&self, other: &Self) -> bool
-    {
-        // Ignore file path when comparing state
-        self.analytics == other.analytics && self.updates == other.updates
-    }
-}
-
-impl Eq for GlobalState {}
 
 #[cfg(test)]
 mod tests
@@ -180,10 +66,10 @@ mod tests
     {
         // Arrange
         let mut state = GlobalState::default();
-        state.analytics.set_session_id(Some("session-1".to_owned()));
-        state.analytics.set_last_activity(Some(now()));
-        state.updates.set_last_check(Some(now()));
-        state.updates.set_last_available(Some("1.2.3".to_owned()));
+        state.analytics.session_id = Some("session-1".to_owned());
+        state.analytics.last_activity = Some(now());
+        state.updates.last_check = Some(now());
+        state.updates.last_available = Some("1.2.3".to_owned());
 
         // Act
         let toml = toml::to_string(&state).unwrap();
@@ -205,10 +91,10 @@ mod tests
         .unwrap();
 
         // Assert
-        assert_eq!(state.analytics.session_id(), Some("session-1"));
-        assert_eq!(state.analytics.last_activity(), Some(now()));
-        assert_eq!(state.updates.last_check(), Some(now()));
-        assert_eq!(state.updates.last_available(), Some("1.2.3"));
+        assert_eq!(state.analytics.session_id, Some("session-1".to_owned()));
+        assert_eq!(state.analytics.last_activity, Some(now()));
+        assert_eq!(state.updates.last_check, Some(now()));
+        assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
     }
 
     #[test]
@@ -220,63 +106,6 @@ mod tests
         // Assert
         assert_eq!(state.analytics, AnalyticsState::default());
         assert_eq!(state.updates, UpdateState::default());
-    }
-
-    #[test]
-    fn roundtrips()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let path = tmp.path().join("state").join("state.toml");
-        let mut state = GlobalState::load_from_path(&path);
-        state.analytics.eval_session_id(now());
-        state.updates.set_last_check(Some(now()));
-        state.updates.set_last_available(Some("1.2.3".to_owned()));
-
-        // Act
-        state.save().unwrap();
-        let loaded = GlobalState::load_from_path(&path);
-
-        // Assert
-        assert_eq!(loaded, state);
-    }
-
-    #[test]
-    fn load_missing_file_returns_default()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let state =
-            GlobalState::load_from_path(&tmp.path().join("missing.toml"));
-
-        // Assert
-        assert_eq!(state, GlobalState::default());
-    }
-
-    #[test]
-    fn load_malformed_file_returns_default()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let path = tmp.path().join("state.toml");
-        fs::write(&path, "[updates]\nlast_check =").unwrap();
-
-        // Act
-        let state = GlobalState::load_from_path(&path);
-
-        // Assert
-        assert_eq!(state, GlobalState::default());
-
-        // Recovery keeps the path so the invalid file can be replaced
-        let mut state = state;
-        state.updates.set_last_available(Some("1.2.3".to_owned()));
-        state.save().unwrap();
-        assert_eq!(
-            GlobalState::load_from_path(&path).updates.last_available(),
-            Some("1.2.3")
-        );
     }
 
     #[test]

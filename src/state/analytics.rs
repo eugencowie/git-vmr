@@ -3,17 +3,14 @@ use serde::{Deserialize, Serialize};
 
 const SESSION_WINDOW: Duration = Duration::hours(4);
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnalyticsState
 {
-    #[serde(skip)]
-    dirty: bool,
-
     /// Active analytics session ID
-    session_id: Option<String>,
+    pub session_id: Option<String>,
 
     /// Last analytics activity time
-    last_activity: Option<DateTime<Utc>>
+    pub last_activity: Option<DateTime<Utc>>
 }
 
 impl AnalyticsState
@@ -31,56 +28,11 @@ impl AnalyticsState
             _ => aptabase_rs::new_session_id()
         };
 
-        self.set_session_id(Some(session_id.clone()));
-        self.set_last_activity(Some(now));
+        self.session_id = Some(session_id.clone());
+        self.last_activity = Some(now);
         session_id
     }
-
-    #[allow(unused)]
-    pub fn session_id(&self) -> Option<&str>
-    {
-        self.session_id.as_deref()
-    }
-
-    pub fn set_session_id(&mut self, session_id: Option<String>)
-    {
-        self.session_id = session_id;
-        self.dirty = true;
-    }
-
-    #[allow(unused)]
-    pub fn last_activity(&self) -> Option<DateTime<Utc>>
-    {
-        self.last_activity
-    }
-
-    pub fn set_last_activity(&mut self, last_activity: Option<DateTime<Utc>>)
-    {
-        self.last_activity = last_activity;
-        self.dirty = true;
-    }
-
-    pub fn is_dirty(&self) -> bool
-    {
-        self.dirty
-    }
-
-    pub fn clear_dirty(&mut self)
-    {
-        self.dirty = false;
-    }
 }
-
-impl PartialEq for AnalyticsState
-{
-    fn eq(&self, other: &Self) -> bool
-    {
-        self.session_id == other.session_id
-            && self.last_activity == other.last_activity
-    }
-}
-
-impl Eq for AnalyticsState {}
 
 #[cfg(test)]
 mod tests
@@ -108,8 +60,7 @@ mod tests
     {
         let state = AnalyticsState {
             session_id: Some("session-1".to_owned()),
-            last_activity: Some(now()),
-            ..AnalyticsState::default()
+            last_activity: Some(now())
         };
 
         let toml = toml::to_string(&state).unwrap();
@@ -149,8 +100,7 @@ mod tests
     {
         let mut state = AnalyticsState {
             session_id: Some("session-1".to_owned()),
-            last_activity: Some(now() - Duration::hours(3)),
-            ..AnalyticsState::default()
+            last_activity: Some(now() - Duration::hours(3))
         };
 
         let session_id = state.eval_session_id(now());
@@ -164,8 +114,7 @@ mod tests
     {
         let mut state = AnalyticsState {
             session_id: Some("session-1".to_owned()),
-            last_activity: Some(now() - Duration::hours(4)),
-            ..AnalyticsState::default()
+            last_activity: Some(now() - Duration::hours(4))
         };
 
         let session_id = state.eval_session_id(now());

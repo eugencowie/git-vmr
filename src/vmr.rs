@@ -1,6 +1,7 @@
 mod repo;
 
 use crate::config::Config;
+use crate::store::FileStore;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 pub use repo::Repo;
@@ -69,9 +70,8 @@ impl Vmr
         fs::create_dir_all(&vmr_dir)
             .context("fatal: failed to create .gitvmr directory")?;
 
-        let config = toml::to_string(&Config::default())
-            .context("fatal: failed to serialize config")?;
-        fs::write(&config_path, config)
+        FileStore::new(config_path, Config::default())
+            .write()
             .context("fatal: failed to write .gitvmr/config")?;
 
         Ok(InitOutcome::Created)

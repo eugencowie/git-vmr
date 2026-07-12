@@ -27,11 +27,11 @@ fn check_with_query(
         return None;
     }
 
-    context.global_state.updates.set_last_check(Some(now));
+    context.global_state.updates.last_check = Some(now);
     context.save().ok()?;
 
     let version = query().ok()??;
-    context.global_state.updates.set_last_available(Some(version.clone()));
+    context.global_state.updates.last_available = Some(version.clone());
 
     Some(format!("\nA new git-vmr version is available: {version}"))
 }
@@ -75,6 +75,7 @@ mod tests
     use super::*;
     use crate::config::{Analytics, Core, Frequency, Updates};
     use crate::state::GlobalState;
+    use crate::store::FileStore;
     use anyhow::bail;
     use std::cell::Cell;
     use std::fs;
@@ -90,17 +91,18 @@ mod tests
         use crate::config::GlobalConfig;
         use std::path::PathBuf;
 
-        let state = crate::state::GlobalState::load_from_path(state_file);
+        let (state, _) = FileStore::load_or_default(state_file.to_path_buf());
         let mut context = CliContext {
             git: crate::git::Git::subprocess(),
             display_name: "git vmr".to_owned(),
             working_dir: PathBuf::new(),
-            global_config: GlobalConfig {
+            global_config: FileStore::new(PathBuf::new(), GlobalConfig {
                 core: Core::default(),
                 updates: Updates { check_frequency: frequency },
                 analytics: Analytics::default()
-            },
-            global_state: state
+            }),
+            global_state: state,
+            warnings: vec![]
         };
         let notice = check_with_query(&mut context, now, query);
         context.save().ok()?;
@@ -153,8 +155,9 @@ mod tests
 
         // Act
         let notice = run_with_paths(daily(), &state_file, now(), || {
-            let state = GlobalState::load_from_path(&state_file);
-            assert_eq!(state.updates.last_check(), Some(now()));
+            let (state, _) =
+                FileStore::<GlobalState>::load_or_default(state_file.clone());
+            assert_eq!(state.updates.last_check, Some(now()));
             bail!("network failed")
         });
 
@@ -185,8 +188,11 @@ mod tests
         );
         assert_eq!(calls.get(), 1);
         assert_eq!(
-            GlobalState::load_from_path(&state_file).updates.last_available(),
-            Some("1.2.3")
+            FileStore::<GlobalState>::load_or_default(state_file)
+                .0
+                .updates
+                .last_available,
+            Some("1.2.3".to_owned())
         );
     }
 
@@ -196,13 +202,7 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let state_file = state_file(&tmp);
-        fs::create_dir_all(state_file.parent().unwrap()).unwrap();
-        fs::write(&state_file, "").unwrap();
-        let original_permissions =
-            fs::metadata(&state_file).unwrap().permissions();
-        let mut readonly_permissions = original_permissions.clone();
-        readonly_permissions.set_readonly(true);
-        fs::set_permissions(&state_file, readonly_permissions).unwrap();
+        fs::write(tmp.path().join("state"), "not a directory").unwrap();
         let calls = Cell::new(0);
 
         // Act
@@ -210,9 +210,6 @@ mod tests
             calls.set(calls.get() + 1);
             Ok(Some("1.2.3".into()))
         });
-
-        // Cleanup
-        fs::set_permissions(&state_file, original_permissions).unwrap();
 
         // Assert
         assert_eq!(notice, None);

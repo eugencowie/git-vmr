@@ -1,6 +1,7 @@
 use crate::config::GlobalConfig;
 use crate::git::Git;
 use crate::state::GlobalState;
+use crate::store::FileStore;
 use anyhow::{Context, Result, bail};
 use std::env;
 use std::path::PathBuf;
@@ -14,10 +15,13 @@ pub struct CliContext
     pub working_dir: PathBuf,
 
     /// Global configuration
-    pub global_config: GlobalConfig,
+    pub global_config: FileStore<GlobalConfig>,
 
     /// Global runtime state
-    pub global_state: GlobalState,
+    pub global_state: FileStore<GlobalState>,
+
+    /// Warnings raised while loading context data
+    pub warnings: Vec<String>,
 
     /// Git operations adapter
     pub git: Git
@@ -31,12 +35,17 @@ impl CliContext
         working_dir: &Option<PathBuf>
     ) -> Result<Self>
     {
+        let global_config = FileStore::load(GlobalConfig::resolve_path(None)?)?;
+        let (global_state, state_warning) =
+            FileStore::load_or_default(GlobalState::resolve_path(None)?);
+
         // Resolve inputs needed by commands
         Ok(Self {
             display_name: display_name.to_owned(),
             working_dir: Self::resolve_working_dir(working_dir)?,
-            global_config: GlobalConfig::load()?,
-            global_state: GlobalState::load()?,
+            global_config,
+            global_state,
+            warnings: state_warning.into_iter().collect(),
             git: Git::subprocess()
         })
     }
@@ -44,6 +53,7 @@ impl CliContext
     /// Save changes to the context
     pub fn save(&mut self) -> Result<()>
     {
+        self.global_config.save()?;
         self.global_state.save()
     }
 
@@ -84,6 +94,40 @@ mod tests
 {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn saves_global_config_and_state_changes()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        let state_path = tmp.path().join("state.toml");
+        let mut context = CliContext {
+            display_name: "git vmr".to_owned(),
+            working_dir: PathBuf::new(),
+            global_config: FileStore::new(
+                config_path.clone(),
+                GlobalConfig::default()
+            ),
+            global_state: FileStore::new(
+                state_path.clone(),
+                GlobalState::default()
+            ),
+            warnings: vec![],
+            git: Git::subprocess()
+        };
+        context.global_config.core.version = 1;
+        context.global_state.updates.last_available = Some("1.2.3".to_owned());
+
+        // Act
+        context.save().unwrap();
+
+        // Assert
+        let config = FileStore::<GlobalConfig>::load(config_path).unwrap();
+        let state = FileStore::<GlobalState>::load(state_path).unwrap();
+        assert_eq!(config.core.version, 1);
+        assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
+    }
 
     #[test]
     fn resolves_working_dir_argument_to_canonical_directory()
