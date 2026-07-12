@@ -1,12 +1,25 @@
+mod add;
 mod branch;
 mod clone;
-mod ops;
+mod commit;
+mod fetch;
+mod merge;
+mod mv;
+mod pull;
+mod push;
+mod rebase;
+mod reset;
+mod restore;
+mod rm;
 mod runner;
 mod status;
+mod switch;
+mod tag;
 mod worktree;
 
+pub use add::ChmodMode;
 use anyhow::{Context, Result, bail};
-pub use ops::{ChmodMode, ResetMode};
+pub use reset::ResetMode;
 #[cfg(test)]
 pub(crate) use runner::scripted::ScriptedFake;
 pub use runner::{GitRunner, SubprocessRunner};
