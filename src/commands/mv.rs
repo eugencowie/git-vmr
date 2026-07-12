@@ -209,7 +209,7 @@ fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
     )
     {
         return Ok(failure_message(
-            &entry.source_repo.name,
+            &entry.destination_repo.name,
             format!(
                 "fatal: failed to stage destination addition in '{}': {error:#}",
                 entry.destination_repo.path.display()
@@ -411,5 +411,38 @@ mod tests
         assert!(failed.message.contains("backend"));
         assert!(tmp.path().join("frontend/docs/a.txt").exists());
         assert!(tmp.path().join("frontend/docs/b.txt").exists());
+    }
+
+    #[test]
+    fn failed_destination_staging_reports_the_destination_repo()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake =
+            ScriptedFake::new().on(["add", "--", "config.toml"], 0, "", "").on(
+                ["add", "--", "settings.toml"],
+                1,
+                "",
+                "fatal: unable to stage"
+            );
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "config.toml"));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/config.toml")],
+            Path::new("frontend/settings.toml")
+        );
+
+        // Assert
+        let failed = result.unwrap_err().downcast::<Failed>().unwrap();
+        assert!(
+            failed.message.contains("failed to stage destination addition")
+        );
+        assert!(failed.message.contains("(frontend)"));
+        assert!(!failed.message.contains("(backend)"));
     }
 }
