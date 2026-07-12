@@ -1,4 +1,4 @@
-use crate::git::{ChildWorktreeState, Git, GitCommandResult, RepoOutcome};
+use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 pub struct WorktreeRootEntry
 {
     pub repo: String,
-    pub head: String,
-    pub state: ChildWorktreeState
+    pub head: Head
 }
 
 /// The result of a mutating root operation: the per-repo outcomes, plus the
@@ -212,8 +211,7 @@ impl<'a> WorktreeRoots<'a>
                 {
                     groups.entry(root).or_default().push(WorktreeRootEntry {
                         repo: repo_name.clone(),
-                        head: entry.head,
-                        state: entry.state
+                        head: entry.head
                     });
                 }
             }
@@ -273,10 +271,12 @@ fn child_worktree_branch(
     Ok(entries
         .into_iter()
         .find(|entry| entry.path.clean() == child_target)
-        .and_then(|entry| match entry.state
+        .and_then(|entry| match entry.head
         {
-            ChildWorktreeState::Branch(branch) => Some(branch),
-            ChildWorktreeState::Detached => None
+            Head::Branch(branch) => Some(branch),
+            // An unborn branch has no ref to delete, so it is skipped just
+            // like a detached head.
+            Head::Unborn(_) | Head::Detached(_) => None
         }))
 }
 
@@ -851,9 +851,6 @@ mod tests
             entries.iter().map(|entry| entry.repo.as_str()).collect::<Vec<_>>(),
             vec!["backend", "frontend"]
         );
-        assert_eq!(
-            entries[0].state,
-            ChildWorktreeState::Branch("feature".to_owned())
-        );
+        assert_eq!(entries[0].head, Head::Branch("feature".to_owned()));
     }
 }

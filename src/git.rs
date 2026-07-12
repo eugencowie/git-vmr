@@ -3,6 +3,7 @@ mod branch;
 mod clone;
 mod commit;
 mod fetch;
+mod head;
 mod merge;
 mod mv;
 mod pull;
@@ -19,7 +20,8 @@ mod tag;
 mod worktree;
 
 pub use add::ChmodMode;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
+pub use head::Head;
 pub use reset::ResetMode;
 #[cfg(test)]
 pub(crate) use runner::scripted::ScriptedFake;
@@ -27,7 +29,6 @@ pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
-pub use worktree::ChildWorktreeState;
 
 /// The deep git module: every operation is a method, and every invocation
 /// flows through the [`GitRunner`] seam owned here.
@@ -118,52 +119,6 @@ impl Git
             .collect::<Vec<_>>();
         self.output(repo_path, args)
     }
-
-    pub(crate) fn status_head(
-        &self,
-        repo_path: &Path,
-        context: &str,
-        header: &[u8]
-    ) -> Result<(Head, bool)>
-    {
-        // Decode and validate branch header.
-        let header = String::from_utf8_lossy(header);
-        let header = header
-            .strip_prefix("## ")
-            .context("fatal: git status branch header had unexpected format")?;
-
-        if let Some(branch) = header.strip_prefix("No commits yet on ")
-        {
-            return Ok((Head::Branch(branch.to_owned()), true));
-        }
-
-        if header == "HEAD (no branch)" || header.starts_with("HEAD detached")
-        {
-            let hash = String::from_utf8_lossy(
-                &self
-                    .stdout(repo_path, ["rev-parse", "--short", "HEAD"])
-                    .with_context(|| {
-                        format!(
-                            "fatal: {context} for '{}'",
-                            repo_path.display()
-                        )
-                    })?
-            )
-            .trim()
-            .to_owned();
-            return Ok((Head::Detached(hash), false));
-        }
-
-        let branch = header.split("...").next().unwrap_or(header).to_owned();
-        Ok((Head::Branch(branch), false))
-    }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub enum Head
-{
-    Branch(String),
-    Detached(String)
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -195,7 +150,6 @@ pub struct FileEntry
 pub struct RepoStatus
 {
     pub head: Head,
-    pub initial: bool,
     pub staged_changes: Vec<FileEntry>,
     pub unstaged_changes: Vec<FileEntry>,
     pub untracked_files: Vec<FileEntry>

@@ -24,7 +24,7 @@ pub fn branches(repos: &[(String, RepoBranches)]) -> String
 
         match &branches.head
         {
-            Head::Branch(branch) =>
+            Head::Branch(branch) | Head::Unborn(branch) =>
             {
                 active_branches.insert(branch.as_str());
             }

@@ -28,7 +28,7 @@ impl Git
         let branch_header = records
             .next()
             .context("fatal: git status did not return a branch header")?;
-        let (head, initial) = self.status_head(
+        let head = self.head_from_status_header(
             &repo.path,
             "failed to read git status",
             branch_header
@@ -39,7 +39,6 @@ impl Git
 
         Ok(Some((repo.clone(), RepoStatus {
             head,
-            initial,
             staged_changes,
             unstaged_changes,
             untracked_files
@@ -151,7 +150,6 @@ mod tests
 
         // Assert
         assert!(matches!(&status.head, Head::Branch(name) if name == "main"));
-        assert!(!status.initial);
         assert_eq!(status.staged_changes, vec![
             FileEntry {
                 path: PathBuf::from("staged.rs"),
@@ -179,7 +177,7 @@ mod tests
         let git = Git::with(
             ScriptedFake::new()
                 .on(STATUS_ARGS, 0, "## HEAD (no branch)\0", "")
-                .on(["rev-parse", "--short", "HEAD"], 0, "abc1234\n", "")
+                .on(["rev-parse", "--short=8", "HEAD"], 0, "abc12345\n", "")
         );
 
         // Act
@@ -187,12 +185,12 @@ mod tests
 
         // Assert
         assert!(
-            matches!(&status.head, Head::Detached(hash) if hash == "abc1234")
+            matches!(&status.head, Head::Detached(hash) if hash == "abc12345")
         );
     }
 
     #[test]
-    fn status_reports_initial_branch_before_first_commit()
+    fn status_reports_unborn_branch_before_first_commit()
     {
         // Arrange
         let git = Git::with(ScriptedFake::new().on(
@@ -206,8 +204,7 @@ mod tests
         let (_, status) = git.status(&repo()).unwrap().unwrap();
 
         // Assert
-        assert!(matches!(&status.head, Head::Branch(name) if name == "main"));
-        assert!(status.initial);
+        assert!(matches!(&status.head, Head::Unborn(name) if name == "main"));
     }
 
     #[test]
