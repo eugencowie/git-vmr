@@ -1,24 +1,8 @@
-use crate::git;
-use crate::git::Git;
-use crate::vmr::Vmr;
+use crate::workspace::Workspace;
 use anyhow::Result;
-use rayon::prelude::*;
-use std::path::Path;
 
-pub fn merge(git: &Git, working_dir: &Path, commit_ish: &str) -> Result<()>
+pub fn merge(workspace: &Workspace, commit_ish: &str) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Merge in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| git.merge(&repo.name, &repo.path, commit_ish))
-        .collect::<Vec<_>>();
-
-    // Print results
-    git::print_results(results)
+    // Merge in each child repository
+    workspace.run(|git, repo| git.merge(&repo.name, &repo.path, commit_ish))
 }

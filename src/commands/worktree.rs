@@ -1,6 +1,6 @@
 use crate::git;
 use crate::git::Git;
-use crate::vmr::{Vmr, resolve_path};
+use crate::workspace::{Repo, Workspace, resolve_path};
 use anyhow::{Context, Result};
 use path_clean::PathClean;
 use rayon::prelude::*;
@@ -8,30 +8,26 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn list(git: &Git, working_dir: &Path) -> Result<()>
+pub fn list(workspace: &Workspace) -> Result<()>
 {
-    let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
-    let repo_names =
-        repos.iter().map(|repo| repo.name.clone()).collect::<Vec<_>>();
-
-    let results = repos
-        .par_iter()
-        .map(|repo| {
-            git.worktree_list(&repo.name, &repo.path)
-                .map(|entries| (repo.name.clone(), entries))
-        })
+    let repo_names = workspace
+        .repos()
+        .iter()
+        .map(|repo| repo.name.clone())
         .collect::<Vec<_>>();
 
-    let mut groups: BTreeMap<PathBuf, Vec<AggregateEntry>> = BTreeMap::new();
-    for result in results
-    {
-        let (repo_name, entries) = result?;
+    let results = workspace.map(|git, repo| {
+        git.worktree_list(&repo.name, &repo.path)
+            .map(|entries| (repo.name.clone(), entries))
+    })?;
 
+    let mut groups: BTreeMap<PathBuf, Vec<AggregateEntry>> = BTreeMap::new();
+    for (repo_name, entries) in results
+    {
         for entry in entries
         {
             if let Some(root) =
-                aggregate_root(&vmr.path, &repo_name, &entry.path)
+                aggregate_root(workspace.root(), &repo_name, &entry.path)
             {
                 groups.entry(root).or_default().push(AggregateEntry {
                     repo: repo_name.clone(),
@@ -51,15 +47,13 @@ pub fn list(git: &Git, working_dir: &Path) -> Result<()>
 }
 
 pub fn add(
-    git: &Git,
+    workspace: &Workspace,
     working_dir: &Path,
     path: &Path,
     branch: Option<&str>,
     commit_ish: Option<&str>
 ) -> Result<()>
 {
-    let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
     let target = resolve_path(working_dir, path).clean();
     let mode = match (branch, commit_ish)
     {
@@ -87,33 +81,28 @@ pub fn add(
         format!("fatal: failed to create VMR marker in '{}'", target.display())
     })?;
 
-    let results = repos
-        .par_iter()
-        .map(|repo| {
-            let (branch, commit_ish) = match &mode
-            {
-                WorktreeAddMode::NewBranch { branch, commit_ish } =>
-                    (Some(branch.as_str()), commit_ish.as_deref()),
-                WorktreeAddMode::CommitIsh(commit_ish) =>
-                    (None, Some(commit_ish.as_str())),
-                WorktreeAddMode::InferredBranch(branch)
-                    if git.branch_exists(&repo.path, branch)? =>
-                    (None, Some(branch.as_str())),
-                WorktreeAddMode::InferredBranch(branch) =>
-                    (Some(branch.as_str()), None),
-            };
+    workspace.run(|git, repo| {
+        let (branch, commit_ish) = match &mode
+        {
+            WorktreeAddMode::NewBranch { branch, commit_ish } =>
+                (Some(branch.as_str()), commit_ish.as_deref()),
+            WorktreeAddMode::CommitIsh(commit_ish) =>
+                (None, Some(commit_ish.as_str())),
+            WorktreeAddMode::InferredBranch(branch)
+                if git.branch_exists(&repo.path, branch)? =>
+                (None, Some(branch.as_str())),
+            WorktreeAddMode::InferredBranch(branch) =>
+                (Some(branch.as_str()), None),
+        };
 
-            git.worktree_add(
-                &repo.name,
-                &repo.path,
-                &target.join(&repo.name),
-                branch,
-                commit_ish
-            )
-        })
-        .collect::<Vec<_>>();
-
-    git::print_results(results)
+        git.worktree_add(
+            &repo.name,
+            &repo.path,
+            &target.join(&repo.name),
+            branch,
+            commit_ish
+        )
+    })
 }
 
 enum WorktreeAddMode
@@ -256,7 +245,7 @@ fn state_sort_key(state: &git::ChildWorktreeState) -> (&str, &str)
 }
 
 pub fn remove(
-    git: &Git,
+    workspace: &Workspace,
     working_dir: &Path,
     path: &Path,
     force: u8,
@@ -264,42 +253,13 @@ pub fn remove(
     force_delete: bool
 ) -> Result<()>
 {
-    let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
+    let git = workspace.git();
     let target = resolve_path(working_dir, path).clean();
 
-    let removals = repos
-        .par_iter()
-        .map(|repo| {
-            let child_target = target.join(&repo.name).clean();
-            let branch = if delete || force_delete
-            {
-                child_worktree_branch(
-                    git,
-                    &repo.name,
-                    &repo.path,
-                    &child_target
-                )?
-            }
-            else
-            {
-                None
-            };
-            let result = git.worktree_remove(
-                &repo.name,
-                &repo.path,
-                &child_target,
-                force
-            );
-
-            Ok(RemovalOutcome {
-                repo_name: repo.name.clone(),
-                repo_path: repo.path.clone(),
-                branch,
-                result
-            })
-        })
-        .collect::<Vec<_>>();
+    let removals = workspace.map(|git, repo| {
+        // Wrap per-repo errors so map attempts every repository.
+        Ok(removal_outcome(git, repo, &target, force, delete, force_delete))
+    })?;
 
     let mut all_child_removals_succeeded = true;
     let mut results = Vec::new();
@@ -345,7 +305,7 @@ pub fn remove(
         cleanup_aggregate_worktree(&target)?;
     }
 
-    git::print_results(results)
+    crate::workspace::report(results)
 }
 
 struct RemovalOutcome
@@ -354,6 +314,35 @@ struct RemovalOutcome
     repo_path: PathBuf,
     branch: Option<String>,
     result: git::GitCommandResult
+}
+
+fn removal_outcome(
+    git: &Git,
+    repo: &Repo,
+    target: &Path,
+    force: u8,
+    delete: bool,
+    force_delete: bool
+) -> Result<RemovalOutcome>
+{
+    let child_target = target.join(&repo.name).clean();
+    let branch = if delete || force_delete
+    {
+        child_worktree_branch(git, &repo.name, &repo.path, &child_target)?
+    }
+    else
+    {
+        None
+    };
+    let result =
+        git.worktree_remove(&repo.name, &repo.path, &child_target, force);
+
+    Ok(RemovalOutcome {
+        repo_name: repo.name.clone(),
+        repo_path: repo.path.clone(),
+        branch,
+        result
+    })
 }
 
 fn child_worktree_branch(
@@ -417,15 +406,13 @@ fn cleanup_aggregate_worktree(target: &Path) -> Result<()>
 }
 
 pub fn move_worktree(
-    git: &Git,
+    workspace: &Workspace,
     working_dir: &Path,
     path: &Path,
     new_path: &Path,
     force: u8
 ) -> Result<()>
 {
-    let vmr = Vmr::find(working_dir)?;
-    let repos = vmr.repos()?;
     let source = resolve_path(working_dir, path).clean();
     let destination = resolve_path(working_dir, new_path).clean();
 
@@ -442,20 +429,15 @@ pub fn move_worktree(
         )
     })?;
 
-    let results = repos
-        .par_iter()
-        .map(|repo| {
-            git.worktree_move(
-                &repo.name,
-                &repo.path,
-                &source.join(&repo.name),
-                &destination.join(&repo.name),
-                force
-            )
-        })
-        .collect::<Vec<_>>();
-
-    git::print_results(results)?;
+    workspace.run(|git, repo| {
+        git.worktree_move(
+            &repo.name,
+            &repo.path,
+            &source.join(&repo.name),
+            &destination.join(&repo.name),
+            force
+        )
+    })?;
 
     let marker = source.join(".gitvmr");
     if marker.exists()

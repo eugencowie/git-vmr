@@ -1,10 +1,8 @@
-use crate::git::{self, Git, Head, RepoBranches};
-use crate::vmr::Vmr;
+use crate::git::{Head, RepoBranches};
+use crate::workspace::Workspace;
 use anstyle::{AnsiColor, Style};
 use anyhow::Result;
-use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 
 #[derive(Clone, Copy)]
 struct BranchStyle(Style);
@@ -38,65 +36,32 @@ impl BranchStyles
     }
 }
 
-pub fn branch(git: &Git, working_dir: &Path, branch_name: &str) -> Result<()>
+pub fn branch(workspace: &Workspace, branch_name: &str) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Branch in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| git.branch(&repo.name, &repo.path, branch_name))
-        .collect::<Vec<_>>();
-
-    // Print results
-    git::print_results(results)
+    // Branch in each child repository
+    workspace.run(|git, repo| git.branch(&repo.name, &repo.path, branch_name))
 }
 
 pub fn delete(
-    git: &Git,
-    working_dir: &Path,
+    workspace: &Workspace,
     branch_name: &str,
     force: bool
 ) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Delete branch in each repository
-    let results = repos
-        .par_iter()
-        .map(|repo| {
-            git.delete_branch(&repo.name, &repo.path, branch_name, force)
-        })
-        .collect::<Vec<_>>();
-
-    // Print results
-    git::print_results(results)
+    // Delete branch in each child repository
+    workspace.run(|git, repo| {
+        git.delete_branch(&repo.name, &repo.path, branch_name, force)
+    })
 }
 
-pub fn branches(git: &Git, working_dir: &Path) -> Result<()>
+pub fn branches(workspace: &Workspace) -> Result<()>
 {
-    // Find virtual monorepo
-    let vmr = Vmr::find(working_dir)?;
-
-    // Get list of repositories
-    let repos = vmr.repos()?;
-
-    // Collect branch information from repositories
-    let mut branches = repos
-        .par_iter()
-        .filter_map(|repo| git.branches(repo).transpose())
-        .collect::<Result<Vec<_>>>()?;
-
-    // Keep branch order deterministic
-    branches.sort_by(|(a, _), (b, _)| a.cmp(b));
+    // Collect branch information from child repositories, in repo order
+    let branches = workspace
+        .map(|git, repo| git.branches(repo))?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     // Print results
     anstream::print!("{}", render_branches(&branches));
