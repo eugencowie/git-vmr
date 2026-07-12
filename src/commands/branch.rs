@@ -1,9 +1,14 @@
+use crate::cli::CliContext;
 use crate::git::{BranchAction, BranchArgs};
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn branch(workspace: &Workspace, args: &BranchArgs) -> Result<Rendered>
+pub fn run(
+    workspace: &Workspace,
+    _context: &CliContext,
+    args: BranchArgs
+) -> Result<Rendered>
 {
     match args.action()
     {

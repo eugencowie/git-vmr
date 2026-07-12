@@ -1,15 +1,17 @@
+use crate::cli::CliContext;
 use crate::git::RestoreArgs;
 use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
-use std::path::Path;
 
-pub fn restore(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    args: &RestoreArgs
+    context: &CliContext,
+    args: RestoreArgs
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     // Restore routed paths in each owning child repository
     workspace.run_routed(
         working_dir,

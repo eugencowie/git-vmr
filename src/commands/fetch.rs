@@ -1,12 +1,17 @@
+use crate::cli::CliContext;
 use crate::git::FetchArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn fetch(workspace: &Workspace, args: &FetchArgs) -> Result<Rendered>
+pub fn run(
+    workspace: &Workspace,
+    _context: &CliContext,
+    args: FetchArgs
+) -> Result<Rendered>
 {
     // Fetch in each child repository
-    workspace.run(|git, repo| git.fetch(repo, args))
+    workspace.run(|git, repo| git.fetch(repo, &args))
 }
 
 #[cfg(test)]
@@ -14,7 +19,7 @@ mod tests
 {
     use super::*;
     use crate::git::{Git, ScriptedFake};
-    use crate::test_support::vmr_fixture;
+    use crate::test_support::{cli_context, vmr_fixture};
     use std::sync::Arc;
 
     #[test]
@@ -27,7 +32,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, &FetchArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
             repository: None,
             refspecs: vec![]
         });
@@ -61,7 +66,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, &FetchArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
             repository: Some("origin".to_owned()),
             refspecs: vec!["main".to_owned()]
         });

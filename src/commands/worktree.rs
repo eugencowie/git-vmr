@@ -1,3 +1,4 @@
+use crate::cli::CliContext;
 use crate::render::{self, Rendered};
 use crate::workspace::{
     Workspace, WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs,
@@ -6,12 +7,14 @@ use crate::workspace::{
 use anyhow::Result;
 use std::path::Path;
 
-pub fn worktree(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
+    context: &CliContext,
     command: Option<WorktreeCommand>
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     match command.unwrap_or(WorktreeCommand::List)
     {
         WorktreeCommand::Add(args) => add(workspace, working_dir, &args),

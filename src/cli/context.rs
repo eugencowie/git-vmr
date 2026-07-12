@@ -53,6 +53,25 @@ impl CliContext
         })
     }
 
+    /// A context rooted at `working_dir`, with stores that touch nothing
+    /// until saved. Tests that exercise git inject a scripted fake.
+    #[cfg(test)]
+    pub(crate) fn for_tests(working_dir: &std::path::Path, git: Git) -> Self
+    {
+        let (global_state, _) =
+            FileStore::load_or_default(working_dir.join("state.toml"));
+
+        Self {
+            display_name: "git vmr".to_owned(),
+            working_dir: working_dir.to_path_buf(),
+            global_config: FileStore::load(working_dir.join("config.toml"))
+                .expect("missing global config loads as defaults"),
+            global_state,
+            warnings: Vec::new(),
+            git
+        }
+    }
+
     /// Warnings raised while loading context data
     pub fn warnings(&self) -> &[String]
     {

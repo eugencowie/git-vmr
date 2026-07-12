@@ -1,14 +1,13 @@
+use crate::cli::CliContext;
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
-use std::path::Path;
 
-pub fn status(
-    workspace: &Workspace,
-    display_name: &str,
-    working_dir: &Path
-) -> Result<Rendered>
+pub fn run(workspace: &Workspace, context: &CliContext) -> Result<Rendered>
 {
+    let display_name = &context.display_name;
+    let working_dir = &context.working_dir;
+
     // Collect status information from child repositories, in repo order
     let statuses = workspace
         .map(|git, repo| git.status(repo))?
@@ -24,7 +23,9 @@ pub fn status(
 mod tests
 {
     use super::*;
+    use crate::test_support::cli_context;
     use std::fs;
+    use std::path::Path;
     use std::process::Command;
 
     const DISPLAY_NAME: &str = "git vmr";
@@ -41,7 +42,9 @@ mod tests
         // Act
         let git = crate::git::Git::subprocess();
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
-        let result = status(&workspace, DISPLAY_NAME, tmp.path());
+        let mut context = cli_context(tmp.path());
+        context.display_name = DISPLAY_NAME.to_owned();
+        let result = run(&workspace, &context);
 
         // Assert
         assert!(result.is_ok());

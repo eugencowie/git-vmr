@@ -42,8 +42,9 @@ pub enum Command
     Workspace(WorkspaceCommand)
 }
 
-/// A command that runs inside an opened workspace: the VMR is discovered and
-/// its child repos snapshotted before the command sees anything.
+// A workspace command runs inside an opened workspace: the VMR is discovered
+// and its child repos snapshotted before the command sees anything. Not a doc
+// comment — clap would surface it as the application's help text.
 #[derive(Subcommand)]
 pub enum WorkspaceCommand
 {
@@ -80,18 +81,16 @@ impl Command
 {
     pub fn run(self, context: &CliContext) -> Result<Rendered>
     {
-        let working_dir = &context.working_dir;
-        let git = &context.git;
-
         match self
         {
-            Command::Clone(args) => clone::clone(git, working_dir, &args),
+            Command::Clone(args) => clone::run(context, args),
 
-            Command::Init(args) => init::init(working_dir, &args),
+            Command::Init(args) => init::run(context, args),
 
             Command::Workspace(command) =>
             {
-                let workspace = Workspace::find(git, working_dir)?;
+                let workspace =
+                    Workspace::find(&context.git, &context.working_dir)?;
                 command.run(&workspace, context)
             }
         }
@@ -106,48 +105,51 @@ impl WorkspaceCommand
         context: &CliContext
     ) -> Result<Rendered>
     {
-        let working_dir = &context.working_dir;
-
         match self
         {
-            WorkspaceCommand::Add(args) =>
-                add::add(workspace, working_dir, &args),
+            WorkspaceCommand::Add(args) => add::run(workspace, context, args),
 
-            WorkspaceCommand::Mv(args) => mv::mv(workspace, working_dir, &args),
+            WorkspaceCommand::Mv(args) => mv::run(workspace, context, args),
 
             WorkspaceCommand::Restore(args) =>
-                restore::restore(workspace, working_dir, &args),
+                restore::run(workspace, context, args),
 
-            WorkspaceCommand::Rm(args) => rm::rm(workspace, working_dir, &args),
+            WorkspaceCommand::Rm(args) => rm::run(workspace, context, args),
 
-            WorkspaceCommand::Status =>
-                status::status(workspace, &context.display_name, working_dir),
+            WorkspaceCommand::Status => status::run(workspace, context),
 
-            WorkspaceCommand::Branch(args) => branch::branch(workspace, &args),
+            WorkspaceCommand::Branch(args) =>
+                branch::run(workspace, context, args),
 
-            WorkspaceCommand::Commit(args) => commit::commit(workspace, &args),
+            WorkspaceCommand::Commit(args) =>
+                commit::run(workspace, context, args),
 
-            WorkspaceCommand::Merge(args) => merge::merge(workspace, &args),
+            WorkspaceCommand::Merge(args) =>
+                merge::run(workspace, context, args),
 
-            WorkspaceCommand::Rebase(args) => rebase::rebase(workspace, &args),
+            WorkspaceCommand::Rebase(args) =>
+                rebase::run(workspace, context, args),
 
-            WorkspaceCommand::Reset(args) => reset::reset(workspace, &args),
+            WorkspaceCommand::Reset(args) =>
+                reset::run(workspace, context, args),
 
-            WorkspaceCommand::Switch(args) => switch::switch(workspace, &args),
+            WorkspaceCommand::Switch(args) =>
+                switch::run(workspace, context, args),
 
-            WorkspaceCommand::Tag(args) => tag::tag(workspace, &args),
+            WorkspaceCommand::Tag(args) => tag::run(workspace, context, args),
 
-            WorkspaceCommand::Fetch(args) => fetch::fetch(workspace, &args),
+            WorkspaceCommand::Fetch(args) =>
+                fetch::run(workspace, context, args),
 
-            WorkspaceCommand::Pull(args) => pull::pull(workspace, &args),
+            WorkspaceCommand::Pull(args) => pull::run(workspace, context, args),
 
-            WorkspaceCommand::Push(args) => push::push(workspace, &args),
+            WorkspaceCommand::Push(args) => push::run(workspace, context, args),
 
             WorkspaceCommand::Worktree { command } =>
-                worktree::worktree(workspace, working_dir, command),
+                worktree::run(workspace, context, command),
 
             WorkspaceCommand::Foreach(args) =>
-                foreach::foreach(workspace, working_dir, &args),
+                foreach::run(workspace, context, args),
         }
     }
 }

@@ -1,9 +1,14 @@
+use crate::cli::CliContext;
 use crate::git::{TagAction, TagArgs};
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn tag(workspace: &Workspace, args: &TagArgs) -> Result<Rendered>
+pub fn run(
+    workspace: &Workspace,
+    _context: &CliContext,
+    args: TagArgs
+) -> Result<Rendered>
 {
     match args.action()
     {

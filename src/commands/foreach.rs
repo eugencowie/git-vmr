@@ -1,3 +1,4 @@
+use crate::cli::CliContext;
 use crate::render::{self, ChildOutput, Rendered};
 use crate::workspace::{Repo, Workspace};
 use anyhow::Result;
@@ -56,12 +57,14 @@ pub struct ForeachArgs
     pub command: Vec<String>
 }
 
-pub fn foreach(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    args: &ForeachArgs
+    context: &CliContext,
+    args: ForeachArgs
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     let quiet = args.quiet;
     let command = args.command.join(" ");
     let root = workspace.root();

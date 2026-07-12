@@ -1,15 +1,17 @@
+use crate::cli::CliContext;
 use crate::git::AddArgs;
 use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
-use std::path::Path;
 
-pub fn add(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    args: &AddArgs
+    context: &CliContext,
+    args: AddArgs
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     // `add -A` with no paths stages the entire VMR
     let scope = if args.paths.is_empty() && args.options.all
     {
@@ -31,7 +33,7 @@ mod tests
 {
     use super::*;
     use crate::git::{AddOptions, Git, ScriptedFake};
-    use crate::test_support::vmr_fixture;
+    use crate::test_support::{cli_context, vmr_fixture};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -50,7 +52,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = add(&workspace, tmp.path(), &AddArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), AddArgs {
             options: AddOptions { all: true, force: false, chmod: None },
             paths: vec![]
         });
@@ -85,7 +87,7 @@ mod tests
         let paths = vec![PathBuf::from("backend/src/main.rs")];
 
         // Act
-        let result = add(&workspace, tmp.path(), &AddArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), AddArgs {
             options: AddOptions { all: false, force: false, chmod: None },
             paths
         });

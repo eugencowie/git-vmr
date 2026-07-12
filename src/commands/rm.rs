@@ -1,15 +1,17 @@
+use crate::cli::CliContext;
 use crate::git::RmArgs;
 use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::{Result, bail};
-use std::path::Path;
 
-pub fn rm(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    args: &RmArgs
+    context: &CliContext,
+    args: RmArgs
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     // Require explicit recursive intent for aggregate path removal
     if !args.options.recursive
         && args
