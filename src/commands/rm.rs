@@ -1,3 +1,4 @@
+use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ pub fn rm(
     force: bool,
     dry_run: bool,
     cached: bool
-) -> Result<()>
+) -> Result<Rendered>
 {
     // Require explicit recursive intent for aggregate path removal
     if !recursive

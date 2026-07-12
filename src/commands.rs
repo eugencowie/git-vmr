@@ -20,6 +20,7 @@ mod worktree;
 
 use crate::cli::CliContext;
 use crate::git::{ChmodMode, ResetMode};
+use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 use clap::{ArgAction, Subcommand};
@@ -482,7 +483,7 @@ impl Command
         flags
     }
 
-    pub fn run(self, context: &CliContext) -> Result<()>
+    pub fn run(self, context: &CliContext) -> Result<Rendered>
     {
         let working_dir = &context.working_dir;
         let git = &context.git;
@@ -513,7 +514,7 @@ impl Command
         self,
         workspace: &Workspace,
         context: &CliContext
-    ) -> Result<()>
+    ) -> Result<Rendered>
     {
         let working_dir = &context.working_dir;
 

@@ -278,7 +278,7 @@ fn reset_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .failure()
         .stdout(predicate::str::contains("HEAD is now at").and(predicate::str::contains("(beta)")))
         .stderr(predicate::str::starts_with(
-            "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. (alpha, zeta)\n"
+            "fatal: ambiguous argument 'release-base': unknown revision or path not in the working tree. \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 

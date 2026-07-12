@@ -258,7 +258,7 @@ fn fetch_failure_does_not_stop_successful_repositories()
         .failure()
         .stdout(predicate::str::contains("(frontend)"))
         .stderr(predicate::str::contains(
-            "fatal: 'origin' does not appear to be a git repository (backend)"
+            "fatal: 'origin' does not appear to be a git repository \x1b[90m(backend)\x1b[0m"
         ));
 
     assert_eq!(
@@ -295,7 +295,7 @@ fn fetch_reports_success_failure_and_failure_order_with_repository_suffixes()
                 .and(predicate::str::contains("(backend)"))
         )
         .stderr(predicate::str::starts_with(
-            "fatal: 'origin' does not appear to be a git repository (alpha, zeta)\n"
+            "fatal: 'origin' does not appear to be a git repository \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 

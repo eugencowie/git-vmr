@@ -1,4 +1,5 @@
 use crate::git::Git;
+use crate::render::Rendered;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
@@ -10,7 +11,7 @@ pub fn mv(
     working_dir: &Path,
     sources: &[PathBuf],
     destination: &Path
-) -> Result<()>
+) -> Result<Rendered>
 {
     // Route all operands before moving anything
     let git = workspace.git();
@@ -22,13 +23,15 @@ pub fn mv(
 
     if sources.len() == 1 && sources[0].0 == destination.0
     {
-        git.mv(&sources[0].0.path, &sources[0].1, &destination.1)
+        git.mv(&sources[0].0.path, &sources[0].1, &destination.1)?;
     }
     else
     {
         let plan = MovePlan::build(git, sources, destination)?;
-        execute_plan(git, plan)
+        execute_plan(git, plan)?;
     }
+
+    Ok(Rendered::default())
 }
 
 struct MovePlan

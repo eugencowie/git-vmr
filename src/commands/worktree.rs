@@ -1,5 +1,6 @@
 use crate::git;
 use crate::git::Git;
+use crate::render::{self, Rendered, WorktreeRootEntry};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace, resolve_target};
 use anyhow::{Context, Result};
@@ -8,7 +9,7 @@ use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-pub fn list(workspace: &Workspace) -> Result<()>
+pub fn list(workspace: &Workspace) -> Result<Rendered>
 {
     let repo_names = workspace
         .repos()
@@ -38,12 +39,7 @@ pub fn list(workspace: &Workspace) -> Result<()>
         }
     }
 
-    for (root, entries) in groups
-    {
-        render_group(&root, entries, &repo_names);
-    }
-
-    Ok(())
+    Ok(render::worktree_list(groups, &repo_names).into())
 }
 
 pub fn add(
@@ -52,7 +48,7 @@ pub fn add(
     path: &Path,
     branch: Option<&str>,
     commit_ish: Option<&str>
-) -> Result<()>
+) -> Result<Rendered>
 {
     let target = resolve_target(working_dir, path);
     let mode = match (branch, commit_ish)
@@ -129,113 +125,6 @@ fn worktree_root(
     if Vmr::is_root(&root) { Some(root) } else { None }
 }
 
-#[derive(Clone, Eq, PartialEq)]
-struct WorktreeRootEntry
-{
-    repo: String,
-    head: String,
-    state: git::ChildWorktreeState
-}
-
-fn render_group(
-    root: &Path,
-    mut entries: Vec<WorktreeRootEntry>,
-    repo_names: &[String]
-)
-{
-    entries.sort_by(|a, b| {
-        (state_sort_key(&a.state), short_head(&a.head), &a.repo).cmp(&(
-            state_sort_key(&b.state),
-            short_head(&b.head),
-            &b.repo
-        ))
-    });
-
-    let mut state_groups: BTreeMap<RenderedState, Vec<String>> =
-        BTreeMap::new();
-
-    for entry in entries
-    {
-        state_groups
-            .entry(RenderedState::from_entry(&entry))
-            .or_default()
-            .push(entry.repo);
-    }
-
-    let mut lines = Vec::new();
-    for (state, mut repos) in state_groups
-    {
-        repos.sort();
-        let suffix = if repos == repo_names
-        {
-            String::new()
-        }
-        else
-        {
-            format!(" ({})", repos.join(", "))
-        };
-
-        lines.push(format!("{}{}", state.render(), suffix));
-    }
-
-    if lines.len() == 1
-    {
-        println!("{} {}", git::git_style_path(root), lines[0]);
-    }
-    else
-    {
-        println!("{}", git::git_style_path(root));
-        for line in lines
-        {
-            println!("  {line}");
-        }
-    }
-}
-
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
-enum RenderedState
-{
-    Branch(String),
-    Detached(String)
-}
-
-impl RenderedState
-{
-    fn from_entry(entry: &WorktreeRootEntry) -> Self
-    {
-        match &entry.state
-        {
-            git::ChildWorktreeState::Branch(branch) =>
-                Self::Branch(branch.clone()),
-            git::ChildWorktreeState::Detached =>
-                Self::Detached(short_head(&entry.head).to_owned()),
-        }
-    }
-
-    fn render(&self) -> String
-    {
-        match self
-        {
-            Self::Branch(branch) => format!("[{branch}]"),
-            Self::Detached(head) => format!("{head} (detached HEAD)")
-        }
-    }
-}
-
-fn short_head(head: &str) -> &str
-{
-    head.get(..8).unwrap_or(head)
-}
-
-fn state_sort_key(state: &git::ChildWorktreeState) -> (&str, &str)
-{
-    match state
-    {
-        git::ChildWorktreeState::Branch(branch) => ("branch", branch),
-        git::ChildWorktreeState::Detached => ("detached", "")
-    }
-}
-
 pub fn remove(
     workspace: &Workspace,
     working_dir: &Path,
@@ -243,7 +132,7 @@ pub fn remove(
     force: u8,
     delete: bool,
     force_delete: bool
-) -> Result<()>
+) -> Result<Rendered>
 {
     let git = workspace.git();
     let target = resolve_target(working_dir, path);
@@ -292,12 +181,15 @@ pub fn remove(
         results.extend(branch_deletions);
     }
 
+    let rendered = render::outcomes(results)?;
+
     if all_child_removals_succeeded
+        && let Err(error) = Vmr::remove_worktree_root(&target)
     {
-        Vmr::remove_worktree_root(&target)?;
+        return Err(render::fail(rendered, format!("{error:#}")));
     }
 
-    crate::workspace::report(results)
+    Ok(rendered)
 }
 
 struct RemovalOutcome
@@ -363,14 +255,14 @@ pub fn move_worktree(
     path: &Path,
     new_path: &Path,
     force: u8
-) -> Result<()>
+) -> Result<Rendered>
 {
     let source = resolve_target(working_dir, path);
     let destination = resolve_target(working_dir, new_path);
 
     Vmr::create_worktree_root(&destination)?;
 
-    workspace.run(|git, repo| {
+    let rendered = workspace.run(|git, repo| {
         git.worktree_move(
             &repo.name,
             &repo.path,
@@ -380,5 +272,10 @@ pub fn move_worktree(
         )
     })?;
 
-    Vmr::remove_worktree_root(&source)
+    // Keep the per-repo successes if dissolving the source root fails
+    match Vmr::remove_worktree_root(&source)
+    {
+        Ok(()) => Ok(rendered),
+        Err(error) => Err(render::fail(rendered, format!("{error:#}")))
+    }
 }

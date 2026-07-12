@@ -1,3 +1,4 @@
+use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ pub fn restore(
     paths: &[PathBuf],
     worktree: bool,
     staged: bool
-) -> Result<()>
+) -> Result<Rendered>
 {
     // Restore routed paths in each owning child repository
     workspace.run_routed(

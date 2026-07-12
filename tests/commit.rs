@@ -220,7 +220,9 @@ fn commit_partial_failures_still_attempt_later_repositories()
             predicate::str::contains("Implement new feature (frontend)")
                 .and(predicate::str::contains("Implement new feature (tools)"))
         )
-        .stderr(predicate::str::contains("pre-commit hook declined (backend)"));
+        .stderr(predicate::str::contains(
+            "pre-commit hook declined \x1b[90m(backend)\x1b[0m"
+        ));
 
     assert_eq!(last_commit_subject(&frontend), "Implement new feature");
     assert_eq!(last_commit_subject(&tools), "Implement new feature");
@@ -249,8 +251,8 @@ fn commit_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "alpha rejected (alpha)\n\
-             zeta rejected (zeta)\n"
+            "alpha rejected \x1b[90m(alpha)\x1b[0m\n\
+             zeta rejected \x1b[90m(zeta)\x1b[0m\n"
         ));
 }
 

@@ -275,7 +275,7 @@ fn branch_create_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists (backend)"
+            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
         ));
 
     assert!(branch_exists(&frontend, "feature/auth"));
@@ -301,7 +301,7 @@ fn branch_create_reports_failures_with_repository_suffixes()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "fatal: a branch named 'feature/auth' already exists (backend)"
+                "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
             )
             .and(
                 predicate::str::contains("fatal: failed to create branch")
@@ -332,7 +332,7 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
+            "fatal: a branch named 'feature/auth' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 
@@ -384,7 +384,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "error: the branch 'feature/auth' is not fully merged (backend)"
+            "error: the branch 'feature/auth' is not fully merged \x1b[90m(backend)\x1b[0m"
         ));
 
     git_vmr()
@@ -394,7 +394,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth")
-                .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains("(backend)"))
                 .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::is_empty());
@@ -421,7 +421,7 @@ fn branch_delete_skips_non_git_child_directories()
         .success()
         .stdout(
             predicate::str::contains("Deleted branch feature/auth")
-                .and(predicate::str::contains(" (backend)"))
+                .and(predicate::str::contains("(backend)"))
                 .and(predicate::str::contains("(was").not())
                 .and(predicate::str::contains("docs").not())
         )
@@ -461,7 +461,7 @@ fn branch_delete_partial_failure_does_not_stop_other_repositories()
                 .and(predicate::str::contains("(was").not())
         )
         .stderr(predicate::str::contains(
-            "error: the branch 'feature/auth' is not fully merged (backend)"
+            "error: the branch 'feature/auth' is not fully merged \x1b[90m(backend)\x1b[0m"
         ));
 
     assert!(branch_exists(&backend, "feature/auth"));
@@ -491,12 +491,12 @@ fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: branch 'feature/auth' not found (backend)"
+                "error: branch 'feature/auth' not found \x1b[90m(backend)\x1b[0m"
             )
             .and(predicate::str::contains(
                 "error: cannot delete branch 'feature/auth' used by worktree at"
             ))
-            .and(predicate::str::contains(" (frontend)"))
+            .and(predicate::str::contains("(frontend)"))
         );
 }
 
@@ -520,6 +520,6 @@ fn branch_delete_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "error: branch 'feature/auth' not found (alpha, zeta)\n"
+            "error: branch 'feature/auth' not found \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }

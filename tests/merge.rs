@@ -173,6 +173,7 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
     create_mergeable_branch(&tools, "feature/auth");
 
     git_vmr()
+        .env("CLICOLOR_FORCE", "1")
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])
         .assert()
@@ -182,7 +183,7 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "merge: feature/auth - not something we can merge (frontend)"
+            "merge: feature/auth - not something we can merge \x1b[90m(frontend)\x1b[0m"
         ));
 
     assert!(branch_contains_head(&backend, "feature/auth"));
@@ -241,7 +242,8 @@ fn merge_successes_are_not_rolled_back_after_later_failure()
 }
 
 #[test]
-fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
+fn merge_reports_colored_repository_suffixes_and_orders_failures_by_repository_name()
+
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path());
@@ -254,6 +256,7 @@ fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
     create_mergeable_branch(&beta, "feature/auth");
 
     git_vmr()
+        .env("CLICOLOR_FORCE", "1")
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])
         .assert()
@@ -263,7 +266,7 @@ fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
                 .and(predicate::str::contains("(beta)"))
         )
         .stderr(predicate::str::starts_with(
-            "merge: feature/auth - not something we can merge (alpha, zeta)\n"
+            "merge: feature/auth - not something we can merge \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 

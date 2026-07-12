@@ -1,5 +1,6 @@
 use crate::cli::SilentError;
 use crate::git::Git;
+use crate::render::Rendered;
 use anyhow::Result;
 use std::path::Path;
 
@@ -8,7 +9,7 @@ pub fn clone(
     working_dir: &Path,
     repository: &str,
     directory: Option<&Path>
-) -> Result<()>
+) -> Result<Rendered>
 {
     let status = git.clone(working_dir, repository, directory)?;
 
@@ -17,7 +18,7 @@ pub fn clone(
         return Err(SilentError.into());
     }
 
-    Ok(())
+    Ok(Rendered::default())
 }
 
 #[cfg(test)]

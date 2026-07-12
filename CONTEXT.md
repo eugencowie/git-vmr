@@ -75,3 +75,15 @@ _Avoid_: output grouping, deduplication
 **Head**:
 Where a child repo currently points: a branch, or a detached commit.
 _Avoid_: current branch, HEAD state
+
+### Output
+
+**Rendering**:
+Turning per-repo data and outcomes into styled terminal text. Rendering is
+pure; printing the rendered text happens once, at a single choke point.
+_Avoid_: formatting, displaying, output (for the act of rendering)
+
+**Repo-list suffix**:
+The parenthesised list of child repo names — "(backend, frontend)" — appended
+to a message or heading that does not apply to every child repo.
+_Avoid_: repo annotation, repo tag
