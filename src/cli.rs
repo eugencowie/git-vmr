@@ -1,5 +1,6 @@
 mod context;
 mod error;
+mod event_meta;
 
 use crate::analytics::CommandEvent;
 use crate::commands::Command;
@@ -8,6 +9,7 @@ use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
 pub use error::SilentError;
+use event_meta::{CommandEventMeta, event_meta};
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -22,6 +24,10 @@ pub struct Cli
     /// Display name of the application
     #[arg(skip)]
     display_name: String,
+
+    /// Event metadata derived from the parsed command line
+    #[arg(skip)]
+    event_meta: CommandEventMeta,
 
     /// Run as if git-vmr was started in <path> instead of the current working
     /// directory
@@ -54,7 +60,9 @@ impl Cli
         // Parse arguments
         let mut command = Self::command();
         let mut matches = command.try_get_matches_from_mut(args)?;
+        let meta = event_meta(&command, &matches);
         let mut cli = Self::from_arg_matches_mut(&mut matches)?;
+        cli.event_meta = meta;
 
         // Set display name
         cli.display_name =
@@ -84,20 +92,18 @@ impl Cli
         {
             // Prepare analytics event
             let start = Instant::now();
-            let command = self.command.command_name();
-            let flags = self.command.flag_names();
-            let global_flags = self.global_flag_names();
+            let meta = self.event_meta;
 
             // Run command
             let result = self.command.run(&context);
 
             // Record analytics event
             analytics::record(&mut context, CommandEvent {
-                name: command,
+                name: meta.name,
                 success: result.is_ok(),
                 duration_ms: start.elapsed().as_millis(),
-                flags,
-                global_flags
+                flags: meta.flags,
+                global_flags: meta.global_flags
             });
 
             result
@@ -124,15 +130,6 @@ impl Cli
         }
 
         result
-    }
-
-    fn global_flag_names(&self) -> Vec<&'static str>
-    {
-        match self.working_dir
-        {
-            Some(_) => vec!["working_dir"],
-            None => vec![]
-        }
     }
 }
 
@@ -231,9 +228,9 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.global_flag_names(), ["working_dir"]);
-        assert_eq!(cli.command.command_name(), "add");
-        assert_eq!(cli.command.flag_names(), ["chmod"]);
+        assert_eq!(cli.event_meta.global_flags, ["working_dir"]);
+        assert_eq!(cli.event_meta.name, "add");
+        assert_eq!(cli.event_meta.flags, ["chmod"]);
     }
 
     #[test]
@@ -249,8 +246,8 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.command.command_name(), "worktree.remove");
-        assert_eq!(cli.command.flag_names(), ["force", "delete"]);
+        assert_eq!(cli.event_meta.name, "worktree.remove");
+        assert_eq!(cli.event_meta.flags, ["force", "delete"]);
     }
 
     #[test]
@@ -261,8 +258,8 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.command.command_name(), "foreach");
-        assert_eq!(cli.command.flag_names(), ["quiet"]);
+        assert_eq!(cli.event_meta.name, "foreach");
+        assert_eq!(cli.event_meta.flags, ["quiet"]);
     }
 
     #[test]

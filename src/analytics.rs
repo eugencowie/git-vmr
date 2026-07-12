@@ -16,11 +16,11 @@ const APP_KEY: Option<&str> = option_env!("GITVMR_APTABASE_KEY");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandEvent
 {
-    pub name: &'static str,
+    pub name: String,
     pub success: bool,
     pub duration_ms: u128,
-    pub flags: Vec<&'static str>,
-    pub global_flags: Vec<&'static str>
+    pub flags: Vec<String>,
+    pub global_flags: Vec<String>
 }
 
 /// Record a command event without affecting command behavior.
@@ -91,11 +91,11 @@ mod tests
     fn event_keeps_expected_fields()
     {
         let event = CommandEvent {
-            name: "rm",
+            name: "rm".to_owned(),
             success: false,
             duration_ms: 42,
-            flags: vec!["force"],
-            global_flags: vec!["working_dir"]
+            flags: vec!["force".to_owned()],
+            global_flags: vec!["working_dir".to_owned()]
         };
 
         assert_eq!(event.name, "rm");
