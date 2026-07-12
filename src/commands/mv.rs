@@ -389,7 +389,6 @@ mod tests
         let fake = ScriptedFake::new()
             .on(["add", "--", "a.txt"], 1, "", "fatal: unable to stage")
             .on(["add", "--", "b.txt"], 0, "", "")
-            .on(["add", "--", "docs/a.txt"], 0, "", "")
             .on(["add", "--", "docs/b.txt"], 0, "", "");
         let fake = tracked_file(&tmp, fake, "backend", "a.txt");
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
