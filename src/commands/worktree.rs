@@ -257,6 +257,7 @@ pub fn remove(
     let target = resolve_path(working_dir, path).clean();
 
     let removals = workspace.map(|git, repo| {
+        // Wrap per-repo errors so map attempts every repository.
         Ok(removal_outcome(git, repo, &target, force, delete, force_delete))
     })?;
 
