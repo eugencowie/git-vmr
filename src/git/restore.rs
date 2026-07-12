@@ -1,14 +1,14 @@
 use crate::git::report::{FailureReport, SuccessReport, command_result};
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 impl Git
 {
     pub fn restore(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         paths: &[PathBuf],
         worktree: bool,
         staged: bool
@@ -28,11 +28,10 @@ impl Git
 
         args.push(OsString::from("--"));
         args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::detailed("restore")

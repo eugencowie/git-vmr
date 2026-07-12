@@ -25,7 +25,7 @@ pub fn add(
 
     // Stage routed paths in each owning child repository
     workspace.run_routed(working_dir, scope, |git, repo, repo_paths| {
-        git.add(&repo.name, &repo.path, repo_paths, all, force, chmod)
+        git.add(repo, repo_paths, all, force, chmod)
     })
 }
 

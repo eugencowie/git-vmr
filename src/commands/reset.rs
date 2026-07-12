@@ -10,5 +10,5 @@ pub fn reset(
 ) -> Result<Rendered>
 {
     // Reset each child repository
-    workspace.run(|git, repo| git.reset(&repo.name, &repo.path, mode, commit))
+    workspace.run(|git, repo| git.reset(repo, mode, commit))
 }

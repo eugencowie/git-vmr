@@ -2,8 +2,8 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use regex::Regex;
-use std::path::Path;
 use std::sync::LazyLock;
 
 static BEHIND_COMMIT_COUNT: LazyLock<Regex> =
@@ -30,31 +30,21 @@ fn report_policy() -> (SuccessReport, FailureReport)
 
 impl Git
 {
-    pub fn switch(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        branch_name: &str
-    ) -> GitCommandResult
+    pub fn switch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["switch", branch_name])?;
+        let output = self.output(&repo.path, ["switch", branch_name])?;
         let (success, failure) = report_policy();
 
-        command_result(repo_name, repo_path, &output, success, failure)
+        command_result(repo, &output, success, failure)
     }
 
-    pub fn create(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        branch_name: &str
-    ) -> GitCommandResult
+    pub fn create(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
     {
         let output =
-            self.output(repo_path, ["switch", "--create", branch_name])?;
+            self.output(&repo.path, ["switch", "--create", branch_name])?;
         let (success, failure) = report_policy();
 
-        command_result(repo_name, repo_path, &output, success, failure)
+        command_result(repo, &output, success, failure)
     }
 }
 
@@ -64,6 +54,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn normalizes_behind_fast_forward_success_message()
@@ -107,9 +98,8 @@ mod tests
         ));
 
         // Act
-        let outcome = git
-            .switch("backend", Path::new("/vmr/backend"), "develop")
-            .unwrap();
+        let outcome =
+            git.switch(&repo("backend", "/vmr/backend"), "develop").unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
@@ -136,7 +126,7 @@ mod tests
 
         // Act
         let outcome = git
-            .create("backend", Path::new("/vmr/backend"), "feature/auth")
+            .create(&repo("backend", "/vmr/backend"), "feature/auth")
             .unwrap();
 
         // Assert

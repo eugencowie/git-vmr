@@ -9,6 +9,5 @@ pub fn pull(
 ) -> Result<Rendered>
 {
     // Pull in each child repository
-    workspace
-        .run(|git, repo| git.pull(&repo.name, &repo.path, repository, refspecs))
+    workspace.run(|git, repo| git.pull(repo, repository, refspecs))
 }

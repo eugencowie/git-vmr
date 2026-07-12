@@ -5,7 +5,7 @@ use anyhow::Result;
 pub fn branch(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
 {
     // Branch in each child repository
-    workspace.run(|git, repo| git.branch(&repo.name, &repo.path, branch_name))
+    workspace.run(|git, repo| git.branch(repo, branch_name))
 }
 
 pub fn delete(
@@ -15,9 +15,7 @@ pub fn delete(
 ) -> Result<Rendered>
 {
     // Delete branch in each child repository
-    workspace.run(|git, repo| {
-        git.delete_branch(&repo.name, &repo.path, branch_name, force)
-    })
+    workspace.run(|git, repo| git.delete_branch(repo, branch_name, force))
 }
 
 pub fn branches(workspace: &Workspace) -> Result<Rendered>

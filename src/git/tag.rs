@@ -2,40 +2,28 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
-use std::path::Path;
+use crate::vmr::Repo;
 
 impl Git
 {
-    pub fn tag(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        tag_name: &str
-    ) -> GitCommandResult
+    pub fn tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["tag", tag_name])?;
+        let output = self.output(&repo.path, ["tag", tag_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::line(Streams::StderrOnly, "git tag failed")
         )
     }
 
-    pub fn delete_tag(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        tag_name: &str
-    ) -> GitCommandResult
+    pub fn delete_tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["tag", "-d", tag_name])?;
+        let output = self.output(&repo.path, ["tag", "-d", tag_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(
                 Streams::StdoutOnly,
@@ -52,6 +40,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn delete_tag_with_no_output_reports_the_deleted_fallback()
@@ -62,7 +51,7 @@ mod tests
 
         // Act
         let outcome =
-            git.delete_tag("backend", Path::new("/vmr/backend"), "v1").unwrap();
+            git.delete_tag(&repo("backend", "/vmr/backend"), "v1").unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome

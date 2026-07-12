@@ -5,13 +5,13 @@ use anyhow::Result;
 pub fn create(workspace: &Workspace, tag_name: &str) -> Result<Rendered>
 {
     // Create tag in each child repository
-    workspace.run(|git, repo| git.tag(&repo.name, &repo.path, tag_name))
+    workspace.run(|git, repo| git.tag(repo, tag_name))
 }
 
 pub fn delete(workspace: &Workspace, tag_name: &str) -> Result<Rendered>
 {
     // Delete tag in each child repository
-    workspace.run(|git, repo| git.delete_tag(&repo.name, &repo.path, tag_name))
+    workspace.run(|git, repo| git.delete_tag(repo, tag_name))
 }
 
 pub fn tag(workspace: &Workspace) -> Result<Rendered>

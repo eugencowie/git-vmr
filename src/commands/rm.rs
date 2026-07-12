@@ -25,10 +25,7 @@ pub fn rm(
         working_dir,
         Scope::Paths(paths.to_vec()),
         |git, repo, repo_paths| {
-            git.rm(
-                &repo.name, &repo.path, repo_paths, recursive, force, dry_run,
-                cached
-            )
+            git.rm(repo, repo_paths, recursive, force, dry_run, cached)
         }
     )
 }

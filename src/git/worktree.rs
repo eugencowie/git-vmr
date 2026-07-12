@@ -2,6 +2,7 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult, Head};
+use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -17,8 +18,7 @@ impl Git
 {
     pub fn worktree_add(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         target: &Path,
         branch: Option<&str>,
         commit_ish: Option<&str>
@@ -39,11 +39,10 @@ impl Git
             args.push(OsString::from(commit_ish));
         }
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(
                 Streams::StderrThenStdout,
@@ -55,8 +54,7 @@ impl Git
 
     pub fn worktree_remove(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         target: &Path,
         force: u8
     ) -> GitCommandResult
@@ -71,11 +69,10 @@ impl Git
 
         args.push(target.as_os_str().to_owned());
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
             FailureReport::line(
@@ -87,8 +84,7 @@ impl Git
 
     pub fn worktree_move(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         source: &Path,
         destination: &Path,
         force: u8
@@ -104,11 +100,10 @@ impl Git
         args.push(source.as_os_str().to_owned());
         args.push(destination.as_os_str().to_owned());
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
             FailureReport::line(
@@ -118,13 +113,9 @@ impl Git
         )
     }
 
-    pub fn worktree_list(
-        &self,
-        repo_name: &str,
-        repo_path: &Path
-    ) -> Result<Vec<ChildWorktree>>
+    pub fn worktree_list(&self, repo: &Repo) -> Result<Vec<ChildWorktree>>
     {
-        let output = self.output(repo_path, [
+        let output = self.output(&repo.path, [
             OsString::from("worktree"),
             OsString::from("list"),
             OsString::from("--porcelain"),
@@ -135,13 +126,13 @@ impl Git
         {
             bail!(
                 "fatal: failed to list worktrees for '{}': {}",
-                repo_name,
+                repo.name,
                 Streams::StderrThenStdout
                     .first_line(&output, "git worktree list failed")
             );
         }
 
-        parse_worktree_list(repo_name, &output.stdout)
+        parse_worktree_list(&repo.name, &output.stdout)
     }
 }
 
@@ -238,6 +229,7 @@ mod tests
 {
     use super::*;
     use crate::git::{RepoOutcome, ScriptedFake};
+    use crate::test_support::repo;
 
     #[test]
     fn worktree_remove_with_no_output_is_a_quiet_success()
@@ -253,8 +245,7 @@ mod tests
         // Act
         let outcome = git
             .worktree_remove(
-                "backend",
-                Path::new("/vmr/backend"),
+                &repo("backend", "/vmr/backend"),
                 Path::new("/wt/backend"),
                 0
             )
@@ -278,8 +269,7 @@ mod tests
         // Act
         let outcome = git
             .worktree_remove(
-                "backend",
-                Path::new("/vmr/backend"),
+                &repo("backend", "/vmr/backend"),
                 Path::new("/wt/backend"),
                 0
             )
@@ -308,8 +298,7 @@ mod tests
         // Act
         let outcome = git
             .worktree_move(
-                "backend",
-                Path::new("/vmr/backend"),
+                &repo("backend", "/vmr/backend"),
                 Path::new("/wt/backend"),
                 Path::new("/wt2/backend"),
                 0

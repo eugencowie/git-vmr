@@ -1,5 +1,6 @@
 use crate::git::report::{FailureReport, SuccessReport, command_result};
 use crate::git::{Git, GitCommandResult, stderr};
+use crate::vmr::Repo;
 use anyhow::{Result, bail};
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -75,8 +76,7 @@ impl Git
 {
     pub fn add(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         paths: &[PathBuf],
         all: bool,
         force: bool,
@@ -84,11 +84,10 @@ impl Git
     ) -> GitCommandResult
     {
         let output =
-            self.path_output(repo_path, add_args(all, force, chmod), paths)?;
+            self.path_output(&repo.path, add_args(all, force, chmod), paths)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::detailed("add")

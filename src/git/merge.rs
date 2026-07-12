@@ -2,22 +2,16 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
-use std::path::Path;
+use crate::vmr::Repo;
 
 impl Git
 {
-    pub fn merge(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        commit_ish: &str
-    ) -> GitCommandResult
+    pub fn merge(&self, repo: &Repo, commit_ish: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["merge", commit_ish])?;
+        let output = self.output(&repo.path, ["merge", commit_ish])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(
                 Streams::StdoutOnly,

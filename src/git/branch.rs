@@ -8,18 +8,12 @@ use std::path::Path;
 
 impl Git
 {
-    pub fn branch(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        branch_name: &str
-    ) -> GitCommandResult
+    pub fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["branch", branch_name])?;
+        let output = self.output(&repo.path, ["branch", branch_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::line(Streams::StderrOnly, "git branch failed")
@@ -28,18 +22,16 @@ impl Git
 
     pub fn delete_branch(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         branch_name: &str,
         force: bool
     ) -> GitCommandResult
     {
         let flag = if force { "-D" } else { "-d" };
-        let output = self.output(repo_path, ["branch", flag, branch_name])?;
+        let output = self.output(&repo.path, ["branch", flag, branch_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::fixed(format!("Deleted branch {branch_name}")),
             FailureReport::line(Streams::StderrOnly, "git branch failed")

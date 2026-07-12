@@ -18,9 +18,7 @@ pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
     }
 
     // Commit in each dirty repository
-    workspace.run_in(&dirty_repos, |git, repo| {
-        git.commit(&repo.name, &repo.path, message)
-    })
+    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, message))
 }
 
 #[cfg(test)]

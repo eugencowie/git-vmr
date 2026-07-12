@@ -9,6 +9,5 @@ pub fn push(
 ) -> Result<Rendered>
 {
     // Push in each child repository
-    workspace
-        .run(|git, repo| git.push(&repo.name, &repo.path, repository, refspecs))
+    workspace.run(|git, repo| git.push(repo, repository, refspecs))
 }

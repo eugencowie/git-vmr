@@ -105,7 +105,7 @@ impl<'a> WorktreeRoots<'a>
         {
             match removal
             {
-                Ok(ChildRemoval { repo_name, repo_path, branch, result }) =>
+                Ok(ChildRemoval { repo, branch, result }) =>
                 {
                     if !matches!(result, Ok(RepoOutcome::Success(_)))
                     {
@@ -113,7 +113,7 @@ impl<'a> WorktreeRoots<'a>
                     }
                     else if let Some(branch) = branch
                     {
-                        deletion_targets.push((repo_name, repo_path, branch));
+                        deletion_targets.push((repo, branch));
                     }
 
                     outcomes.push(result);
@@ -131,13 +131,8 @@ impl<'a> WorktreeRoots<'a>
             let git = self.workspace.git();
             let branch_deletions = deletion_targets
                 .par_iter()
-                .map(|(repo_name, repo_path, branch)| {
-                    git.delete_branch(
-                        repo_name,
-                        repo_path,
-                        branch,
-                        force_delete
-                    )
+                .map(|(repo, branch)| {
+                    git.delete_branch(repo, branch, force_delete)
                 })
                 .collect::<Vec<_>>();
             outcomes.extend(branch_deletions);
@@ -171,8 +166,7 @@ impl<'a> WorktreeRoots<'a>
 
         let outcomes = self.workspace.map(|git, repo| {
             Ok(git.worktree_move(
-                &repo.name,
-                &repo.path,
+                repo,
                 &source.join(&repo.name),
                 &destination.join(&repo.name),
                 force
@@ -200,8 +194,7 @@ impl<'a> WorktreeRoots<'a>
     pub fn list(&self) -> Result<BTreeMap<PathBuf, Vec<WorktreeRootEntry>>>
     {
         let results = self.workspace.map(|git, repo| {
-            git.worktree_list(&repo.name, &repo.path)
-                .map(|entries| (repo.name.clone(), entries))
+            git.worktree_list(repo).map(|entries| (repo.name.clone(), entries))
         })?;
 
         let mut groups: BTreeMap<PathBuf, Vec<WorktreeRootEntry>> =
@@ -227,8 +220,7 @@ impl<'a> WorktreeRoots<'a>
 
 struct ChildRemoval
 {
-    repo_name: String,
-    repo_path: PathBuf,
+    repo: Repo,
     branch: Option<String>,
     result: GitCommandResult
 }
@@ -245,31 +237,24 @@ fn remove_child(
     let child_target = target.join(&repo.name).clean();
     let branch = if delete || force_delete
     {
-        child_worktree_branch(git, &repo.name, &repo.path, &child_target)?
+        child_worktree_branch(git, repo, &child_target)?
     }
     else
     {
         None
     };
-    let result =
-        git.worktree_remove(&repo.name, &repo.path, &child_target, force);
+    let result = git.worktree_remove(repo, &child_target, force);
 
-    Ok(ChildRemoval {
-        repo_name: repo.name.clone(),
-        repo_path: repo.path.clone(),
-        branch,
-        result
-    })
+    Ok(ChildRemoval { repo: repo.clone(), branch, result })
 }
 
 fn child_worktree_branch(
     git: &Git,
-    repo_name: &str,
-    repo_path: &Path,
+    repo: &Repo,
     child_target: &Path
 ) -> Result<Option<String>>
 {
-    let entries = git.worktree_list(repo_name, repo_path)?;
+    let entries = git.worktree_list(repo)?;
     let child_target = child_target.clean();
 
     Ok(entries
@@ -313,13 +298,7 @@ fn add_child(
         AddMode::InferredBranch(branch) => (Some(branch.as_str()), None)
     };
 
-    git.worktree_add(
-        &repo.name,
-        &repo.path,
-        &target.join(&repo.name),
-        branch,
-        commit_ish
-    )
+    git.worktree_add(repo, &target.join(&repo.name), branch, commit_ish)
 }
 
 /// The reverse of the layout convention: the root a child worktree belongs

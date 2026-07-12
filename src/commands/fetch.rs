@@ -9,9 +9,7 @@ pub fn fetch(
 ) -> Result<Rendered>
 {
     // Fetch in each child repository
-    workspace.run(|git, repo| {
-        git.fetch(&repo.name, &repo.path, repository, refspecs)
-    })
+    workspace.run(|git, repo| git.fetch(repo, repository, refspecs))
 }
 
 #[cfg(test)]

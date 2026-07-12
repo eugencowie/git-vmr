@@ -2,23 +2,18 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult, stderr};
+use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
 impl Git
 {
-    pub fn commit(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        message: &str
-    ) -> GitCommandResult
+    pub fn commit(&self, repo: &Repo, message: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["commit", "-m", message])?;
+        let output = self.output(&repo.path, ["commit", "-m", message])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(
                 Streams::StdoutOnly,
@@ -58,6 +53,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn is_dirty_maps_diff_exit_codes()
@@ -92,9 +88,8 @@ mod tests
         ));
 
         // Act
-        let outcome = git
-            .commit("backend", Path::new("/vmr/backend"), "message")
-            .unwrap();
+        let outcome =
+            git.commit(&repo("backend", "/vmr/backend"), "message").unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
@@ -118,9 +113,8 @@ mod tests
         ));
 
         // Act
-        let outcome = git
-            .commit("backend", Path::new("/vmr/backend"), "message")
-            .unwrap();
+        let outcome =
+            git.commit(&repo("backend", "/vmr/backend"), "message").unwrap();
 
         // Assert
         let RepoOutcome::Failure(message) = outcome

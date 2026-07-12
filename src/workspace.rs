@@ -180,8 +180,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace
-            .run(|git, repo| git.fetch(&repo.name, &repo.path, None, &[]));
+        let result = workspace.run(|git, repo| git.fetch(repo, None, &[]));
 
         // Assert
         assert!(result.is_ok());
@@ -208,9 +207,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let err = workspace
-            .run(|git, repo| git.merge(&repo.name, &repo.path, "topic"))
-            .unwrap_err();
+        let err =
+            workspace.run(|git, repo| git.merge(repo, "topic")).unwrap_err();
 
         // Assert: the shared failure groups to one line, and the repo list
         // is omitted because it covers every repo in scope.
@@ -233,11 +231,7 @@ mod tests
         let subset = vec![workspace.repos()[0].clone()];
 
         // Act
-        workspace
-            .run_in(&subset, |git, repo| {
-                git.commit(&repo.name, &repo.path, "msg")
-            })
-            .unwrap();
+        workspace.run_in(&subset, |git, repo| git.commit(repo, "msg")).unwrap();
 
         // Assert
         assert_eq!(
@@ -266,7 +260,7 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), Scope::EntireVmr, |git, repo, paths| {
-                git.add(&repo.name, &repo.path, paths, true, false, None)
+                git.add(repo, paths, true, false, None)
             })
             .unwrap();
 
@@ -301,7 +295,7 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), scope, |git, repo, paths| {
-                git.add(&repo.name, &repo.path, paths, false, false, None)
+                git.add(repo, paths, false, false, None)
             })
             .unwrap();
 

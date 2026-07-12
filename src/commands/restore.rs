@@ -15,8 +15,6 @@ pub fn restore(
     workspace.run_routed(
         working_dir,
         Scope::Paths(paths.to_vec()),
-        |git, repo, repo_paths| {
-            git.restore(&repo.name, &repo.path, repo_paths, worktree, staged)
-        }
+        |git, repo, repo_paths| git.restore(repo, repo_paths, worktree, staged)
     )
 }

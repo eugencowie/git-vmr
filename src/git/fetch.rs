@@ -2,15 +2,14 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use std::ffi::OsString;
-use std::path::Path;
 
 impl Git
 {
     pub fn fetch(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         repository: Option<&str>,
         refspecs: &[String]
     ) -> GitCommandResult
@@ -24,11 +23,10 @@ impl Git
 
         args.extend(refspecs.iter().map(OsString::from));
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(Streams::StderrThenStdout, OnEmpty::Quiet),
             FailureReport::line(Streams::StderrThenStdout, "git fetch failed")
@@ -42,6 +40,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn fetch_with_no_output_is_a_quiet_success()
@@ -51,7 +50,7 @@ mod tests
 
         // Act
         let outcome =
-            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+            git.fetch(&repo("backend", "/vmr/backend"), None, &[]).unwrap();
 
         // Assert
         assert!(matches!(outcome, RepoOutcome::Success(None)));
@@ -70,7 +69,7 @@ mod tests
 
         // Act
         let outcome =
-            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+            git.fetch(&repo("backend", "/vmr/backend"), None, &[]).unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
