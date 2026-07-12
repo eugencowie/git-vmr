@@ -44,6 +44,13 @@ _Avoid_: target, selection
 A user-supplied path resolved against the working dir and normalized — the only form in which user paths reach the filesystem or routing.
 _Avoid_: raw path, input path
 
+**Move plan**:
+The validated description of a mv: every source routed and
+tracking-verified, every final destination resolved and conflict-checked,
+built in full before anything moves. Execution consumes it entry by entry,
+producing one repo outcome per entry.
+_Avoid_: plan (unqualified), rename plan
+
 ### Worktrees
 
 **Worktree root**:

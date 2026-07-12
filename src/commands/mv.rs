@@ -1,5 +1,5 @@
-use crate::git::Git;
-use crate::render::Rendered;
+use crate::git::{Git, GitCommandResult, failure_message, quiet_success};
+use crate::render::{self, Rendered};
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
@@ -21,17 +21,21 @@ pub fn mv(
         .collect::<Result<Vec<_>>>()?;
     let destination = workspace.route_single(working_dir, destination)?;
 
-    if sources.len() == 1 && sources[0].0 == destination.0
+    let results = if sources.len() == 1 && sources[0].0 == destination.0
     {
-        git.mv(&sources[0].0.path, &sources[0].1, &destination.1)?;
+        let (repo, source_relative) = &sources[0];
+        vec![in_repo_outcome(
+            repo,
+            git.mv(&repo.path, source_relative, &destination.1)
+        )]
     }
     else
     {
         let plan = MovePlan::build(git, sources, destination)?;
-        execute_plan(git, plan)?;
-    }
+        execute_plan(git, plan)
+    };
 
-    Ok(Rendered::default())
+    render::outcomes(results)
 }
 
 struct MovePlan
@@ -130,7 +134,10 @@ impl MovePlan
     }
 }
 
-fn execute_plan(git: &Git, plan: MovePlan) -> Result<()>
+/// Executes a same-repository multi-source plan as one batched `git mv` and
+/// produces one aggregated repo outcome. Other plans produce one outcome per
+/// entry so result aggregation reports exactly which moves landed.
+fn execute_plan(git: &Git, plan: MovePlan) -> Vec<GitCommandResult>
 {
     if plan.multi_source
         && plan
@@ -143,56 +150,75 @@ fn execute_plan(git: &Git, plan: MovePlan) -> Result<()>
             .iter()
             .map(|entry| entry.source_relative.clone())
             .collect::<Vec<_>>();
-        return git.mv_to_directory(
-            &plan.destination_repo.path,
-            &sources,
-            &plan.destination_relative
-        );
+        return vec![in_repo_outcome(
+            &plan.destination_repo,
+            git.mv_to_directory(
+                &plan.destination_repo.path,
+                &sources,
+                &plan.destination_relative
+            )
+        )];
     }
 
-    for entry in plan.entries
-    {
-        mv_between_repos(git, entry)?;
-    }
-
-    Ok(())
+    plan.entries.into_iter().map(|entry| mv_between_repos(git, entry)).collect()
 }
 
-fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> Result<()>
+fn in_repo_outcome(repo: &Repo, result: Result<()>) -> GitCommandResult
+{
+    Ok(match result
+    {
+        Ok(()) => quiet_success(),
+        Err(error) => failure_message(&repo.name, format!("{error:#}"))
+    })
+}
+
+fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
 {
     let source_path = entry.source_repo.path.join(&entry.source_relative);
     let destination_path =
         entry.destination_repo.path.join(&entry.final_destination_relative);
 
     // Move the worktree path across child repositories
-    fs::rename(&source_path, &destination_path).with_context(|| {
-        format!(
-            "fatal: failed to move '{}' to '{}'",
-            source_path.display(),
-            destination_path.display()
-        )
-    })?;
+    if let Err(error) = fs::rename(&source_path, &destination_path)
+    {
+        return Ok(failure_message(
+            &entry.source_repo.name,
+            format!(
+                "fatal: failed to move '{}' to '{}': {error}",
+                source_path.display(),
+                destination_path.display()
+            )
+        ));
+    }
 
     // Stage the source deletion and destination addition in their repositories
-    git.add_path(&entry.source_repo.path, &entry.source_relative)
-        .with_context(|| {
+    if let Err(error) =
+        git.add_path(&entry.source_repo.path, &entry.source_relative)
+    {
+        return Ok(failure_message(
+            &entry.source_repo.name,
             format!(
-                "fatal: failed to stage source deletion in '{}'",
+                "fatal: failed to stage source deletion in '{}': {error:#}",
                 entry.source_repo.path.display()
             )
-        })?;
-    git.add_path(
+        ));
+    }
+
+    if let Err(error) = git.add_path(
         &entry.destination_repo.path,
         &entry.final_destination_relative
     )
-    .with_context(|| {
-        format!(
-            "fatal: failed to stage destination addition in '{}'",
-            entry.destination_repo.path.display()
-        )
-    })?;
+    {
+        return Ok(failure_message(
+            &entry.destination_repo.name,
+            format!(
+                "fatal: failed to stage destination addition in '{}': {error:#}",
+                entry.destination_repo.path.display()
+            )
+        ));
+    }
 
-    Ok(())
+    Ok(quiet_success())
 }
 
 fn final_destination_path(
@@ -233,4 +259,267 @@ fn final_destination_path(
     }
 
     Ok(destination_relative.to_path_buf())
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::ScriptedFake;
+    use crate::render::Failed;
+    use crate::test_support::vmr_fixture;
+    use std::sync::Arc;
+
+    /// A tracked file in a child repo: the file exists on disk and the fake
+    /// answers the tracking probe for it.
+    fn tracked_file(
+        tmp: &tempfile::TempDir,
+        fake: ScriptedFake,
+        repo: &str,
+        relative: &str
+    ) -> ScriptedFake
+    {
+        let path = tmp.path().join(repo).join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "content\n").unwrap();
+        fake.on(["ls-files", "--error-unmatch", "--", relative], 0, "", "")
+    }
+
+    #[test]
+    fn single_source_same_repo_move_uses_git_mv_directly()
+    {
+        // Arrange: no tracking probe is scripted, so the plan path would fail
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(
+            ["mv", "--", "src/old.rs", "src/new.rs"],
+            0,
+            "",
+            ""
+        ));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let rendered = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/src/old.rs")],
+            Path::new("backend/src/new.rs")
+        )
+        .unwrap();
+
+        // Assert
+        assert!(rendered.stdout.is_empty());
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].path, tmp.path().join("backend"));
+        assert_eq!(
+            calls[0].args,
+            ["mv", "--", "src/old.rs", "src/new.rs"]
+                .map(std::ffi::OsString::from)
+        );
+    }
+
+    #[test]
+    fn multi_source_same_repo_move_uses_one_batched_git_mv()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new().on(
+            ["mv", "--", "a.txt", "b.txt", "docs"],
+            0,
+            "",
+            ""
+        );
+        let fake = tracked_file(&tmp, fake, "backend", "a.txt");
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
+        fs::create_dir(tmp.path().join("backend/docs")).unwrap();
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let rendered = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/a.txt"), PathBuf::from("backend/b.txt")],
+            Path::new("backend/docs")
+        )
+        .unwrap();
+
+        // Assert
+        assert!(rendered.stdout.is_empty());
+        let mv_calls = fake
+            .calls()
+            .into_iter()
+            .filter(|invocation| invocation.args.first() == Some(&"mv".into()))
+            .collect::<Vec<_>>();
+        assert_eq!(mv_calls.len(), 1);
+        assert_eq!(mv_calls[0].path, tmp.path().join("backend"));
+        assert_eq!(
+            mv_calls[0].args,
+            ["mv", "--", "a.txt", "b.txt", "docs"]
+                .map(std::ffi::OsString::from)
+        );
+    }
+
+    #[test]
+    fn cross_repo_move_renames_and_stages_both_sides()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new()
+            .on(["add", "--", "config.toml"], 0, "", "")
+            .on(["add", "--", "settings.toml"], 0, "", "");
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "config.toml"));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/config.toml")],
+            Path::new("frontend/settings.toml")
+        );
+
+        // Assert: the file moved on disk and both repos staged their side
+        assert!(result.unwrap().stdout.is_empty());
+        assert!(!tmp.path().join("backend/config.toml").exists());
+        assert!(tmp.path().join("frontend/settings.toml").exists());
+        let staged = fake
+            .calls()
+            .into_iter()
+            .filter(|invocation| {
+                invocation.args.first().map(|arg| arg.to_string_lossy())
+                    == Some("add".into())
+            })
+            .map(|invocation| invocation.path)
+            .collect::<Vec<_>>();
+        assert_eq!(staged, vec![
+            tmp.path().join("backend"),
+            tmp.path().join("frontend")
+        ]);
+    }
+
+    #[test]
+    fn planning_rejects_duplicate_destinations_before_moving_anything()
+    {
+        // Arrange: two sources in different repos collapse onto one name
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new();
+        let fake = tracked_file(&tmp, fake, "backend", "notes.md");
+        let fake = Arc::new(tracked_file(&tmp, fake, "frontend", "notes.md"));
+        fs::create_dir(tmp.path().join("backend/docs")).unwrap();
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[
+                PathBuf::from("backend/notes.md"),
+                PathBuf::from("frontend/notes.md")
+            ],
+            Path::new("backend/docs")
+        );
+
+        // Assert: planning fails and no source has moved
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("duplicate destination"));
+        assert!(tmp.path().join("backend/notes.md").exists());
+        assert!(tmp.path().join("frontend/notes.md").exists());
+    }
+
+    #[test]
+    fn planning_rejects_multi_source_move_to_a_non_directory()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new();
+        let fake = tracked_file(&tmp, fake, "backend", "a.txt");
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/a.txt"), PathBuf::from("backend/b.txt")],
+            Path::new("frontend/missing")
+        );
+
+        // Assert
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("is not an existing directory")
+        );
+    }
+
+    #[test]
+    fn failed_staging_reports_the_entry_and_still_attempts_the_rest()
+    {
+        // Arrange: staging fails in backend, succeeds everywhere else
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new()
+            .on(["add", "--", "a.txt"], 1, "", "fatal: unable to stage")
+            .on(["add", "--", "b.txt"], 0, "", "")
+            .on(["add", "--", "docs/b.txt"], 0, "", "");
+        let fake = tracked_file(&tmp, fake, "backend", "a.txt");
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
+        fs::create_dir(tmp.path().join("frontend/docs")).unwrap();
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/a.txt"), PathBuf::from("backend/b.txt")],
+            Path::new("frontend/docs")
+        );
+
+        // Assert: the failure names its entry and the other entry landed
+        let failed = result.unwrap_err().downcast::<Failed>().unwrap();
+        assert!(failed.message.contains("failed to stage source deletion"));
+        assert!(failed.message.contains("backend"));
+        assert!(tmp.path().join("frontend/docs/a.txt").exists());
+        assert!(tmp.path().join("frontend/docs/b.txt").exists());
+    }
+
+    #[test]
+    fn failed_destination_staging_reports_the_destination_repo()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake =
+            ScriptedFake::new().on(["add", "--", "config.toml"], 0, "", "").on(
+                ["add", "--", "settings.toml"],
+                1,
+                "",
+                "fatal: unable to stage"
+            );
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "config.toml"));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let result = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/config.toml")],
+            Path::new("frontend/settings.toml")
+        );
+
+        // Assert
+        let failed = result.unwrap_err().downcast::<Failed>().unwrap();
+        assert!(
+            failed.message.contains("failed to stage destination addition")
+        );
+        assert!(failed.message.contains("(frontend)"));
+        assert!(!failed.message.contains("(backend)"));
+    }
 }

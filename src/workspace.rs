@@ -142,17 +142,8 @@ mod tests
 {
     use super::*;
     use crate::git::ScriptedFake;
-    use std::fs;
+    use crate::test_support::vmr_fixture;
     use std::sync::Arc;
-
-    fn vmr_fixture() -> tempfile::TempDir
-    {
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
-        fs::create_dir_all(tmp.path().join("backend/.git")).unwrap();
-        fs::create_dir_all(tmp.path().join("frontend/.git")).unwrap();
-        tmp
-    }
 
     #[test]
     fn find_snapshots_child_repos_sorted_by_name()
