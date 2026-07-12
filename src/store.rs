@@ -145,7 +145,7 @@ where T: Serialize + DeserializeOwned + Default + Clone + PartialEq
     /// Store whose snapshot matches the file on disk
     fn clean(path: PathBuf, data: T) -> Self
     {
-        Self { path, snapshot: Some(data.clone()), data }
+        Self::new(path, data)
     }
 
     /// Defaulted store whose next save always writes
