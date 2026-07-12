@@ -295,7 +295,7 @@ fn tag_create_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "fatal: tag 'v1.0.0' already exists (backend)"
+            "fatal: tag 'v1.0.0' already exists \x1b[90m(backend)\x1b[0m"
         ));
 
     assert!(tag_exists(&frontend, "v1.0.0"));
@@ -321,7 +321,7 @@ fn tag_create_reports_failures_with_repository_suffixes()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "fatal: tag 'v1.0.0' already exists (backend)"
+                "fatal: tag 'v1.0.0' already exists \x1b[90m(backend)\x1b[0m"
             )
             .and(predicate::str::contains("fatal: git tag failed").not())
         );
@@ -349,7 +349,7 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: tag 'v1.0.0' already exists (alpha, zeta)\n"
+            "fatal: tag 'v1.0.0' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 
@@ -471,7 +471,7 @@ fn tag_delete_partial_failure_does_not_stop_other_repositories()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "error: tag 'v1.0.0' not found. (backend)"
+            "error: tag 'v1.0.0' not found. \x1b[90m(backend)\x1b[0m"
         ));
 
     assert!(!tag_exists(&frontend, "v1.0.0"));
@@ -499,7 +499,7 @@ fn tag_delete_reports_failures_with_repository_suffixes()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: tag 'v1.0.0' not found. (backend, tools)"
+                "error: tag 'v1.0.0' not found. \x1b[90m(backend, tools)\x1b[0m"
             )
             .and(predicate::str::contains("fatal: git tag failed").not())
         );
@@ -525,6 +525,6 @@ fn tag_delete_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "error: tag 'v1.0.0' not found. (alpha, zeta)\n"
+            "error: tag 'v1.0.0' not found. \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }

@@ -181,12 +181,15 @@ pub fn remove(
         results.extend(branch_deletions);
     }
 
+    let rendered = render::outcomes(results)?;
+
     if all_child_removals_succeeded
+        && let Err(error) = Vmr::remove_worktree_root(&target)
     {
-        Vmr::remove_worktree_root(&target)?;
+        return Err(render::fail(rendered, format!("{error:#}")));
     }
 
-    render::outcomes(results)
+    Ok(rendered)
 }
 
 struct RemovalOutcome

@@ -259,7 +259,7 @@ fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: feature/auth (frontend)"
+            "fatal: invalid reference: feature/auth \x1b[90m(frontend)\x1b[0m"
         ));
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -287,7 +287,7 @@ fn switch_successes_are_not_rolled_back_after_later_failure()
             "Switched to branch 'feature/auth' (backend)"
         ))
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: feature/auth (frontend)"
+            "fatal: invalid reference: feature/auth \x1b[90m(frontend)\x1b[0m"
         ));
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -311,7 +311,7 @@ fn switch_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: invalid reference: feature/auth (alpha, zeta)\n"
+            "fatal: invalid reference: feature/auth \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 
@@ -335,7 +335,7 @@ fn switch_dirty_worktree_protection_is_delegated_to_git()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "error: Your local changes to the following files would be overwritten by checkout: (backend)"
+            "error: Your local changes to the following files would be overwritten by checkout: \x1b[90m(backend)\x1b[0m"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -492,7 +492,7 @@ fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_o
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists (backend)"
+            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -520,7 +520,7 @@ fn switch_create_successes_are_not_rolled_back_after_failure()
             "Switched to a new branch 'feature/auth'"
         ))
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists (backend)"
+            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -546,7 +546,7 @@ fn switch_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
+            "fatal: a branch named 'feature/auth' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 
     assert_eq!(current_branch(&alpha), "master");

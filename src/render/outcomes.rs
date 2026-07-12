@@ -1,5 +1,5 @@
 use crate::git::{GitCommandResult, RepoMessage, RepoOutcome};
-use crate::render::{Rendered, fail};
+use crate::render::{REPO_LIST, Rendered, fail, paint};
 use anyhow::Result;
 
 /// Renders aggregated per-repo outcomes: identical messages are grouped,
@@ -34,7 +34,8 @@ pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
 
     let mut rendered_errors =
         grouped_messages(failures, RepositoryFormat::NamesWithCount);
-    rendered_errors.extend(errors.into_iter().map(|error| error.to_string()));
+    rendered_errors
+        .extend(errors.into_iter().map(|error| format!("{error:#}")));
 
     if !rendered_errors.is_empty()
     {
@@ -83,30 +84,36 @@ fn grouped_messages(
 
 fn repository_suffix(repos: &[String], format: &RepositoryFormat) -> String
 {
-    if repos.len() == 1
+    let suffix = if repos.len() == 1
     {
-        return format!("({})", repos[0]);
+        format!("({})", repos[0])
     }
+    else
+    {
+        match format
+        {
+            RepositoryFormat::NamesUntilLimit
+                if repos.len() > REPOSITORY_NAME_LIMIT =>
+            {
+                format!("({} repos)", repos.len())
+            }
+            RepositoryFormat::NamesUntilLimit =>
+                format!("({})", repos.join(", ")),
+            RepositoryFormat::NamesWithCount
+                if repos.len() > REPOSITORY_NAME_LIMIT =>
+            {
+                format!(
+                    "({} repos: {}, ...)",
+                    repos.len(),
+                    repos[..REPOSITORY_NAME_LIMIT].join(", ")
+                )
+            }
+            RepositoryFormat::NamesWithCount =>
+                format!("({})", repos.join(", ")),
+        }
+    };
 
-    match format
-    {
-        RepositoryFormat::NamesUntilLimit
-            if repos.len() > REPOSITORY_NAME_LIMIT =>
-        {
-            format!("({} repos)", repos.len())
-        }
-        RepositoryFormat::NamesUntilLimit => format!("({})", repos.join(", ")),
-        RepositoryFormat::NamesWithCount
-            if repos.len() > REPOSITORY_NAME_LIMIT =>
-        {
-            format!(
-                "({} repos: {}, ...)",
-                repos.len(),
-                repos[..REPOSITORY_NAME_LIMIT].join(", ")
-            )
-        }
-        RepositoryFormat::NamesWithCount => format!("({})", repos.join(", "))
-    }
+    paint(REPO_LIST, &suffix)
 }
 
 #[cfg(test)]
@@ -136,8 +143,8 @@ mod tests
 
         // Assert
         assert_eq!(rendered, vec![
-            "Already up to date. (backend, frontend)",
-            "Updating abc123..def456 (tools)"
+            "Already up to date. \x1b[90m(backend, frontend)\x1b[0m",
+            "Updating abc123..def456 \x1b[90m(tools)\x1b[0m"
         ]);
     }
 
@@ -156,7 +163,9 @@ mod tests
             grouped_messages(messages, RepositoryFormat::NamesUntilLimit);
 
         // Assert
-        assert_eq!(rendered, vec!["Already up to date. (6 repos)"]);
+        assert_eq!(rendered, vec![
+            "Already up to date. \x1b[90m(6 repos)\x1b[0m"
+        ]);
     }
 
     #[test]
@@ -175,7 +184,7 @@ mod tests
 
         // Assert
         assert_eq!(rendered, vec![
-            "remote rejected (6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)"
+            "remote rejected \x1b[90m(6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)\x1b[0m"
         ]);
     }
 
@@ -210,7 +219,7 @@ mod tests
         // Assert
         assert_eq!(
             rendered.stdout,
-            "Already up to date. (backend, frontend)\n"
+            "Already up to date. \x1b[90m(backend, frontend)\x1b[0m\n"
         );
     }
 
@@ -236,7 +245,25 @@ mod tests
         // Assert
         assert_eq!(
             err.to_string(),
-            "error: branch not found (backend, frontend)\nfatal: transport failed"
+            "error: branch not found \x1b[90m(backend, frontend)\x1b[0m\nfatal: transport failed"
+        );
+    }
+
+    #[test]
+    fn outcomes_renders_error_context()
+    {
+        // Arrange
+        let error =
+            Err(anyhow!("connection refused")
+                .context("failed to fetch repository"));
+
+        // Act
+        let err = outcomes(vec![error]).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "failed to fetch repository: connection refused"
         );
     }
 
@@ -257,7 +284,7 @@ mod tests
 
         // Assert
         let failed = err.downcast::<crate::render::Failed>().unwrap();
-        assert_eq!(failed.rendered.stdout, "pushed (backend)\n");
-        assert_eq!(failed.message, "remote rejected (frontend)");
+        assert_eq!(failed.rendered.stdout, "pushed \x1b[90m(backend)\x1b[0m\n");
+        assert_eq!(failed.message, "remote rejected \x1b[90m(frontend)\x1b[0m");
     }
 }

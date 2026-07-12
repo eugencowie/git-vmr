@@ -182,7 +182,7 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "merge: feature/auth - not something we can merge (frontend)"
+            "merge: feature/auth - not something we can merge \x1b[90m(frontend)\x1b[0m"
         ));
 
     assert!(branch_contains_head(&backend, "feature/auth"));
@@ -263,7 +263,7 @@ fn merge_reports_repository_suffixes_and_orders_failures_by_repository_name()
                 .and(predicate::str::contains("(beta)"))
         )
         .stderr(predicate::str::starts_with(
-            "merge: feature/auth - not something we can merge (alpha, zeta)\n"
+            "merge: feature/auth - not something we can merge \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 

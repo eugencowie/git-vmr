@@ -616,7 +616,7 @@ fn worktree_add_invalid_explicit_commit_ish_groups_failures()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: new (backend, frontend)"
+            "fatal: invalid reference: new \x1b[90m(backend, frontend)\x1b[0m"
         ));
 
     assert!(!branch_exists(&backend, "wt"));
@@ -744,7 +744,7 @@ fn worktree_add_reports_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: invalid reference: new (alpha, zeta)\n"
+            "fatal: invalid reference: new \x1b[90m(alpha, zeta)\x1b[0m\n"
         ));
 }
 
@@ -1130,7 +1130,7 @@ fn worktree_remove_force_delete_skips_branch_for_failed_child_removal()
 }
 
 #[test]
-fn worktree_remove_delete_failure_keeps_marker_cleanup()
+fn worktree_remove_delete_failure_keeps_worktree_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = init_vmr_with_repos(tmp.path(), &["backend"]);
@@ -1153,8 +1153,8 @@ fn worktree_remove_delete_failure_keeps_marker_cleanup()
         );
 
     assert!(!tmp.path().join("wt/backend").exists());
-    assert!(!tmp.path().join("wt/.gitvmr").exists());
-    assert!(!tmp.path().join("wt").exists());
+    assert!(tmp.path().join("wt/.gitvmr").exists());
+    assert!(tmp.path().join("wt").exists());
     assert!(branch_exists(&vmr.join("backend"), "wt"));
 }
 

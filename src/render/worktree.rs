@@ -1,4 +1,5 @@
 use crate::git::{self, ChildWorktreeState};
+use crate::render::repo_list_suffix;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -31,18 +32,10 @@ pub fn worktree_list(
 fn render_group(
     output: &mut String,
     root: &Path,
-    mut entries: Vec<WorktreeRootEntry>,
+    entries: Vec<WorktreeRootEntry>,
     repo_names: &[String]
 )
 {
-    entries.sort_by(|a, b| {
-        (state_sort_key(&a.state), short_head(&a.head), &a.repo).cmp(&(
-            state_sort_key(&b.state),
-            short_head(&b.head),
-            &b.repo
-        ))
-    });
-
     let mut state_groups: BTreeMap<RenderedState, Vec<String>> =
         BTreeMap::new();
 
@@ -64,7 +57,8 @@ fn render_group(
         }
         else
         {
-            format!(" ({})", repos.join(", "))
+            let repo_names: Vec<_> = repos.iter().map(String::as_str).collect();
+            format!(" {}", repo_list_suffix(&repo_names))
         };
 
         lines.push(format!("{}{}", state.render(), suffix));
@@ -122,11 +116,76 @@ fn short_head(head: &str) -> &str
     head.get(..8).unwrap_or(head)
 }
 
-fn state_sort_key(state: &ChildWorktreeState) -> (&str, &str)
+#[cfg(test)]
+mod tests
 {
-    match state
+    use super::*;
+
+    #[test]
+    fn renders_empty_output_for_no_worktrees()
     {
-        ChildWorktreeState::Branch(branch) => ("branch", branch),
-        ChildWorktreeState::Detached => ("detached", "")
+        assert_eq!(worktree_list(BTreeMap::new(), &[]), "");
+    }
+
+    #[test]
+    fn renders_shared_state_on_single_line_without_repo_list()
+    {
+        let groups = BTreeMap::from([(PathBuf::from("../release"), vec![
+            branch_entry("frontend", "release", "22222222"),
+            branch_entry("backend", "release", "11111111"),
+        ])]);
+        let repo_names = vec!["backend".to_owned(), "frontend".to_owned()];
+
+        let output = worktree_list(groups, &repo_names);
+
+        assert_eq!(output, "../release [release]\n");
+    }
+
+    #[test]
+    fn groups_and_sorts_states_in_multi_line_block()
+    {
+        let groups = BTreeMap::from([(PathBuf::from("../feature"), vec![
+            detached_entry("tools", "fedcba9876543210"),
+            branch_entry("frontend", "topic", "33333333"),
+            detached_entry("backend", "0123456789abcdef"),
+            branch_entry("backend", "topic", "11111111"),
+            branch_entry("tools", "alpha", "22222222"),
+        ])]);
+        let repo_names = vec![
+            "backend".to_owned(),
+            "frontend".to_owned(),
+            "tools".to_owned(),
+        ];
+
+        let output = worktree_list(groups, &repo_names);
+
+        assert_eq!(
+            output,
+            concat!(
+                "../feature\n",
+                "  [alpha] \x1b[90m(tools)\x1b[0m\n",
+                "  [topic] \x1b[90m(backend, frontend)\x1b[0m\n",
+                "  01234567 (detached HEAD) \x1b[90m(backend)\x1b[0m\n",
+                "  fedcba98 (detached HEAD) \x1b[90m(tools)\x1b[0m\n"
+            )
+        );
+    }
+
+    fn branch_entry(repo: &str, branch: &str, head: &str) -> WorktreeRootEntry
+    {
+        WorktreeRootEntry {
+            repo: repo.to_owned(),
+            head: head.to_owned(),
+            state: ChildWorktreeState::Branch(branch.to_owned())
+        }
+    }
+
+    fn detached_entry(repo: &str, head: &str) -> WorktreeRootEntry
+    {
+        WorktreeRootEntry {
+            repo: repo.to_owned(),
+            head: head.to_owned(),
+            state: ChildWorktreeState::Detached
+        }
     }
 }

@@ -219,7 +219,10 @@ mod tests
             .unwrap_err();
 
         // Assert
-        assert_eq!(err.to_string(), "merge failed (backend, frontend)");
+        assert_eq!(
+            err.to_string(),
+            "merge failed \x1b[90m(backend, frontend)\x1b[0m"
+        );
     }
 
     #[test]
