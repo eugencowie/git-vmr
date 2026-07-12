@@ -1,6 +1,5 @@
 use crate::git::{
-    Git, GitCommandResult, command_result, failure_message,
-    first_non_empty_line_with_fallback, success_message
+    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
 };
 use regex::Regex;
 use std::path::Path;
@@ -57,28 +56,24 @@ impl Git
         let output =
             self.output(repo_path, ["switch", "--create", branch_name])?;
 
-        if output.status.success()
-        {
-            Ok(success_message(
-                repo_name,
-                first_non_empty_line_with_fallback(
+        command_result(
+            repo_name,
+            &output,
+            |output| {
+                Some(first_non_empty_line_with_fallback(
                     &output.stdout,
                     &output.stderr,
                     "git switch succeeded"
-                )
-            ))
-        }
-        else
-        {
-            Ok(failure_message(
-                repo_name,
+                ))
+            },
+            |output| {
                 first_non_empty_line_with_fallback(
                     &output.stderr,
                     &output.stdout,
                     "git switch failed"
                 )
-            ))
-        }
+            }
+        )
     }
 }
 
