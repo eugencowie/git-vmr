@@ -6,9 +6,9 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Write};
 use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct FileStore<T>
@@ -107,21 +107,37 @@ where T: Serialize + DeserializeOwned + Default + Clone + PartialEq
     /// Write the data unconditionally, creating the file if needed.
     pub fn write(&mut self) -> Result<()>
     {
-        // Create parent directory if needed
-        if let Some(parent) = self.path.parent()
-        {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create {}", parent.display())
-            })?;
-        }
+        let parent = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
 
-        // Serialize and write the file
+        // Create parent directory if needed
+        fs::create_dir_all(parent).with_context(|| {
+            format!("failed to create {}", parent.display())
+        })?;
+
+        // Serialize, then atomically replace the file from the same directory
         let contents = toml::to_string(&self.data).with_context(|| {
             format!("failed to serialize {}", self.path.display())
         })?;
-        fs::write(&self.path, contents).with_context(|| {
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)
+            .with_context(|| {
+                format!(
+                    "failed to create temporary file in {}",
+                    parent.display()
+                )
+            })?;
+        temporary.write_all(contents.as_bytes()).with_context(|| {
             format!("failed to write {}", self.path.display())
         })?;
+        temporary.flush().with_context(|| {
+            format!("failed to flush {}", self.path.display())
+        })?;
+        temporary.persist(&self.path).map_err(|err| err.error).with_context(
+            || format!("failed to replace {}", self.path.display())
+        )?;
         self.snapshot = Some(self.data.clone());
         Ok(())
     }

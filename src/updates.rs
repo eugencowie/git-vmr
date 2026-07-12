@@ -202,13 +202,7 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let state_file = state_file(&tmp);
-        fs::create_dir_all(state_file.parent().unwrap()).unwrap();
-        fs::write(&state_file, "").unwrap();
-        let original_permissions =
-            fs::metadata(&state_file).unwrap().permissions();
-        let mut readonly_permissions = original_permissions.clone();
-        readonly_permissions.set_readonly(true);
-        fs::set_permissions(&state_file, readonly_permissions).unwrap();
+        fs::write(tmp.path().join("state"), "not a directory").unwrap();
         let calls = Cell::new(0);
 
         // Act
@@ -216,9 +210,6 @@ mod tests
             calls.set(calls.get() + 1);
             Ok(Some("1.2.3".into()))
         });
-
-        // Cleanup
-        fs::set_permissions(&state_file, original_permissions).unwrap();
 
         // Assert
         assert_eq!(notice, None);
