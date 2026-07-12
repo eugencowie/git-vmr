@@ -134,8 +134,9 @@ impl MovePlan
     }
 }
 
-/// Attempts every entry of the plan, producing one repo outcome per entry so
-/// result aggregation reports exactly which moves landed.
+/// Executes a same-repository multi-source plan as one batched `git mv` and
+/// produces one aggregated repo outcome. Other plans produce one outcome per
+/// entry so result aggregation reports exactly which moves landed.
 fn execute_plan(git: &Git, plan: MovePlan) -> Vec<GitCommandResult>
 {
     if plan.multi_source
@@ -315,6 +316,48 @@ mod tests
         assert_eq!(
             calls[0].args,
             ["mv", "--", "src/old.rs", "src/new.rs"]
+                .map(std::ffi::OsString::from)
+        );
+    }
+
+    #[test]
+    fn multi_source_same_repo_move_uses_one_batched_git_mv()
+    {
+        // Arrange
+        let tmp = vmr_fixture();
+        let fake = ScriptedFake::new().on(
+            ["mv", "--", "a.txt", "b.txt", "docs"],
+            0,
+            "",
+            ""
+        );
+        let fake = tracked_file(&tmp, fake, "backend", "a.txt");
+        let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
+        fs::create_dir(tmp.path().join("backend/docs")).unwrap();
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let rendered = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/a.txt"), PathBuf::from("backend/b.txt")],
+            Path::new("backend/docs")
+        )
+        .unwrap();
+
+        // Assert
+        assert!(rendered.stdout.is_empty());
+        let mv_calls = fake
+            .calls()
+            .into_iter()
+            .filter(|invocation| invocation.args.first() == Some(&"mv".into()))
+            .collect::<Vec<_>>();
+        assert_eq!(mv_calls.len(), 1);
+        assert_eq!(mv_calls[0].path, tmp.path().join("backend"));
+        assert_eq!(
+            mv_calls[0].args,
+            ["mv", "--", "a.txt", "b.txt", "docs"]
                 .map(std::ffi::OsString::from)
         );
     }
