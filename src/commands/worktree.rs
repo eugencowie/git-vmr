@@ -1,11 +1,11 @@
 use crate::git;
 use crate::git::Git;
-use crate::workspace::{Repo, Workspace, resolve_path};
+use crate::vmr::Vmr;
+use crate::workspace::{Repo, Workspace, resolve_target};
 use anyhow::{Context, Result};
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn list(workspace: &Workspace) -> Result<()>
@@ -21,15 +21,15 @@ pub fn list(workspace: &Workspace) -> Result<()>
             .map(|entries| (repo.name.clone(), entries))
     })?;
 
-    let mut groups: BTreeMap<PathBuf, Vec<AggregateEntry>> = BTreeMap::new();
+    let mut groups: BTreeMap<PathBuf, Vec<WorktreeRootEntry>> = BTreeMap::new();
     for (repo_name, entries) in results
     {
         for entry in entries
         {
             if let Some(root) =
-                aggregate_root(workspace.root(), &repo_name, &entry.path)
+                worktree_root(workspace.root(), &repo_name, &entry.path)
             {
-                groups.entry(root).or_default().push(AggregateEntry {
+                groups.entry(root).or_default().push(WorktreeRootEntry {
                     repo: repo_name.clone(),
                     head: entry.head,
                     state: entry.state
@@ -54,7 +54,7 @@ pub fn add(
     commit_ish: Option<&str>
 ) -> Result<()>
 {
-    let target = resolve_path(working_dir, path).clean();
+    let target = resolve_target(working_dir, path);
     let mode = match (branch, commit_ish)
     {
         (Some(branch), commit_ish) => WorktreeAddMode::NewBranch {
@@ -71,15 +71,7 @@ pub fn add(
         )
     };
 
-    fs::create_dir_all(&target).with_context(|| {
-        format!(
-            "fatal: failed to create worktree target '{}'",
-            target.display()
-        )
-    })?;
-    fs::write(target.join(".gitvmr"), "").with_context(|| {
-        format!("fatal: failed to create VMR marker in '{}'", target.display())
-    })?;
+    Vmr::create_worktree_root(&target)?;
 
     workspace.run(|git, repo| {
         let (branch, commit_ish) = match &mode
@@ -116,7 +108,7 @@ enum WorktreeAddMode
     InferredBranch(String)
 }
 
-fn aggregate_root(
+fn worktree_root(
     vmr_root: &Path,
     repo_name: &str,
     worktree_path: &Path
@@ -134,11 +126,11 @@ fn aggregate_root(
     }
 
     let root = worktree_path.parent()?.to_owned();
-    if root.join(".gitvmr").exists() { Some(root) } else { None }
+    if Vmr::is_root(&root) { Some(root) } else { None }
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct AggregateEntry
+struct WorktreeRootEntry
 {
     repo: String,
     head: String,
@@ -147,7 +139,7 @@ struct AggregateEntry
 
 fn render_group(
     root: &Path,
-    mut entries: Vec<AggregateEntry>,
+    mut entries: Vec<WorktreeRootEntry>,
     repo_names: &[String]
 )
 {
@@ -209,7 +201,7 @@ enum RenderedState
 
 impl RenderedState
 {
-    fn from_entry(entry: &AggregateEntry) -> Self
+    fn from_entry(entry: &WorktreeRootEntry) -> Self
     {
         match &entry.state
         {
@@ -254,7 +246,7 @@ pub fn remove(
 ) -> Result<()>
 {
     let git = workspace.git();
-    let target = resolve_path(working_dir, path).clean();
+    let target = resolve_target(working_dir, path);
 
     let removals = workspace.map(|git, repo| {
         // Wrap per-repo errors so map attempts every repository.
@@ -302,7 +294,7 @@ pub fn remove(
 
     if all_child_removals_succeeded
     {
-        cleanup_aggregate_worktree(&target)?;
+        Vmr::remove_worktree_root(&target)?;
     }
 
     crate::workspace::report(results)
@@ -365,46 +357,6 @@ fn child_worktree_branch(
         }))
 }
 
-fn cleanup_aggregate_worktree(target: &Path) -> Result<()>
-{
-    let marker = target.join(".gitvmr");
-    if marker.exists()
-    {
-        if marker.is_dir()
-        {
-            fs::remove_dir(&marker).with_context(|| {
-                format!(
-                    "fatal: failed to remove VMR marker '{}'",
-                    marker.display()
-                )
-            })?;
-        }
-        else
-        {
-            fs::remove_file(&marker).with_context(|| {
-                format!(
-                    "fatal: failed to remove VMR marker '{}'",
-                    marker.display()
-                )
-            })?;
-        }
-    }
-
-    match fs::remove_dir(target)
-    {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty =>
-            Ok(()),
-        Err(error) => Err(error).with_context(|| {
-            format!(
-                "fatal: failed to remove empty worktree directory '{}'",
-                target.display()
-            )
-        })
-    }
-}
-
 pub fn move_worktree(
     workspace: &Workspace,
     working_dir: &Path,
@@ -413,21 +365,10 @@ pub fn move_worktree(
     force: u8
 ) -> Result<()>
 {
-    let source = resolve_path(working_dir, path).clean();
-    let destination = resolve_path(working_dir, new_path).clean();
+    let source = resolve_target(working_dir, path);
+    let destination = resolve_target(working_dir, new_path);
 
-    fs::create_dir_all(&destination).with_context(|| {
-        format!(
-            "fatal: failed to create worktree target '{}'",
-            destination.display()
-        )
-    })?;
-    fs::write(destination.join(".gitvmr"), "").with_context(|| {
-        format!(
-            "fatal: failed to create VMR marker in '{}'",
-            destination.display()
-        )
-    })?;
+    Vmr::create_worktree_root(&destination)?;
 
     workspace.run(|git, repo| {
         git.worktree_move(
@@ -439,40 +380,5 @@ pub fn move_worktree(
         )
     })?;
 
-    let marker = source.join(".gitvmr");
-    if marker.exists()
-    {
-        if marker.is_dir()
-        {
-            fs::remove_dir(&marker).with_context(|| {
-                format!(
-                    "fatal: failed to remove VMR marker '{}'",
-                    marker.display()
-                )
-            })?;
-        }
-        else
-        {
-            fs::remove_file(&marker).with_context(|| {
-                format!(
-                    "fatal: failed to remove VMR marker '{}'",
-                    marker.display()
-                )
-            })?;
-        }
-    }
-
-    match fs::remove_dir(&source)
-    {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty =>
-            Ok(()),
-        Err(error) => Err(error).with_context(|| {
-            format!(
-                "fatal: failed to remove empty worktree directory '{}'",
-                source.display()
-            )
-        })
-    }
+    Vmr::remove_worktree_root(&source)
 }
