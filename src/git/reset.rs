@@ -39,6 +39,25 @@ pub struct ResetArgs
     pub commit: Option<String>
 }
 
+impl ResetArgs
+{
+    /// The selected reset mode. Total: the `conflicts_with_all` attributes
+    /// above reject every multi-flag combination.
+    pub fn mode(&self) -> Option<ResetMode>
+    {
+        match (self.soft, self.mixed, self.hard, self.merge, self.keep)
+        {
+            (true, false, false, false, false) => Some(ResetMode::Soft),
+            (false, true, false, false, false) => Some(ResetMode::Mixed),
+            (false, false, true, false, false) => Some(ResetMode::Hard),
+            (false, false, false, true, false) => Some(ResetMode::Merge),
+            (false, false, false, false, true) => Some(ResetMode::Keep),
+            (false, false, false, false, false) => None,
+            _ => unreachable!()
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResetMode
 {
@@ -51,26 +70,6 @@ pub enum ResetMode
 
 impl ResetMode
 {
-    pub fn from_arg(
-        soft: bool,
-        mixed: bool,
-        hard: bool,
-        merge: bool,
-        keep: bool
-    ) -> Option<ResetMode>
-    {
-        match (soft, mixed, hard, merge, keep)
-        {
-            (true, false, false, false, false) => Some(ResetMode::Soft),
-            (false, true, false, false, false) => Some(ResetMode::Mixed),
-            (false, false, true, false, false) => Some(ResetMode::Hard),
-            (false, false, false, true, false) => Some(ResetMode::Merge),
-            (false, false, false, false, true) => Some(ResetMode::Keep),
-            (false, false, false, false, false) => None,
-            _ => unreachable!()
-        }
-    }
-
     pub fn as_arg(self) -> &'static str
     {
         match self
@@ -124,18 +123,29 @@ mod tests
     use crate::git::runner::scripted::ScriptedFake;
     use crate::test_support::repo;
 
+    fn args(
+        soft: bool,
+        mixed: bool,
+        hard: bool,
+        merge: bool,
+        keep: bool
+    ) -> ResetArgs
+    {
+        ResetArgs { soft, mixed, hard, merge, keep, commit: None }
+    }
+
     #[test]
-    fn from_arg_returns_none_when_no_mode_flag_is_set()
+    fn mode_returns_none_when_no_mode_flag_is_set()
     {
         // Act
-        let mode = ResetMode::from_arg(false, false, false, false, false);
+        let mode = args(false, false, false, false, false).mode();
 
         // Assert
         assert_eq!(mode, None);
     }
 
     #[test]
-    fn from_arg_returns_selected_mode()
+    fn mode_returns_selected_mode()
     {
         for (flags, expected) in [
             ((true, false, false, false, false), ResetMode::Soft),
@@ -146,9 +156,7 @@ mod tests
         ]
         {
             // Act
-            let mode = ResetMode::from_arg(
-                flags.0, flags.1, flags.2, flags.3, flags.4
-            );
+            let mode = args(flags.0, flags.1, flags.2, flags.3, flags.4).mode();
 
             // Assert
             assert_eq!(mode, Some(expected));

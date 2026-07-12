@@ -41,6 +41,36 @@ pub struct BranchArgs
     pub branch_name: Option<String>
 }
 
+/// What a `branch` invocation asks for. Total: the flag combinations the
+/// arg attributes above reject cannot reach this enum.
+pub enum BranchAction<'a>
+{
+    List,
+    Create(&'a str),
+    Delete
+    {
+        branch_name: &'a str,
+        force: bool
+    }
+}
+
+impl BranchArgs
+{
+    pub fn action(&self) -> BranchAction<'_>
+    {
+        match &self.branch_name
+        {
+            Some(branch_name) if self.delete || self.force_delete =>
+                BranchAction::Delete {
+                    branch_name,
+                    force: self.force || self.force_delete
+                },
+            Some(branch_name) => BranchAction::Create(branch_name),
+            None => BranchAction::List
+        }
+    }
+}
+
 impl Git
 {
     pub fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult

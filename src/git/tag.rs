@@ -17,6 +17,29 @@ pub struct TagArgs
     pub tag_name: Option<String>
 }
 
+/// What a `tag` invocation asks for. Total: `delete` without a tag name is
+/// rejected by the `requires` attribute above.
+pub enum TagAction<'a>
+{
+    List,
+    Create(&'a str),
+    Delete(&'a str)
+}
+
+impl TagArgs
+{
+    pub fn action(&self) -> TagAction<'_>
+    {
+        match (&self.tag_name, self.delete)
+        {
+            (Some(tag_name), true) => TagAction::Delete(tag_name),
+            (Some(tag_name), false) => TagAction::Create(tag_name),
+            (None, false) => TagAction::List,
+            (None, true) => unreachable!()
+        }
+    }
+}
+
 impl Git
 {
     pub fn tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult

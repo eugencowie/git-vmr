@@ -14,8 +14,8 @@ fn normalize_success_message(message: String) -> String
     BEHIND_COMMIT_COUNT.replace(&message, "").into_owned()
 }
 
-/// The report policy `switch` and `create` share: both run `git switch`,
-/// so both normalize its fast-forward success message the same way.
+/// The switch report policy: normalize the fast-forward success message,
+/// with or without `--create`.
 fn report_policy() -> (SuccessReport, FailureReport)
 {
     (
@@ -43,18 +43,18 @@ pub struct SwitchArgs
 
 impl Git
 {
-    pub fn switch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
+    pub fn switch(&self, repo: &Repo, args: &SwitchArgs) -> GitCommandResult
     {
-        let output = self.output(&repo.path, ["switch", branch_name])?;
-        let (success, failure) = report_policy();
+        let mut invocation = vec!["switch"];
 
-        command_result(repo, &output, success, failure)
-    }
+        if args.create
+        {
+            invocation.push("--create");
+        }
 
-    pub fn create(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
-    {
-        let output =
-            self.output(&repo.path, ["switch", "--create", branch_name])?;
+        invocation.push(&args.branch_name);
+
+        let output = self.output(&repo.path, invocation)?;
         let (success, failure) = report_policy();
 
         command_result(repo, &output, success, failure)
@@ -111,8 +111,12 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.switch(&repo("backend", "/vmr/backend"), "develop").unwrap();
+        let outcome = git
+            .switch(&repo("backend", "/vmr/backend"), &SwitchArgs {
+                create: false,
+                branch_name: "develop".to_owned()
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
@@ -139,7 +143,10 @@ mod tests
 
         // Act
         let outcome = git
-            .create(&repo("backend", "/vmr/backend"), "feature/auth")
+            .switch(&repo("backend", "/vmr/backend"), &SwitchArgs {
+                create: true,
+                branch_name: "feature/auth".to_owned()
+            })
             .unwrap();
 
         // Assert

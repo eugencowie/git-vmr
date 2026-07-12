@@ -33,8 +33,20 @@ use init::InitArgs;
 #[derive(Subcommand)]
 pub enum Command
 {
+    // Clone and init run before a VMR exists
     Clone(CloneArgs),
     Init(InitArgs),
+
+    // Every other command is a workspace command
+    #[command(flatten)]
+    Workspace(WorkspaceCommand)
+}
+
+/// A command that runs inside an opened workspace: the VMR is discovered and
+/// its child repos snapshotted before the command sees anything.
+#[derive(Subcommand)]
+pub enum WorkspaceCommand
+{
     Add(AddArgs),
     Mv(MvArgs),
     Restore(RestoreArgs),
@@ -73,21 +85,22 @@ impl Command
 
         match self
         {
-            // Clone and init run before a VMR exists
             Command::Clone(args) => clone::clone(git, working_dir, &args),
 
             Command::Init(args) => init::init(working_dir, &args),
 
-            // Every other command runs inside an opened workspace
-            command =>
+            Command::Workspace(command) =>
             {
                 let workspace = Workspace::find(git, working_dir)?;
-                command.run_in_workspace(&workspace, context)
+                command.run(&workspace, context)
             }
         }
     }
+}
 
-    fn run_in_workspace(
+impl WorkspaceCommand
+{
+    fn run(
         self,
         workspace: &Workspace,
         context: &CliContext
@@ -97,44 +110,43 @@ impl Command
 
         match self
         {
-            Command::Clone(_) | Command::Init(_) => unreachable!(),
+            WorkspaceCommand::Add(args) =>
+                add::add(workspace, working_dir, &args),
 
-            Command::Add(args) => add::add(workspace, working_dir, &args),
+            WorkspaceCommand::Mv(args) => mv::mv(workspace, working_dir, &args),
 
-            Command::Mv(args) => mv::mv(workspace, working_dir, &args),
-
-            Command::Restore(args) =>
+            WorkspaceCommand::Restore(args) =>
                 restore::restore(workspace, working_dir, &args),
 
-            Command::Rm(args) => rm::rm(workspace, working_dir, &args),
+            WorkspaceCommand::Rm(args) => rm::rm(workspace, working_dir, &args),
 
-            Command::Status =>
+            WorkspaceCommand::Status =>
                 status::status(workspace, &context.display_name, working_dir),
 
-            Command::Branch(args) => branch::branch(workspace, &args),
+            WorkspaceCommand::Branch(args) => branch::branch(workspace, &args),
 
-            Command::Commit(args) => commit::commit(workspace, &args),
+            WorkspaceCommand::Commit(args) => commit::commit(workspace, &args),
 
-            Command::Merge(args) => merge::merge(workspace, &args),
+            WorkspaceCommand::Merge(args) => merge::merge(workspace, &args),
 
-            Command::Rebase(args) => rebase::rebase(workspace, &args),
+            WorkspaceCommand::Rebase(args) => rebase::rebase(workspace, &args),
 
-            Command::Reset(args) => reset::reset(workspace, &args),
+            WorkspaceCommand::Reset(args) => reset::reset(workspace, &args),
 
-            Command::Switch(args) => switch::switch(workspace, &args),
+            WorkspaceCommand::Switch(args) => switch::switch(workspace, &args),
 
-            Command::Tag(args) => tag::tag(workspace, &args),
+            WorkspaceCommand::Tag(args) => tag::tag(workspace, &args),
 
-            Command::Fetch(args) => fetch::fetch(workspace, &args),
+            WorkspaceCommand::Fetch(args) => fetch::fetch(workspace, &args),
 
-            Command::Pull(args) => pull::pull(workspace, &args),
+            WorkspaceCommand::Pull(args) => pull::pull(workspace, &args),
 
-            Command::Push(args) => push::push(workspace, &args),
+            WorkspaceCommand::Push(args) => push::push(workspace, &args),
 
-            Command::Worktree { command } =>
+            WorkspaceCommand::Worktree { command } =>
                 worktree::worktree(workspace, working_dir, command),
 
-            Command::Foreach(args) =>
+            WorkspaceCommand::Foreach(args) =>
                 foreach::foreach(workspace, working_dir, &args),
         }
     }

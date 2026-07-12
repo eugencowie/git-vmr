@@ -18,6 +18,12 @@ _Avoid_: VMR (when the fixed, opened view is meant), context, session
 A Git repository living directly inside a VMR, operated on as part of the whole.
 _Avoid_: submodule, subrepo, member, project
 
+**Workspace command**:
+A command that runs inside an opened workspace — every command except clone
+and init, which run before a VMR exists. The distinction is encoded in the
+command type, not checked at run time.
+_Avoid_: repo command, VMR command
+
 **VMR root**:
 The directory bearing the `.gitvmr` marker: the main root of a VMR, or a worktree root.
 _Avoid_: boundary, top level

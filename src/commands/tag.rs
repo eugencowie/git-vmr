@@ -1,29 +1,22 @@
-use crate::git::TagArgs;
+use crate::git::{TagAction, TagArgs};
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
 
 pub fn tag(workspace: &Workspace, args: &TagArgs) -> Result<Rendered>
 {
-    match (&args.tag_name, args.delete)
+    match args.action()
     {
-        (Some(tag_name), true) => delete(workspace, tag_name),
-        (Some(tag_name), false) => create(workspace, tag_name),
-        (None, false) => tags(workspace),
-        _ => unreachable!()
+        TagAction::List => tags(workspace),
+
+        // Create tag in each child repository
+        TagAction::Create(tag_name) =>
+            workspace.run(|git, repo| git.tag(repo, tag_name)),
+
+        // Delete tag in each child repository
+        TagAction::Delete(tag_name) =>
+            workspace.run(|git, repo| git.delete_tag(repo, tag_name)),
     }
-}
-
-fn create(workspace: &Workspace, tag_name: &str) -> Result<Rendered>
-{
-    // Create tag in each child repository
-    workspace.run(|git, repo| git.tag(repo, tag_name))
-}
-
-fn delete(workspace: &Workspace, tag_name: &str) -> Result<Rendered>
-{
-    // Delete tag in each child repository
-    workspace.run(|git, repo| git.delete_tag(repo, tag_name))
 }
 
 fn tags(workspace: &Workspace) -> Result<Rendered>
