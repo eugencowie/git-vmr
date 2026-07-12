@@ -539,7 +539,7 @@ mod tests
                         destination.join("backend").into()
                     ],
                     0,
-                    "",
+                    "Moved worktree",
                     ""
                 )
                 .on(
@@ -566,6 +566,7 @@ mod tests
         let failed = result.unwrap_err().downcast::<Failed>().unwrap();
         assert!(failed.message.contains("locked working tree"));
         assert!(failed.message.contains("frontend"));
+        assert!(failed.rendered.stdout.contains("backend"));
         assert!(source.join(".gitvmr").exists());
         assert!(destination.join(".gitvmr").exists());
     }
