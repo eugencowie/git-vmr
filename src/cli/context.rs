@@ -53,6 +53,7 @@ impl CliContext
     /// Save changes to the context
     pub fn save(&mut self) -> Result<()>
     {
+        self.global_config.save()?;
         self.global_state.save()
     }
 
@@ -93,6 +94,40 @@ mod tests
 {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn saves_global_config_and_state_changes()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        let state_path = tmp.path().join("state.toml");
+        let mut context = CliContext {
+            display_name: "git vmr".to_owned(),
+            working_dir: PathBuf::new(),
+            global_config: FileStore::new(
+                config_path.clone(),
+                GlobalConfig::default()
+            ),
+            global_state: FileStore::new(
+                state_path.clone(),
+                GlobalState::default()
+            ),
+            warnings: vec![],
+            git: Git::subprocess()
+        };
+        context.global_config.core.version = 1;
+        context.global_state.updates.last_available = Some("1.2.3".to_owned());
+
+        // Act
+        context.save().unwrap();
+
+        // Assert
+        let config = FileStore::<GlobalConfig>::load(config_path).unwrap();
+        let state = FileStore::<GlobalState>::load(state_path).unwrap();
+        assert_eq!(config.core.version, 1);
+        assert_eq!(state.updates.last_available, Some("1.2.3".to_owned()));
+    }
 
     #[test]
     fn resolves_working_dir_argument_to_canonical_directory()

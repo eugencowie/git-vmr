@@ -96,8 +96,8 @@ memory, knows the file's path, and is the only thing that reads or writes it.
 _Avoid_: store (unqualified), persistence layer, repository
 
 **Global config**:
-User-level, read-only configuration from the user's config directory. Strict:
-a malformed file is an error, a missing one means defaults.
+User-level mutable configuration from the user's config directory. Strict: a
+malformed file is an error, a missing one means defaults.
 _Avoid_: settings
 
 **VMR config**:
