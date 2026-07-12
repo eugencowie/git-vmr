@@ -90,8 +90,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Quiet,
-            FailureReport::Detailed { command: "add" }
+            SuccessReport::quiet(),
+            FailureReport::detailed("add")
         )
     }
 

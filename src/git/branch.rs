@@ -21,11 +21,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Quiet,
-            FailureReport::Line {
-                from: Streams::StderrOnly,
-                fallback: "git branch failed"
-            }
+            SuccessReport::quiet(),
+            FailureReport::line(Streams::StderrOnly, "git branch failed")
         )
     }
 
@@ -44,11 +41,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Fixed(format!("Deleted branch {branch_name}")),
-            FailureReport::Line {
-                from: Streams::StderrOnly,
-                fallback: "git branch failed"
-            }
+            SuccessReport::fixed(format!("Deleted branch {branch_name}")),
+            FailureReport::line(Streams::StderrOnly, "git branch failed")
         )
     }
 

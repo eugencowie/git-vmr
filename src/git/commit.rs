@@ -20,14 +20,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutOnly,
-                on_empty: OnEmpty::Text("git commit succeeded")
-            },
-            FailureReport::Line {
-                from: Streams::StderrOnly,
-                fallback: "git commit failed"
-            }
+            SuccessReport::line(
+                Streams::StdoutOnly,
+                OnEmpty::Text("git commit succeeded")
+            ),
+            FailureReport::line(Streams::StderrOnly, "git commit failed")
         )
     }
 

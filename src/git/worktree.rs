@@ -56,13 +56,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StderrThenStdout,
-                on_empty: OnEmpty::Text("git worktree add succeeded")
-            },
-            FailureReport::LastStderrLine {
-                fallback: "git worktree add failed"
-            }
+            SuccessReport::line(
+                Streams::StderrThenStdout,
+                OnEmpty::Text("git worktree add succeeded")
+            ),
+            FailureReport::last_stderr_line("git worktree add failed")
         )
     }
 
@@ -90,14 +88,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Quiet
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git worktree remove failed"
-            }
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(
+                Streams::StderrThenStdout,
+                "git worktree remove failed"
+            )
         )
     }
 
@@ -126,14 +121,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Quiet
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git worktree move failed"
-            }
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(
+                Streams::StderrThenStdout,
+                "git worktree move failed"
+            )
         )
     }
 

@@ -19,11 +19,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Quiet,
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git rebase failed"
-            }
+            SuccessReport::quiet(),
+            FailureReport::line(Streams::StderrThenStdout, "git rebase failed")
         )
     }
 }

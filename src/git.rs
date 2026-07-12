@@ -220,26 +220,6 @@ pub enum RepoOutcome
     Failure(RepoMessage)
 }
 
-impl RepoOutcome
-{
-    /// Applies `map` to the success message, if there is one; failures and
-    /// quiet successes pass through unchanged.
-    pub(crate) fn map_success_message(
-        self,
-        map: impl FnOnce(String) -> String
-    ) -> Self
-    {
-        match self
-        {
-            Self::Success(Some(message)) => Self::Success(Some(RepoMessage {
-                repo: message.repo,
-                message: map(message.message)
-            })),
-            other => other
-        }
-    }
-}
-
 pub type GitCommandResult = Result<RepoOutcome>;
 
 pub(crate) fn git_style_path(path: &Path) -> String

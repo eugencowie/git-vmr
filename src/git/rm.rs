@@ -47,14 +47,11 @@ impl Git
 
         let success = if dry_run
         {
-            SuccessReport::Line {
-                from: Streams::StdoutOnly,
-                on_empty: OnEmpty::Quiet
-            }
+            SuccessReport::line(Streams::StdoutOnly, OnEmpty::Quiet)
         }
         else
         {
-            SuccessReport::Quiet
+            SuccessReport::quiet()
         };
 
         command_result(
@@ -62,7 +59,7 @@ impl Git
             repo_path,
             &output,
             success,
-            FailureReport::Detailed { command: "rm" }
+            FailureReport::detailed("rm")
         )
     }
 }

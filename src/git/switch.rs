@@ -14,6 +14,20 @@ fn normalize_success_message(message: String) -> String
     BEHIND_COMMIT_COUNT.replace(&message, "").into_owned()
 }
 
+/// The report policy `switch` and `create` share: both run `git switch`,
+/// so both normalize its fast-forward success message the same way.
+fn report_policy() -> (SuccessReport, FailureReport)
+{
+    (
+        SuccessReport::line(
+            Streams::StdoutThenStderr,
+            OnEmpty::Text("git switch succeeded")
+        )
+        .map(normalize_success_message),
+        FailureReport::line(Streams::StderrThenStdout, "git switch failed")
+    )
+}
+
 impl Git
 {
     pub fn switch(
@@ -24,21 +38,9 @@ impl Git
     ) -> GitCommandResult
     {
         let output = self.output(repo_path, ["switch", branch_name])?;
+        let (success, failure) = report_policy();
 
-        Ok(command_result(
-            repo_name,
-            repo_path,
-            &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Text("git switch succeeded")
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git switch failed"
-            }
-        )?
-        .map_success_message(normalize_success_message))
+        command_result(repo_name, repo_path, &output, success, failure)
     }
 
     pub fn create(
@@ -50,20 +52,9 @@ impl Git
     {
         let output =
             self.output(repo_path, ["switch", "--create", branch_name])?;
+        let (success, failure) = report_policy();
 
-        command_result(
-            repo_name,
-            repo_path,
-            &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Text("git switch succeeded")
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git switch failed"
-            }
-        )
+        command_result(repo_name, repo_path, &output, success, failure)
     }
 }
 
@@ -118,6 +109,34 @@ mod tests
         // Act
         let outcome = git
             .switch("backend", Path::new("/vmr/backend"), "develop")
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(
+            message.message,
+            "Your branch is behind 'origin/develop', and can be fast-forwarded."
+        );
+    }
+
+    #[test]
+    fn create_normalizes_behind_count_in_success_message()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["switch", "--create", "feature/auth"],
+            0,
+            "Your branch is behind 'origin/develop' by 3 commits, and can be fast-forwarded.\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .create("backend", Path::new("/vmr/backend"), "feature/auth")
             .unwrap();
 
         // Assert

@@ -19,11 +19,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Quiet,
-            FailureReport::Line {
-                from: Streams::StderrOnly,
-                fallback: "git tag failed"
-            }
+            SuccessReport::quiet(),
+            FailureReport::line(Streams::StderrOnly, "git tag failed")
         )
     }
 
@@ -40,14 +37,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutOnly,
-                on_empty: OnEmpty::Text("git tag deleted")
-            },
-            FailureReport::Line {
-                from: Streams::StderrOnly,
-                fallback: "git tag failed"
-            }
+            SuccessReport::line(
+                Streams::StdoutOnly,
+                OnEmpty::Text("git tag deleted")
+            ),
+            FailureReport::line(Streams::StderrOnly, "git tag failed")
         )
     }
 }
