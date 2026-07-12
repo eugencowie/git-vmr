@@ -4,24 +4,47 @@ use crate::vmr::Repo;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+/// Restore working tree files
+#[derive(clap::Args)]
+pub struct RestoreArgs
+{
+    #[command(flatten)]
+    pub options: RestoreOptions,
+
+    /// Files to restore
+    #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+    pub paths: Vec<PathBuf>
+}
+
+#[derive(clap::Args)]
+pub struct RestoreOptions
+{
+    /// Restore the working tree
+    #[arg(long)]
+    pub worktree: bool,
+
+    /// Restore the index
+    #[arg(long)]
+    pub staged: bool
+}
+
 impl Git
 {
     pub fn restore(
         &self,
         repo: &Repo,
         paths: &[PathBuf],
-        worktree: bool,
-        staged: bool
+        options: &RestoreOptions
     ) -> GitCommandResult
     {
         let mut args = vec![OsString::from("restore")];
 
-        if staged
+        if options.staged
         {
             args.push(OsString::from("--staged"));
         }
 
-        if worktree
+        if options.worktree
         {
             args.push(OsString::from("--worktree"));
         }

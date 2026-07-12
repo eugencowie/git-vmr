@@ -1,5 +1,5 @@
 use crate::cli::SilentError;
-use crate::git::Git;
+use crate::git::{CloneArgs, Git};
 use crate::render::Rendered;
 use anyhow::Result;
 use std::path::Path;
@@ -7,11 +7,11 @@ use std::path::Path;
 pub fn clone(
     git: &Git,
     working_dir: &Path,
-    repository: &str,
-    directory: Option<&Path>
+    args: &CloneArgs
 ) -> Result<Rendered>
 {
-    let status = git.clone(working_dir, repository, directory)?;
+    let status =
+        git.clone(working_dir, &args.repository, args.directory.as_deref())?;
 
     if !status.success()
     {
@@ -38,12 +38,10 @@ mod tests
         let git = Git::with(fake);
 
         // Act
-        let result = clone(
-            &git,
-            Path::new("/vmr"),
-            "https://example.com/repo",
-            Some(Path::new("dir"))
-        );
+        let result = clone(&git, Path::new("/vmr"), &CloneArgs {
+            repository: "https://example.com/repo".to_owned(),
+            directory: Some(PathBuf::from("dir"))
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -60,8 +58,11 @@ mod tests
         let git = Git::with(Arc::clone(&fake));
 
         // Act
-        clone(&git, Path::new("/vmr"), "https://example.com/repo", None)
-            .unwrap();
+        clone(&git, Path::new("/vmr"), &CloneArgs {
+            repository: "https://example.com/repo".to_owned(),
+            directory: None
+        })
+        .unwrap();
 
         // Assert
         let calls = fake.calls();
@@ -78,9 +79,11 @@ mod tests
         let git = Git::with(fake);
 
         // Act
-        let error =
-            clone(&git, Path::new("/vmr"), "https://example.com/repo", None)
-                .unwrap_err();
+        let error = clone(&git, Path::new("/vmr"), &CloneArgs {
+            repository: "https://example.com/repo".to_owned(),
+            directory: None
+        })
+        .unwrap_err();
 
         // Assert
         assert!(error.is::<SilentError>());

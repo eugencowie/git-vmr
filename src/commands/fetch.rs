@@ -1,15 +1,12 @@
+use crate::git::FetchArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn fetch(
-    workspace: &Workspace,
-    repository: Option<&str>,
-    refspecs: &[String]
-) -> Result<Rendered>
+pub fn fetch(workspace: &Workspace, args: &FetchArgs) -> Result<Rendered>
 {
     // Fetch in each child repository
-    workspace.run(|git, repo| git.fetch(repo, repository, refspecs))
+    workspace.run(|git, repo| git.fetch(repo, args))
 }
 
 #[cfg(test)]
@@ -30,7 +27,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, None, &[]);
+        let result = fetch(&workspace, &FetchArgs {
+            repository: None,
+            refspecs: vec![]
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -61,7 +61,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, Some("origin"), &["main".to_owned()]);
+        let result = fetch(&workspace, &FetchArgs {
+            repository: Some("origin".to_owned()),
+            refspecs: vec!["main".to_owned()]
+        });
 
         // Assert
         assert!(result.is_ok());

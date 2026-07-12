@@ -1,8 +1,21 @@
 use crate::git::Git;
 use anyhow::Result;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
+
+/// Clone a repository into a new directory
+#[derive(clap::Args)]
+pub struct CloneArgs
+{
+    /// The (possibly remote) <repository> to clone from
+    #[arg(value_name = "repository")]
+    pub repository: String,
+
+    /// The name of a new directory to clone into
+    #[arg(value_name = "directory")]
+    pub directory: Option<PathBuf>
+}
 
 impl Git
 {

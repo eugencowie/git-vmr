@@ -6,9 +6,13 @@ use crate::render::{self, Rendered};
 use crate::vmr::Vmr;
 pub use crate::vmr::{Repo, resolve_target};
 use anyhow::Result;
+pub use mv::MvArgs;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+pub use worktree_root::{
+    WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs, WorktreeRemoveArgs
+};
 
 /// What a path-taking command operates over: explicit paths, or the entire
 /// VMR via the aggregate path.
@@ -144,7 +148,9 @@ impl<'a> Workspace<'a>
 mod tests
 {
     use super::*;
-    use crate::git::ScriptedFake;
+    use crate::git::{
+        AddOptions, CommitArgs, FetchArgs, MergeArgs, ScriptedFake
+    };
     use crate::test_support::vmr_fixture;
     use std::sync::Arc;
 
@@ -180,7 +186,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace.run(|git, repo| git.fetch(repo, None, &[]));
+        let result = workspace.run(|git, repo| {
+            git.fetch(repo, &FetchArgs { repository: None, refspecs: vec![] })
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -207,8 +215,11 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let err =
-            workspace.run(|git, repo| git.merge(repo, "topic")).unwrap_err();
+        let err = workspace
+            .run(|git, repo| {
+                git.merge(repo, &MergeArgs { commit_ish: "topic".to_owned() })
+            })
+            .unwrap_err();
 
         // Assert: the shared failure groups to one line, and the repo list
         // is omitted because it covers every repo in scope.
@@ -231,7 +242,11 @@ mod tests
         let subset = vec![workspace.repos()[0].clone()];
 
         // Act
-        workspace.run_in(&subset, |git, repo| git.commit(repo, "msg")).unwrap();
+        workspace
+            .run_in(&subset, |git, repo| {
+                git.commit(repo, &CommitArgs { message: "msg".to_owned() })
+            })
+            .unwrap();
 
         // Assert
         assert_eq!(
@@ -260,7 +275,11 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), Scope::EntireVmr, |git, repo, paths| {
-                git.add(repo, paths, true, false, None)
+                git.add(repo, paths, &AddOptions {
+                    all: true,
+                    force: false,
+                    chmod: None
+                })
             })
             .unwrap();
 
@@ -295,7 +314,11 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), scope, |git, repo, paths| {
-                git.add(repo, paths, false, false, None)
+                git.add(repo, paths, &AddOptions {
+                    all: false,
+                    force: false,
+                    chmod: None
+                })
             })
             .unwrap();
 

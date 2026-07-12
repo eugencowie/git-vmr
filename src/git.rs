@@ -19,16 +19,32 @@ mod switch;
 mod tag;
 mod worktree;
 
-pub use add::ChmodMode;
+pub use add::AddArgs;
+#[cfg(test)]
+pub(crate) use add::{AddOptions, ChmodMode};
 use anyhow::{Result, bail};
+pub use branch::BranchArgs;
+pub use clone::CloneArgs;
+pub use commit::CommitArgs;
+pub use fetch::FetchArgs;
 pub use head::Head;
-pub use reset::ResetMode;
+pub use merge::MergeArgs;
+pub use pull::PullArgs;
+pub use push::PushArgs;
+pub use rebase::RebaseArgs;
+pub use reset::{ResetArgs, ResetMode};
+pub use restore::RestoreArgs;
+pub use rm::RmArgs;
+#[cfg(test)]
+pub(crate) use rm::RmOptions;
 #[cfg(test)]
 pub(crate) use runner::scripted::ScriptedFake;
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
+pub use switch::SwitchArgs;
+pub use tag::TagArgs;
 
 /// The deep git module: every operation is a method, and every invocation
 /// flows through the [`GitRunner`] seam owned here.

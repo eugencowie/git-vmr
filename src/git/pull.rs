@@ -5,23 +5,32 @@ use crate::git::{Git, GitCommandResult};
 use crate::vmr::Repo;
 use std::ffi::OsString;
 
+/// Fetch from and integrate with another repository or a local branch
+#[derive(clap::Args)]
+pub struct PullArgs
+{
+    /// The "remote" repository to pull from
+    #[arg(value_name = "repository")]
+    pub repository: Option<String>,
+
+    /// Which branch or other reference(s) to fetch and integrate into the
+    /// current branch
+    #[arg(value_name = "refspec")]
+    pub refspecs: Vec<String>
+}
+
 impl Git
 {
-    pub fn pull(
-        &self,
-        repo: &Repo,
-        repository: Option<&str>,
-        refspecs: &[String]
-    ) -> GitCommandResult
+    pub fn pull(&self, repo: &Repo, pull: &PullArgs) -> GitCommandResult
     {
         let mut args = vec![OsString::from("pull")];
 
-        if let Some(repository) = repository
+        if let Some(repository) = &pull.repository
         {
             args.push(OsString::from(repository));
         }
 
-        args.extend(refspecs.iter().map(OsString::from));
+        args.extend(pull.refspecs.iter().map(OsString::from));
 
         let output = self.output(&repo.path, args)?;
 
@@ -54,8 +63,12 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.pull(&repo("backend", "/vmr/backend"), None, &[]).unwrap();
+        let outcome = git
+            .pull(&repo("backend", "/vmr/backend"), &PullArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome

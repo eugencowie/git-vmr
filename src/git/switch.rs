@@ -28,6 +28,19 @@ fn report_policy() -> (SuccessReport, FailureReport)
     )
 }
 
+/// Switch branches
+#[derive(clap::Args)]
+pub struct SwitchArgs
+{
+    /// Create a new branch named <branch> before switching to the branch
+    #[arg(short, long)]
+    pub create: bool,
+
+    /// Branch to switch to
+    #[arg(required = true, value_name = "branch")]
+    pub branch_name: String
+}
+
 impl Git
 {
     pub fn switch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult

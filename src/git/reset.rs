@@ -5,6 +5,40 @@ use crate::git::{Git, GitCommandResult};
 use crate::vmr::Repo;
 use std::ffi::OsString;
 
+/// Set `HEAD` or the index to a known state
+#[derive(clap::Args)]
+pub struct ResetArgs
+{
+    /// Leave your working directory unchanged
+    #[arg(long, conflicts_with_all = ["soft", "hard", "merge", "keep"])]
+    pub mixed: bool,
+
+    /// Leave your working tree files and the index unchanged
+    #[arg(long, conflicts_with_all = ["mixed", "hard", "merge", "keep"])]
+    pub soft: bool,
+
+    /// Overwrite all files and directories with the version from [commit],
+    /// and may overwrite untracked files
+    #[arg(long, conflicts_with_all = ["soft", "mixed", "merge", "keep"])]
+    pub hard: bool,
+
+    /// Reset the index and update the files in the working tree that are
+    /// different between [commit] and HEAD, but keep those which are
+    /// different between the index and working tree (i.e. which have
+    /// changes which have not been added)
+    #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "keep"])]
+    pub merge: bool,
+
+    /// Resets index entries and updates files in the working tree that are
+    /// different between [commit] and HEAD
+    #[arg(long, conflicts_with_all = ["soft", "mixed", "hard", "merge"])]
+    pub keep: bool,
+
+    /// Set the current branch head (HEAD) to point at [commit]
+    #[arg(value_name = "commit")]
+    pub commit: Option<String>
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResetMode
 {

@@ -2,10 +2,81 @@ use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
+use clap::ArgAction;
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+#[derive(clap::Subcommand)]
+pub enum WorktreeCommand
+{
+    /// Create a worktree at <path> and checkout [commit-ish] into it
+    Add(WorktreeAddArgs),
+
+    /// List details of each worktree
+    List,
+
+    /// Move a worktree to a new location
+    Move(WorktreeMoveArgs),
+
+    /// Remove a worktree
+    #[command(visible_alias = "rm")]
+    Remove(WorktreeRemoveArgs)
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeAddArgs
+{
+    /// With add, create a new branch named <new-branch> starting at
+    /// [commit-ish], and check out <new-branch> into the new worktree
+    #[arg(short, value_name = "new-branch")]
+    pub branch: Option<String>,
+
+    #[arg(value_name = "path")]
+    pub path: PathBuf,
+
+    #[arg(value_name = "commit-ish")]
+    pub commit_ish: Option<String>
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeMoveArgs
+{
+    /// Move a worktree even when Git would otherwise refuse. Specify twice
+    /// for cases that require two force flags.
+    #[arg(short, long, action = ArgAction::Count)]
+    pub force: u8,
+
+    /// Worktrees can be identified by path, either relative or absolute
+    #[arg(value_name = "worktree")]
+    pub path: PathBuf,
+
+    /// New location for the worktree
+    #[arg(value_name = "new-path")]
+    pub new_path: PathBuf
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeRemoveArgs
+{
+    /// By default, remove refuses to remove an unclean worktree unless
+    /// --force is used. To remove a locked worktree, specify --force twice
+    #[arg(short, long, action = ArgAction::Count)]
+    pub force: u8,
+
+    /// Delete the branch
+    #[arg(short, long, conflicts_with = "force_delete")]
+    pub delete: bool,
+
+    /// Force-delete the branch
+    #[arg(short = 'D')]
+    pub force_delete: bool,
+
+    /// Worktrees can be identified by path, either relative or absolute
+    #[arg(value_name = "worktree")]
+    pub path: PathBuf
+}
 
 /// One child repo's entry under a worktree root, as gathered for listing.
 #[derive(Clone, Eq, PartialEq)]

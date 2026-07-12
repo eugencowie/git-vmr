@@ -6,6 +6,41 @@ use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
+/// List, create, or delete branches
+#[derive(clap::Args)]
+pub struct BranchArgs
+{
+    /// Delete a branch. The branch must be fully merged in its upstream
+    /// branch
+    #[arg(
+        short,
+        long,
+        conflicts_with = "force_delete",
+        requires = "branch_name"
+    )]
+    pub delete: bool,
+
+    /// Shortcut for `--delete --force`
+    #[arg(short = 'D', conflicts_with = "delete", requires = "branch_name")]
+    pub force_delete: bool,
+
+    /// In combination with `-d` (or `--delete`), allow deleting the branch
+    /// irrespective of its merged status, or whether it even points to a
+    /// valid commit
+    #[arg(
+        short,
+        long,
+        conflicts_with = "force_delete",
+        requires_all = ["branch_name", "delete"]
+    )]
+    pub force: bool,
+
+    /// Creates a new branch head named [branch-name] which points to the
+    /// current HEAD
+    #[arg(value_name = "branch-name")]
+    pub branch_name: Option<String>
+}
+
 impl Git
 {
     pub fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult

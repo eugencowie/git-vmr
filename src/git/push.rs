@@ -5,23 +5,31 @@ use crate::git::{Git, GitCommandResult};
 use crate::vmr::Repo;
 use std::ffi::OsString;
 
+/// Update remote refs along with associated objects
+#[derive(clap::Args)]
+pub struct PushArgs
+{
+    /// The "remote" repository that is the destination of a push operation
+    #[arg(value_name = "repository")]
+    pub repository: Option<String>,
+
+    /// Specify what destination ref to update with what source object
+    #[arg(value_name = "refspec")]
+    pub refspecs: Vec<String>
+}
+
 impl Git
 {
-    pub fn push(
-        &self,
-        repo: &Repo,
-        repository: Option<&str>,
-        refspecs: &[String]
-    ) -> GitCommandResult
+    pub fn push(&self, repo: &Repo, push: &PushArgs) -> GitCommandResult
     {
         let mut args = vec![OsString::from("push")];
 
-        if let Some(repository) = repository
+        if let Some(repository) = &push.repository
         {
             args.push(OsString::from(repository));
         }
 
-        args.extend(refspecs.iter().map(OsString::from));
+        args.extend(push.refspecs.iter().map(OsString::from));
 
         let output = self.output(&repo.path, args)?;
 
@@ -54,8 +62,12 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.push(&repo("backend", "/vmr/backend"), None, &[]).unwrap();
+        let outcome = git
+            .push(&repo("backend", "/vmr/backend"), &PushArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome

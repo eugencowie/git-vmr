@@ -2,12 +2,22 @@ use crate::render::Rendered;
 use crate::vmr::{InitOutcome, Vmr};
 use anyhow::{Context, Result, bail};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn init(working_dir: &Path, directory: Option<&Path>) -> Result<Rendered>
+/// Create an empty virtual monorepo or reinitialize an existing one
+#[derive(clap::Args)]
+pub struct InitArgs
+{
+    /// If you provide a directory, the command is run inside it. If this
+    /// directory does not exist, it will be created
+    #[arg(value_name = "directory")]
+    pub directory: Option<PathBuf>
+}
+
+pub fn init(working_dir: &Path, args: &InitArgs) -> Result<Rendered>
 {
     // Resolve init target directory
-    let target_dir = match directory
+    let target_dir = match args.directory.as_deref()
     {
         // Resolve provided directory against the effective working directory
         Some(directory) => working_dir.join(directory),
@@ -60,7 +70,7 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        init(tmp.path(), None).unwrap();
+        init(tmp.path(), &InitArgs { directory: None }).unwrap();
 
         // Assert
         assert!(tmp.path().join(".gitvmr").exists());
@@ -75,7 +85,10 @@ mod tests
         let target = tmp.path().join("project");
 
         // Act
-        init(Path::new("/ignored"), Some(&target)).unwrap();
+        init(Path::new("/ignored"), &InitArgs {
+            directory: Some(target.clone())
+        })
+        .unwrap();
 
         // Assert
         assert!(target.join(".gitvmr/config").is_file());
@@ -88,7 +101,7 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        init(tmp.path(), None).unwrap();
+        init(tmp.path(), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let contents =
@@ -102,12 +115,12 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        init(tmp.path(), None).unwrap();
+        init(tmp.path(), &InitArgs { directory: None }).unwrap();
         let first =
             fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
 
         // Act
-        init(tmp.path(), None).unwrap();
+        init(tmp.path(), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let second =
@@ -125,7 +138,7 @@ mod tests
         fs::write(config_dir.join("config"), "custom content").unwrap();
 
         // Act
-        init(tmp.path(), None).unwrap();
+        init(tmp.path(), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let contents = fs::read_to_string(config_dir.join("config")).unwrap();
@@ -141,7 +154,10 @@ mod tests
         fs::write(&file, "").unwrap();
 
         // Act
-        let err = init(tmp.path(), Some(Path::new("file"))).unwrap_err();
+        let err = init(tmp.path(), &InitArgs {
+            directory: Some(PathBuf::from("file"))
+        })
+        .unwrap_err();
 
         // Assert
         let msg = format!("{err:#}");
@@ -157,7 +173,10 @@ mod tests
         let target = tmp.path().join("project");
 
         // Act
-        init(tmp.path(), Some(Path::new("project"))).unwrap();
+        init(tmp.path(), &InitArgs {
+            directory: Some(PathBuf::from("project"))
+        })
+        .unwrap();
 
         // Assert
         assert!(target.is_dir());
@@ -173,7 +192,10 @@ mod tests
         fs::create_dir(&target).unwrap();
 
         // Act
-        init(tmp.path(), Some(Path::new("project"))).unwrap();
+        init(tmp.path(), &InitArgs {
+            directory: Some(PathBuf::from("project"))
+        })
+        .unwrap();
 
         // Assert
         assert!(target.join(".gitvmr/config").is_file());

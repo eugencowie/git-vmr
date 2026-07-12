@@ -6,11 +6,21 @@ use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
+/// Record changes to the repositories
+#[derive(clap::Args)]
+pub struct CommitArgs
+{
+    /// Use <msg> as the commit message
+    #[arg(short, long, required = true, value_name = "msg")]
+    pub message: String
+}
+
 impl Git
 {
-    pub fn commit(&self, repo: &Repo, message: &str) -> GitCommandResult
+    pub fn commit(&self, repo: &Repo, args: &CommitArgs) -> GitCommandResult
     {
-        let output = self.output(&repo.path, ["commit", "-m", message])?;
+        let output =
+            self.output(&repo.path, ["commit", "-m", &args.message])?;
 
         command_result(
             repo,
@@ -88,8 +98,11 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.commit(&repo("backend", "/vmr/backend"), "message").unwrap();
+        let outcome = git
+            .commit(&repo("backend", "/vmr/backend"), &CommitArgs {
+                message: "message".to_owned()
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome
@@ -113,8 +126,11 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.commit(&repo("backend", "/vmr/backend"), "message").unwrap();
+        let outcome = git
+            .commit(&repo("backend", "/vmr/backend"), &CommitArgs {
+                message: "message".to_owned()
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Failure(message) = outcome

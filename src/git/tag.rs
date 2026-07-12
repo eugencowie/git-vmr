@@ -4,6 +4,19 @@ use crate::git::report::{
 use crate::git::{Git, GitCommandResult};
 use crate::vmr::Repo;
 
+/// Create, list, delete or verify tags
+#[derive(clap::Args)]
+pub struct TagArgs
+{
+    /// Delete existing tags with the given names
+    #[arg(short, long, requires = "tag_name")]
+    pub delete: bool,
+
+    /// The name of the tag to create, delete, or describe
+    #[arg(value_name = "tagname")]
+    pub tag_name: Option<String>
+}
+
 impl Git
 {
     pub fn tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult

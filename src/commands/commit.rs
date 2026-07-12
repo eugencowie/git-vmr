@@ -1,8 +1,9 @@
+use crate::git::CommitArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::{Result, bail};
 
-pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
+pub fn commit(workspace: &Workspace, args: &CommitArgs) -> Result<Rendered>
 {
     // Filter child repositories without staged changes
     let dirty_repos = workspace
@@ -18,7 +19,7 @@ pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
     }
 
     // Commit in each dirty repository
-    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, message))
+    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, args))
 }
 
 #[cfg(test)]
@@ -41,7 +42,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let err = commit(&workspace, "message").unwrap_err();
+        let err =
+            commit(&workspace, &CommitArgs { message: "message".to_owned() })
+                .unwrap_err();
 
         // Assert
         assert_eq!(
@@ -64,7 +67,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = commit(&workspace, "message");
+        let result =
+            commit(&workspace, &CommitArgs { message: "message".to_owned() });
 
         // Assert
         assert!(result.is_ok());

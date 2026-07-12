@@ -1,15 +1,16 @@
+use crate::git::SwitchArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn switch(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
+pub fn switch(workspace: &Workspace, args: &SwitchArgs) -> Result<Rendered>
 {
-    // Switch in each child repository
-    workspace.run(|git, repo| git.switch(repo, branch_name))
-}
+    match args.create
+    {
+        // Create and switch in each child repository
+        true => workspace.run(|git, repo| git.create(repo, &args.branch_name)),
 
-pub fn create(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
-{
-    // Create and switch in each child repository
-    workspace.run(|git, repo| git.create(repo, branch_name))
+        // Switch in each child repository
+        false => workspace.run(|git, repo| git.switch(repo, &args.branch_name))
+    }
 }

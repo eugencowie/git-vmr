@@ -1,14 +1,26 @@
+use crate::git::BranchArgs;
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn branch(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
+pub fn branch(workspace: &Workspace, args: &BranchArgs) -> Result<Rendered>
+{
+    match &args.branch_name
+    {
+        Some(branch_name) if args.delete || args.force_delete =>
+            delete(workspace, branch_name, args.force || args.force_delete),
+        Some(branch_name) => create(workspace, branch_name),
+        None => branches(workspace)
+    }
+}
+
+fn create(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
 {
     // Branch in each child repository
     workspace.run(|git, repo| git.branch(repo, branch_name))
 }
 
-pub fn delete(
+fn delete(
     workspace: &Workspace,
     branch_name: &str,
     force: bool
@@ -18,7 +30,7 @@ pub fn delete(
     workspace.run(|git, repo| git.delete_branch(repo, branch_name, force))
 }
 
-pub fn branches(workspace: &Workspace) -> Result<Rendered>
+fn branches(workspace: &Workspace) -> Result<Rendered>
 {
     // Collect branch information from child repositories, in repo order
     let branches = workspace

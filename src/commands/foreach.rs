@@ -37,14 +37,33 @@ impl ChildStatus
     }
 }
 
+/// Evaluates an arbitrary shell command in each checked out repository
+#[derive(clap::Args)]
+pub struct ForeachArgs
+{
+    /// Only print error messages
+    #[arg(short, long)]
+    pub quiet: bool,
+
+    /// Command to evaluate through the shell
+    #[arg(
+        required = true,
+        num_args = 1..,
+        trailing_var_arg = true,
+        allow_hyphen_values = true,
+        value_name = "command"
+    )]
+    pub command: Vec<String>
+}
+
 pub fn foreach(
     workspace: &Workspace,
     working_dir: &Path,
-    quiet: bool,
-    command: &[String]
+    args: &ForeachArgs
 ) -> Result<Rendered>
 {
-    let command = command.join(" ");
+    let quiet = args.quiet;
+    let command = args.command.join(" ");
     let root = workspace.root();
 
     let results = workspace

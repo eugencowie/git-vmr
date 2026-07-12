@@ -1,31 +1,28 @@
-use crate::git::ChmodMode;
+use crate::git::AddArgs;
 use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn add(
     workspace: &Workspace,
     working_dir: &Path,
-    paths: &[PathBuf],
-    all: bool,
-    force: bool,
-    chmod: Option<ChmodMode>
+    args: &AddArgs
 ) -> Result<Rendered>
 {
     // `add -A` with no paths stages the entire VMR
-    let scope = if paths.is_empty() && all
+    let scope = if args.paths.is_empty() && args.options.all
     {
         Scope::EntireVmr
     }
     else
     {
-        Scope::Paths(paths.to_vec())
+        Scope::Paths(args.paths.to_vec())
     };
 
     // Stage routed paths in each owning child repository
     workspace.run_routed(working_dir, scope, |git, repo, repo_paths| {
-        git.add(repo, repo_paths, all, force, chmod)
+        git.add(repo, repo_paths, &args.options)
     })
 }
 
@@ -33,8 +30,9 @@ pub fn add(
 mod tests
 {
     use super::*;
-    use crate::git::{Git, ScriptedFake};
+    use crate::git::{AddOptions, Git, ScriptedFake};
     use crate::test_support::vmr_fixture;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     #[test]
@@ -52,7 +50,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = add(&workspace, tmp.path(), &[], true, false, None);
+        let result = add(&workspace, tmp.path(), &AddArgs {
+            options: AddOptions { all: true, force: false, chmod: None },
+            paths: vec![]
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -84,7 +85,10 @@ mod tests
         let paths = vec![PathBuf::from("backend/src/main.rs")];
 
         // Act
-        let result = add(&workspace, tmp.path(), &paths, false, false, None);
+        let result = add(&workspace, tmp.path(), &AddArgs {
+            options: AddOptions { all: false, force: false, chmod: None },
+            paths
+        });
 
         // Assert
         assert!(result.is_ok());
