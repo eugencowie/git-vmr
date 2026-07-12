@@ -17,7 +17,7 @@ impl Vmr
 {
     pub fn new(path: &Path) -> Vmr
     {
-        Vmr { path: path.to_owned() }
+        Vmr { path: path.clean() }
     }
 
     pub fn find(working_dir: &Path) -> Result<Vmr>
@@ -222,6 +222,22 @@ mod tests
 
         // Act
         let result = Vmr::find(tmp.path()).unwrap();
+
+        // Assert
+        assert_eq!(result.path, tmp.path());
+    }
+
+    #[test]
+    fn normalizes_found_vmr_path()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir(tmp.path().join("child")).unwrap();
+        let working_dir = tmp.path().join("child").join("..");
+
+        // Act
+        let result = Vmr::find(&working_dir).unwrap();
 
         // Assert
         assert_eq!(result.path, tmp.path());
