@@ -285,6 +285,41 @@ mod tests
     }
 
     #[test]
+    fn single_source_same_repo_move_uses_git_mv_directly()
+    {
+        // Arrange: no tracking probe is scripted, so the plan path would fail
+        let tmp = vmr_fixture();
+        let fake = Arc::new(ScriptedFake::new().on(
+            ["mv", "--", "src/old.rs", "src/new.rs"],
+            0,
+            "",
+            ""
+        ));
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        // Act
+        let rendered = mv(
+            &workspace,
+            tmp.path(),
+            &[PathBuf::from("backend/src/old.rs")],
+            Path::new("backend/src/new.rs")
+        )
+        .unwrap();
+
+        // Assert
+        assert!(rendered.stdout.is_empty());
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].path, tmp.path().join("backend"));
+        assert_eq!(
+            calls[0].args,
+            ["mv", "--", "src/old.rs", "src/new.rs"]
+                .map(std::ffi::OsString::from)
+        );
+    }
+
+    #[test]
     fn cross_repo_move_renames_and_stages_both_sides()
     {
         // Arrange
