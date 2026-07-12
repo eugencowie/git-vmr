@@ -1,13 +1,10 @@
-mod analytics;
-mod updates;
-
+use crate::analytics::AnalyticsState;
 use crate::cli::APP_NAME;
-pub use analytics::AnalyticsState;
+use crate::updates::UpdateState;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
-pub use updates::UpdateState;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]

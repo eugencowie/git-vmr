@@ -1,37 +1,94 @@
-use crate::cli::{APP_NAME, CliContext};
+mod frequency;
+
+use crate::cli::APP_NAME;
+use crate::state::GlobalState;
+use crate::store::FileStore;
 use anyhow::Result;
 use axoupdater::AxoUpdater;
 use chrono::{DateTime, Utc};
+pub use frequency::Frequency;
+use serde::{Deserialize, Serialize};
 use std::time::Duration as StdDuration;
 
 const QUERY_TIMEOUT: StdDuration = StdDuration::from_secs(5);
 
-/// Check for updates and return a notice if a new version is available
-pub fn check(context: &mut CliContext) -> Option<String>
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Updates
 {
-    check_with_query(context, Utc::now(), query_with_axoupdater)
+    /// How often to check for updates
+    #[serde(rename = "checkfrequency")]
+    pub check_frequency: Frequency
+}
+
+impl Default for Updates
+{
+    /// Default update configuration
+    fn default() -> Self
+    {
+        // Check for updates daily by default
+        Self { check_frequency: Frequency::from_days(1) }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateState
+{
+    /// Last time an update check was attempted
+    pub last_check: Option<DateTime<Utc>>,
+
+    /// Last available version reported by update checks
+    pub last_available: Option<String>
+}
+
+impl UpdateState
+{
+    /// Whether an update check is due
+    fn is_due(&self, frequency: Frequency, now: DateTime<Utc>) -> bool
+    {
+        // Disabled update checks are never due
+        let Some(interval) = frequency.interval()
+        else
+        {
+            return false;
+        };
+
+        // Missing or expired check state is due
+        self.last_check.is_none_or(|last| {
+            now.signed_duration_since(last)
+                .to_std()
+                .is_ok_and(|elapsed| elapsed >= interval)
+        })
+    }
+}
+
+/// Check for updates and return a notice if a new version is available
+pub fn check(
+    check_frequency: Frequency,
+    state: &mut FileStore<GlobalState>
+) -> Option<String>
+{
+    check_with_query(check_frequency, state, Utc::now(), query_with_axoupdater)
 }
 
 /// Run a scheduled update check
 fn check_with_query(
-    context: &mut CliContext,
+    check_frequency: Frequency,
+    state: &mut FileStore<GlobalState>,
     now: DateTime<Utc>,
     mut query: impl FnMut() -> Result<Option<String>>
 ) -> Option<String>
 {
-    if !context
-        .global_state
-        .updates
-        .is_due(context.global_config.updates.check_frequency, now)
+    if !state.updates.is_due(check_frequency, now)
     {
         return None;
     }
 
-    context.global_state.updates.last_check = Some(now);
-    context.save().ok()?;
+    // Record the attempt before the query so failures don't retry-storm
+    state.updates.last_check = Some(now);
+    state.save().ok()?;
 
     let version = query().ok()??;
-    context.global_state.updates.last_available = Some(version.clone());
+    state.updates.last_available = Some(version.clone());
 
     Some(format!("\nA new git-vmr version is available: {version}"))
 }
@@ -73,42 +130,23 @@ fn query_with_axoupdater() -> Result<Option<String>>
 mod tests
 {
     use super::*;
-    use crate::config::{Analytics, Core, Frequency, Updates};
-    use crate::state::GlobalState;
-    use crate::store::FileStore;
     use anyhow::bail;
+    use chrono::Duration;
     use std::cell::Cell;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
-    fn run_with_paths(
+    fn run_with_store(
         frequency: Frequency,
-        state_file: &std::path::Path,
+        state_file: &Path,
         now: DateTime<Utc>,
         query: impl FnMut() -> Result<Option<String>>
     ) -> Option<String>
     {
-        use crate::config::GlobalConfig;
-
-        // Write the desired global config where the context will load it
-        let config_file = state_file.with_file_name("config.toml");
-        FileStore::new(config_file.clone(), GlobalConfig {
-            core: Core::default(),
-            updates: Updates { check_frequency: frequency },
-            analytics: Analytics::default()
-        })
-        .write()
-        .unwrap();
-
-        let mut context = CliContext::new(
-            "git vmr",
-            &None,
-            config_file,
-            state_file.to_path_buf()
-        )
-        .unwrap();
-        let notice = check_with_query(&mut context, now, query);
-        context.save().ok()?;
+        let (mut state, _) =
+            FileStore::<GlobalState>::load_or_default(state_file.to_path_buf());
+        let notice = check_with_query(frequency, &mut state, now, query);
+        state.save().ok()?;
         notice
     }
 
@@ -139,7 +177,7 @@ mod tests
 
         // Act
         let notice =
-            run_with_paths(Frequency::Never, &state_file, now(), || {
+            run_with_store(Frequency::Never, &state_file, now(), || {
                 calls.set(calls.get() + 1);
                 Ok(Some("9.0.0".into()))
             });
@@ -157,7 +195,7 @@ mod tests
         let state_file = state_file(&tmp);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             let (state, _) =
                 FileStore::<GlobalState>::load_or_default(state_file.clone());
             assert_eq!(state.updates.last_check, Some(now()));
@@ -179,7 +217,7 @@ mod tests
         let calls = Cell::new(0);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             calls.set(calls.get() + 1);
             Ok(Some("1.2.3".into()))
         });
@@ -209,7 +247,7 @@ mod tests
         let calls = Cell::new(0);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             calls.set(calls.get() + 1);
             Ok(Some("1.2.3".into()))
         });
@@ -228,7 +266,7 @@ mod tests
         let calls = Cell::new(0);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             calls.set(calls.get() + 1);
             fs::remove_file(&state_file).unwrap();
             fs::create_dir(&state_file).unwrap();
@@ -248,7 +286,7 @@ mod tests
         let state_file = state_file(&tmp);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             Ok(Some("1.2.3".into()))
         })
         .unwrap();
@@ -265,7 +303,7 @@ mod tests
         let state_file = state_file(&tmp);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || Ok(None));
+        let notice = run_with_store(daily(), &state_file, now(), || Ok(None));
 
         // Assert
         assert_eq!(notice, None);
@@ -280,7 +318,7 @@ mod tests
         let calls = Cell::new(0);
 
         // Act
-        let notice = run_with_paths(daily(), &state_file, now(), || {
+        let notice = run_with_store(daily(), &state_file, now(), || {
             calls.set(calls.get() + 1);
             bail!("timeout")
         });
@@ -298,5 +336,107 @@ mod tests
 
         // Assert
         assert_eq!(version.to_string(), "1.2.3");
+    }
+
+    mod update_state
+    {
+        use super::*;
+        use std::time::Duration as StdDuration;
+
+        #[test]
+        fn default_configuration_checks_daily()
+        {
+            // Act
+            let updates = Updates::default();
+
+            // Assert
+            assert_eq!(updates.check_frequency, Frequency::from_days(1));
+        }
+
+        #[test]
+        fn missing_state_is_due()
+        {
+            // Arrange
+            let state = UpdateState::default();
+
+            // Act
+            let due = state.is_due(
+                Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
+                now()
+            );
+
+            // Assert
+            assert!(due);
+        }
+
+        #[test]
+        fn recent_state_is_not_due()
+        {
+            // Arrange
+            let state = UpdateState {
+                last_check: Some(now() - Duration::hours(23)),
+                last_available: None
+            };
+
+            // Act
+            let due = state.is_due(
+                Frequency::Every(StdDuration::from_secs(60 * 60 * 24)),
+                now()
+            );
+
+            // Assert
+            assert!(!due);
+        }
+
+        #[test]
+        fn expired_state_is_due()
+        {
+            // Arrange
+            let state = UpdateState {
+                last_check: Some(now() - Duration::days(31)),
+                last_available: None
+            };
+
+            // Act
+            let due = state.is_due(
+                Frequency::Every(StdDuration::from_secs(60 * 60 * 24 * 30)),
+                now()
+            );
+
+            // Assert
+            assert!(due);
+        }
+
+        #[test]
+        fn never_frequency_is_not_due()
+        {
+            // Arrange
+            let state = UpdateState::default();
+
+            // Act
+            let due = state.is_due(Frequency::Never, now());
+
+            // Assert
+            assert!(!due);
+        }
+
+        #[test]
+        fn future_attempt_is_not_due()
+        {
+            // Arrange
+            let state = UpdateState {
+                last_check: Some(now() + Duration::hours(1)),
+                last_available: None
+            };
+
+            // Act
+            let due = state.is_due(
+                Frequency::Every(StdDuration::from_secs(60 * 60)),
+                now()
+            );
+
+            // Assert
+            assert!(!due);
+        }
     }
 }

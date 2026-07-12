@@ -94,37 +94,32 @@ impl Cli
             eprintln!("warning: {warning}");
         }
 
-        let result = if context.global_config.analytics.enabled()
-        {
-            // Prepare analytics event
-            let start = Instant::now();
-            let meta = self.event_meta;
+        // Run command
+        let start = Instant::now();
+        let meta = self.event_meta;
+        let result = self.command.run(&context);
 
-            // Run command
-            let result = self.command.run(&context);
-
-            // Record analytics event
-            analytics::record(&mut context, CommandEvent {
+        // Record analytics event
+        analytics::record(
+            &context.global_config.analytics,
+            &mut context.global_state.analytics,
+            CommandEvent {
                 name: meta.name,
                 success: result.is_ok(),
                 duration_ms: start.elapsed().as_millis(),
                 flags: meta.flags,
                 global_flags: meta.global_flags
-            });
-
-            result
-        }
-        else
-        {
-            // Run command
-            self.command.run(&context)
-        };
+            }
+        );
 
         // Print rendered command output at the single choke point
         let result = render::emit(result);
 
         // Check for updates
-        if let Some(update) = updates::check(&mut context)
+        if let Some(update) = updates::check(
+            context.global_config.updates.check_frequency,
+            &mut context.global_state
+        )
         {
             eprintln!("{update}");
         }
