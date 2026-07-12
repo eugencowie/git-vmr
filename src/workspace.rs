@@ -1,3 +1,4 @@
+pub mod mv;
 pub mod worktree_root;
 
 use crate::git::{Git, GitCommandResult};
