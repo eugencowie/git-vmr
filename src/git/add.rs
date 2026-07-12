@@ -1,7 +1,7 @@
-use crate::git::{GitCommandResult, command_result, git_path_output, stderr};
+use crate::git::{Git, GitCommandResult, command_result, stderr};
 use anyhow::{Result, bail};
 use std::ffi::OsString;
-use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -24,9 +24,9 @@ impl ChmodMode
     }
 }
 
-impl fmt::Display for ChmodMode
+impl Display for ChmodMode
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result
     {
         f.write_str(self.as_git_value())
     }
@@ -45,32 +45,6 @@ impl FromStr for ChmodMode
             _ => Err("expected +x or -x".to_owned())
         }
     }
-}
-
-pub fn add(
-    repo_name: &str,
-    repo_path: &Path,
-    paths: &[PathBuf],
-    all: bool,
-    force: bool,
-    chmod: Option<ChmodMode>
-) -> GitCommandResult
-{
-    let output =
-        git_path_output(repo_path, add_args(all, force, chmod), paths)?;
-
-    command_result(
-        repo_name,
-        &output,
-        |_| None,
-        |output| {
-            format!(
-                "git add failed for '{}': {}",
-                repo_path.display(),
-                stderr(output)
-            )
-        }
-    )
 }
 
 fn add_args(all: bool, force: bool, chmod: Option<ChmodMode>) -> Vec<OsString>
@@ -96,18 +70,48 @@ fn add_args(all: bool, force: bool, chmod: Option<ChmodMode>) -> Vec<OsString>
     args
 }
 
-pub fn add_path(repo_path: &Path, path: &Path) -> Result<()>
+impl Git
 {
-    let output = git_path_output(repo_path, ["add", "--"], [path])?;
-
-    if !output.status.success()
+    pub fn add(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        paths: &[PathBuf],
+        all: bool,
+        force: bool,
+        chmod: Option<ChmodMode>
+    ) -> GitCommandResult
     {
-        bail!(
-            "git add failed for '{}': {}",
-            repo_path.display(),
-            stderr(&output)
-        );
+        let output =
+            self.path_output(repo_path, add_args(all, force, chmod), paths)?;
+
+        command_result(
+            repo_name,
+            &output,
+            |_| None,
+            |output| {
+                format!(
+                    "git add failed for '{}': {}",
+                    repo_path.display(),
+                    stderr(output)
+                )
+            }
+        )
     }
 
-    Ok(())
+    pub fn add_path(&self, repo_path: &Path, path: &Path) -> Result<()>
+    {
+        let output = self.path_output(repo_path, ["add", "--"], [path])?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "git add failed for '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(())
+    }
 }

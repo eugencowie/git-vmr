@@ -1,60 +1,75 @@
-use crate::git::{
-    GitCommandResult, command_result, first_non_empty_line, git_output,
-    git_stdout
-};
-use crate::vmr::Repo;
-use anyhow::{Context, Result};
+use crate::git::{Git, GitCommandResult, command_result, first_non_empty_line};
 use std::path::Path;
 
-pub fn tag(
-    repo_name: &str,
-    repo_path: &Path,
-    tag_name: &str
-) -> GitCommandResult
+impl Git
 {
-    let output = git_output(repo_path, ["tag", tag_name])?;
+    pub fn tag(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        tag_name: &str
+    ) -> GitCommandResult
+    {
+        let output = self.output(repo_path, ["tag", tag_name])?;
 
-    command_result(
-        repo_name,
-        &output,
-        |_| None,
-        |output| first_non_empty_line(&output.stderr, "git tag failed")
-    )
-}
-
-pub fn delete_tag(
-    repo_name: &str,
-    repo_path: &Path,
-    tag_name: &str
-) -> GitCommandResult
-{
-    let output = git_output(repo_path, ["tag", "-d", tag_name])?;
-
-    command_result(
-        repo_name,
-        &output,
-        |output| first_non_empty_line(&output.stdout, "git tag failed").into(),
-        |output| first_non_empty_line(&output.stderr, "git tag failed")
-    )
-}
-
-pub fn tags(repo: &Repo) -> Result<Option<(String, Vec<String>)>>
-{
-    let tags_output = git_stdout(&repo.path, [
-        "for-each-ref",
-        "--format=%(refname:short)",
-        "refs/tags"
-    ])
-    .with_context(|| {
-        format!(
-            "fatal: failed to read tag information for '{}'",
-            repo.path.display()
+        command_result(
+            repo_name,
+            &output,
+            |_| None,
+            |output| first_non_empty_line(&output.stderr, "git tag failed")
         )
-    })?;
-    let tags = String::from_utf8_lossy(&tags_output)
-        .lines()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
+    }
 
-    Ok(Some((repo.name.clone(), tags)))
+    pub fn delete_tag(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        tag_name: &str
+    ) -> GitCommandResult
+    {
+        let output = self.output(repo_path, ["tag", "-d", tag_name])?;
+
+        command_result(
+            repo_name,
+            &output,
+            |output| {
+                first_non_empty_line(&output.stdout, "git tag delete succeeded")
+                    .into()
+            },
+            |output| first_non_empty_line(&output.stderr, "git tag failed")
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::RepoOutcome;
+    use crate::git::runner::scripted::ScriptedFake;
+
+    #[test]
+    fn delete_tag_with_no_output_reports_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["tag", "-d", "v1.0.0"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .delete_tag("backend", Path::new("/vmr/backend"), "v1.0.0")
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "git tag delete succeeded");
+    }
 }

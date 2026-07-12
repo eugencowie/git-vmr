@@ -1,4 +1,5 @@
 use crate::git;
+use crate::git::Git;
 use crate::vmr::{Vmr, resolve_path};
 use anyhow::{Context, Result};
 use path_clean::PathClean;
@@ -7,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn list(working_dir: &Path) -> Result<()>
+pub fn list(git: &Git, working_dir: &Path) -> Result<()>
 {
     let vmr = Vmr::find(working_dir)?;
     let repos = vmr.repos()?;
@@ -17,7 +18,7 @@ pub fn list(working_dir: &Path) -> Result<()>
     let results = repos
         .par_iter()
         .map(|repo| {
-            git::worktree_list(&repo.name, &repo.path)
+            git.worktree_list(&repo.name, &repo.path)
                 .map(|entries| (repo.name.clone(), entries))
         })
         .collect::<Vec<_>>();
@@ -50,6 +51,7 @@ pub fn list(working_dir: &Path) -> Result<()>
 }
 
 pub fn add(
+    git: &Git,
     working_dir: &Path,
     path: &Path,
     branch: Option<&str>,
@@ -95,13 +97,13 @@ pub fn add(
                 WorktreeAddMode::CommitIsh(commit_ish) =>
                     (None, Some(commit_ish.as_str())),
                 WorktreeAddMode::InferredBranch(branch)
-                    if git::branch_exists(&repo.path, branch)? =>
+                    if git.branch_exists(&repo.path, branch)? =>
                     (None, Some(branch.as_str())),
                 WorktreeAddMode::InferredBranch(branch) =>
                     (Some(branch.as_str()), None),
             };
 
-            git::worktree_add(
+            git.worktree_add(
                 &repo.name,
                 &repo.path,
                 &target.join(&repo.name),
@@ -254,6 +256,7 @@ fn state_sort_key(state: &git::ChildWorktreeState) -> (&str, &str)
 }
 
 pub fn remove(
+    git: &Git,
     working_dir: &Path,
     path: &Path,
     force: u8,
@@ -271,13 +274,18 @@ pub fn remove(
             let child_target = target.join(&repo.name).clean();
             let branch = if delete || force_delete
             {
-                child_worktree_branch(&repo.name, &repo.path, &child_target)?
+                child_worktree_branch(
+                    git,
+                    &repo.name,
+                    &repo.path,
+                    &child_target
+                )?
             }
             else
             {
                 None
             };
-            let result = git::worktree_remove(
+            let result = git.worktree_remove(
                 &repo.name,
                 &repo.path,
                 &child_target,
@@ -326,7 +334,7 @@ pub fn remove(
         let branch_deletions = deletion_targets
             .par_iter()
             .map(|(repo_name, repo_path, branch)| {
-                git::delete_branch(repo_name, repo_path, branch, force_delete)
+                git.delete_branch(repo_name, repo_path, branch, force_delete)
             })
             .collect::<Vec<_>>();
         results.extend(branch_deletions);
@@ -349,12 +357,13 @@ struct RemovalOutcome
 }
 
 fn child_worktree_branch(
+    git: &Git,
     repo_name: &str,
     repo_path: &Path,
     child_target: &Path
 ) -> Result<Option<String>>
 {
-    let entries = git::worktree_list(repo_name, repo_path)?;
+    let entries = git.worktree_list(repo_name, repo_path)?;
     let child_target = child_target.clean();
 
     Ok(entries
@@ -408,6 +417,7 @@ fn cleanup_aggregate_worktree(target: &Path) -> Result<()>
 }
 
 pub fn move_worktree(
+    git: &Git,
     working_dir: &Path,
     path: &Path,
     new_path: &Path,
@@ -435,7 +445,7 @@ pub fn move_worktree(
     let results = repos
         .par_iter()
         .map(|repo| {
-            git::worktree_move(
+            git.worktree_move(
                 &repo.name,
                 &repo.path,
                 &source.join(&repo.name),

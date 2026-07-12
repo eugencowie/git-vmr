@@ -7,7 +7,7 @@ mod state;
 mod updates;
 mod vmr;
 
-use cli::Cli;
+use cli::{Cli, SilentError};
 use std::process::ExitCode;
 
 fn main() -> ExitCode
@@ -18,7 +18,12 @@ fn main() -> ExitCode
     // Run command and handle errors
     if let Err(e) = cli.run()
     {
-        eprintln!("{e:#}");
+        // A silent error should not be displayed
+        if !e.is::<SilentError>()
+        {
+            eprintln!("{e:#}");
+        }
+
         return ExitCode::FAILURE;
     }
 

@@ -1,6 +1,5 @@
 use crate::git::{
-    GitCommandResult, command_result, failure_message,
-    first_non_empty_line_with_fallback, git_output, success_message
+    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
 };
 use regex::Regex;
 use std::path::Path;
@@ -9,68 +8,72 @@ use std::sync::LazyLock;
 static BEHIND_COMMIT_COUNT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r" by \d+ commits?").unwrap());
 
-pub fn switch(
-    repo_name: &str,
-    repo_path: &Path,
-    branch_name: &str
-) -> GitCommandResult
-{
-    let output = git_output(repo_path, ["switch", branch_name])?;
-
-    command_result(
-        repo_name,
-        &output,
-        |output| {
-            Some(normalize_success_message(first_non_empty_line_with_fallback(
-                &output.stdout,
-                &output.stderr,
-                "git switch succeeded"
-            )))
-        },
-        |output| {
-            first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git switch failed"
-            )
-        }
-    )
-}
-
 fn normalize_success_message(message: String) -> String
 {
     BEHIND_COMMIT_COUNT.replace(&message, "").into_owned()
 }
 
-pub fn create(
-    repo_name: &str,
-    repo_path: &Path,
-    branch_name: &str
-) -> GitCommandResult
+impl Git
 {
-    let output = git_output(repo_path, ["switch", "--create", branch_name])?;
+    pub fn switch(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        branch_name: &str
+    ) -> GitCommandResult
+    {
+        let output = self.output(repo_path, ["switch", branch_name])?;
 
-    if output.status.success()
-    {
-        Ok(success_message(
+        command_result(
             repo_name,
-            first_non_empty_line_with_fallback(
-                &output.stdout,
-                &output.stderr,
-                "git switch succeeded"
-            )
-        ))
+            &output,
+            |output| {
+                Some(normalize_success_message(
+                    first_non_empty_line_with_fallback(
+                        &output.stdout,
+                        &output.stderr,
+                        "git switch succeeded"
+                    )
+                ))
+            },
+            |output| {
+                first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git switch failed"
+                )
+            }
+        )
     }
-    else
+
+    pub fn create(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        branch_name: &str
+    ) -> GitCommandResult
     {
-        Ok(failure_message(
+        let output =
+            self.output(repo_path, ["switch", "--create", branch_name])?;
+
+        command_result(
             repo_name,
-            first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git switch failed"
-            )
-        ))
+            &output,
+            |output| {
+                Some(first_non_empty_line_with_fallback(
+                    &output.stdout,
+                    &output.stderr,
+                    "git switch succeeded"
+                ))
+            },
+            |output| {
+                first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git switch failed"
+                )
+            }
+        )
     }
 }
 
@@ -78,6 +81,8 @@ pub fn create(
 mod tests
 {
     use super::*;
+    use crate::git::RepoOutcome;
+    use crate::git::runner::scripted::ScriptedFake;
 
     #[test]
     fn normalizes_behind_fast_forward_success_message()
@@ -106,6 +111,34 @@ mod tests
                 "Switched to branch 'feature/auth'".to_owned()
             ),
             "Switched to branch 'feature/auth'"
+        );
+    }
+
+    #[test]
+    fn switch_normalizes_behind_count_in_success_message()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["switch", "develop"],
+            0,
+            "Your branch is behind 'origin/develop' by 3 commits, and can be fast-forwarded.\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .switch("backend", Path::new("/vmr/backend"), "develop")
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(
+            message.message,
+            "Your branch is behind 'origin/develop', and can be fast-forwarded."
         );
     }
 }

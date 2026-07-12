@@ -1,6 +1,5 @@
 use crate::git::{
-    GitCommandResult, command_result, first_non_empty_line_with_fallback,
-    git_output
+    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
 };
 use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
@@ -24,167 +23,175 @@ pub enum ChildWorktreeState
     Detached
 }
 
-pub fn worktree_add(
-    repo_name: &str,
-    repo_path: &Path,
-    target: &Path,
-    branch: Option<&str>,
-    commit_ish: Option<&str>
-) -> GitCommandResult
+impl Git
 {
-    let mut args = vec![OsString::from("worktree"), OsString::from("add")];
-
-    if let Some(branch) = branch
+    pub fn worktree_add(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        target: &Path,
+        branch: Option<&str>,
+        commit_ish: Option<&str>
+    ) -> GitCommandResult
     {
-        args.push(OsString::from("-b"));
-        args.push(OsString::from(branch));
-    }
+        let mut args = vec![OsString::from("worktree"), OsString::from("add")];
 
-    args.push(target.as_os_str().to_owned());
-
-    if let Some(commit_ish) = commit_ish
-    {
-        args.push(OsString::from(commit_ish));
-    }
-
-    let output = git_output(repo_path, args)?;
-
-    command_result(
-        repo_name,
-        &output,
-        |output| {
-            Some(first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git worktree add succeeded"
-            ))
-        },
-        failure_line
-    )
-}
-
-pub fn worktree_remove(
-    repo_name: &str,
-    repo_path: &Path,
-    target: &Path,
-    force: u8
-) -> GitCommandResult
-{
-    let mut args = vec![OsString::from("worktree"), OsString::from("remove")];
-
-    for _ in 0..force
-    {
-        args.push(OsString::from("-f"));
-    }
-
-    args.push(target.as_os_str().to_owned());
-
-    let output = git_output(repo_path, args)?;
-
-    command_result(
-        repo_name,
-        &output,
-        |output| {
-            let message = first_non_empty_line_with_fallback(
-                &output.stdout,
-                &output.stderr,
-                "git worktree remove succeeded"
-            );
-
-            if message == "git worktree remove succeeded"
-            {
-                None
-            }
-            else
-            {
-                Some(message)
-            }
-        },
-        |output| {
-            first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git worktree remove failed"
-            )
+        if let Some(branch) = branch
+        {
+            args.push(OsString::from("-b"));
+            args.push(OsString::from(branch));
         }
-    )
-}
 
-pub fn worktree_move(
-    repo_name: &str,
-    repo_path: &Path,
-    source: &Path,
-    destination: &Path,
-    force: u8
-) -> GitCommandResult
-{
-    let mut args = vec![OsString::from("worktree"), OsString::from("move")];
+        args.push(target.as_os_str().to_owned());
 
-    for _ in 0..force
-    {
-        args.push(OsString::from("-f"));
-    }
-
-    args.push(source.as_os_str().to_owned());
-    args.push(destination.as_os_str().to_owned());
-
-    let output = git_output(repo_path, args)?;
-
-    command_result(
-        repo_name,
-        &output,
-        |output| {
-            let message = first_non_empty_line_with_fallback(
-                &output.stdout,
-                &output.stderr,
-                "git worktree move succeeded"
-            );
-
-            if message == "git worktree move succeeded"
-            {
-                None
-            }
-            else
-            {
-                Some(message)
-            }
-        },
-        |output| {
-            first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git worktree move failed"
-            )
+        if let Some(commit_ish) = commit_ish
+        {
+            args.push(OsString::from(commit_ish));
         }
-    )
-}
 
-pub fn worktree_list(
-    repo_name: &str,
-    repo_path: &Path
-) -> Result<Vec<ChildWorktree>>
-{
-    let output = git_output(repo_path, [
-        OsString::from("worktree"),
-        OsString::from("list"),
-        OsString::from("--porcelain"),
-        OsString::from("-z")
-    ])?;
+        let output = self.output(repo_path, args)?;
 
-    if !output.status.success()
-    {
-        bail!(
-            "fatal: failed to list worktrees for '{}': {}",
+        command_result(
             repo_name,
-            first_non_empty_line_with_fallback(
-                &output.stderr,
-                &output.stdout,
-                "git worktree list failed"
-            )
-        );
+            &output,
+            |output| {
+                Some(first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git worktree add succeeded"
+                ))
+            },
+            failure_line
+        )
     }
 
-    parse_worktree_list(repo_name, &output.stdout)
+    pub fn worktree_remove(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        target: &Path,
+        force: u8
+    ) -> GitCommandResult
+    {
+        let mut args =
+            vec![OsString::from("worktree"), OsString::from("remove")];
+
+        for _ in 0..force
+        {
+            args.push(OsString::from("-f"));
+        }
+
+        args.push(target.as_os_str().to_owned());
+
+        let output = self.output(repo_path, args)?;
+
+        command_result(
+            repo_name,
+            &output,
+            |output| {
+                let message = first_non_empty_line_with_fallback(
+                    &output.stdout,
+                    &output.stderr,
+                    "git worktree remove succeeded"
+                );
+
+                if message == "git worktree remove succeeded"
+                {
+                    None
+                }
+                else
+                {
+                    Some(message)
+                }
+            },
+            |output| {
+                first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git worktree remove failed"
+                )
+            }
+        )
+    }
+
+    pub fn worktree_move(
+        &self,
+        repo_name: &str,
+        repo_path: &Path,
+        source: &Path,
+        destination: &Path,
+        force: u8
+    ) -> GitCommandResult
+    {
+        let mut args = vec![OsString::from("worktree"), OsString::from("move")];
+
+        for _ in 0..force
+        {
+            args.push(OsString::from("-f"));
+        }
+
+        args.push(source.as_os_str().to_owned());
+        args.push(destination.as_os_str().to_owned());
+
+        let output = self.output(repo_path, args)?;
+
+        command_result(
+            repo_name,
+            &output,
+            |output| {
+                let message = first_non_empty_line_with_fallback(
+                    &output.stdout,
+                    &output.stderr,
+                    "git worktree move succeeded"
+                );
+
+                if message == "git worktree move succeeded"
+                {
+                    None
+                }
+                else
+                {
+                    Some(message)
+                }
+            },
+            |output| {
+                first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git worktree move failed"
+                )
+            }
+        )
+    }
+
+    pub fn worktree_list(
+        &self,
+        repo_name: &str,
+        repo_path: &Path
+    ) -> Result<Vec<ChildWorktree>>
+    {
+        let output = self.output(repo_path, [
+            OsString::from("worktree"),
+            OsString::from("list"),
+            OsString::from("--porcelain"),
+            OsString::from("-z")
+        ])?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "fatal: failed to list worktrees for '{}': {}",
+                repo_name,
+                first_non_empty_line_with_fallback(
+                    &output.stderr,
+                    &output.stdout,
+                    "git worktree list failed"
+                )
+            );
+        }
+
+        parse_worktree_list(repo_name, &output.stdout)
+    }
 }
 
 fn parse_worktree_list(
