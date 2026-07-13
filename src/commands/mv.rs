@@ -20,6 +20,12 @@ pub fn mv(
         .map(|source| workspace.route_single(working_dir, source))
         .collect::<Result<Vec<_>>>()?;
     let destination = workspace.route_single(working_dir, destination)?;
+    let scope_repo_count = sources
+        .iter()
+        .map(|(repo, _)| repo.name.as_str())
+        .chain(std::iter::once(destination.0.name.as_str()))
+        .collect::<HashSet<_>>()
+        .len();
 
     let results = if sources.len() == 1 && sources[0].0 == destination.0
     {
@@ -35,7 +41,7 @@ pub fn mv(
         execute_plan(git, plan)
     };
 
-    render::outcomes(results)
+    render::outcomes_in_scope(results, scope_repo_count)
 }
 
 struct MovePlan

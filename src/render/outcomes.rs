@@ -7,6 +7,17 @@ use anyhow::Result;
 pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
 {
     let total = results.len();
+    outcomes_in_scope(results, total)
+}
+
+/// Renders outcomes against an explicit repository scope. This is used by
+/// commands whose result count is not the same as the number of child repos
+/// involved, such as a move that produces one outcome per moved entry.
+pub(crate) fn outcomes_in_scope(
+    results: Vec<GitCommandResult>,
+    total: usize
+) -> Result<Rendered>
+{
     let mut successes = Vec::new();
     let mut failures = Vec::new();
     let mut errors = Vec::new();
@@ -59,7 +70,10 @@ fn grouped_messages(
             .iter_mut()
             .find(|(message, _)| message == &repo_message.message)
         {
-            repos.push(repo_message.repo);
+            if !repos.contains(&repo_message.repo)
+            {
+                repos.push(repo_message.repo);
+            }
         }
         else
         {
@@ -278,5 +292,31 @@ mod tests
         let failed = err.downcast::<crate::render::Failed>().unwrap();
         assert_eq!(failed.rendered.stdout, "pushed \x1b[90m(backend)\x1b[0m\n");
         assert_eq!(failed.message, "remote rejected \x1b[90m(frontend)\x1b[0m");
+    }
+
+    #[test]
+    fn explicit_scope_deduplicates_repos_from_repeated_entry_outcomes()
+    {
+        // Arrange: two move entries failed in the same destination repo,
+        // within a command whose scope also includes the source repo.
+        let results = vec![
+            Ok(RepoOutcome::Failure(repo_message(
+                "frontend",
+                "unable to stage"
+            ))),
+            Ok(RepoOutcome::Failure(repo_message(
+                "frontend",
+                "unable to stage"
+            ))),
+        ];
+
+        // Act
+        let err = outcomes_in_scope(results, 2).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "unable to stage \x1b[90m(frontend)\x1b[0m"
+        );
     }
 }

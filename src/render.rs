@@ -13,6 +13,7 @@ use anyhow::Result;
 pub use branch::branches;
 pub use foreach::{ChildOutput, foreach};
 pub use outcomes::outcomes;
+pub(crate) use outcomes::outcomes_in_scope;
 pub use status::status;
 use std::fmt;
 pub use tag::tags;
