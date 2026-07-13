@@ -1,57 +1,9 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("git output should be utf8")
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    if let Some(parent) = path.join(file).parent()
-    {
-        fs::create_dir_all(parent).expect("failed to create parent dir");
-    }
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn staged_names(repo: &Path) -> String
 {
@@ -85,7 +37,7 @@ fn rm_removes_tracked_file_from_vmr_root()
 
     // Assert
     assert!(!backend.join("src/main.rs").exists());
-    assert_eq!(staged_names(&backend), "src/main.rs\n");
+    assert_eq!(staged_names(&backend), "src/main.rs");
 }
 
 #[test]
@@ -110,8 +62,8 @@ fn rm_removes_paths_across_multiple_repositories()
         .success();
 
     // Assert
-    assert_eq!(staged_names(&backend), "src/main.rs\n");
-    assert_eq!(staged_names(&frontend), "src/app.rs\n");
+    assert_eq!(staged_names(&backend), "src/main.rs");
+    assert_eq!(staged_names(&frontend), "src/app.rs");
 }
 
 #[test]
@@ -144,7 +96,7 @@ fn rm_removes_from_child_repo_and_with_working_dir_argument()
         .success();
 
     // Assert
-    assert_eq!(staged_names(&backend), "src/lib.rs\nsrc/main.rs\n");
+    assert_eq!(staged_names(&backend), "src/lib.rs\nsrc/main.rs");
 }
 
 #[test]
@@ -197,7 +149,7 @@ fn rm_recursive_removes_directories_with_short_flag()
         .success();
 
     // Assert
-    assert_eq!(staged_names(&backend), "src/lib.rs\nsrc/main.rs\n");
+    assert_eq!(staged_names(&backend), "src/lib.rs\nsrc/main.rs");
 }
 
 #[test]
@@ -235,8 +187,8 @@ fn rm_force_removes_modified_tracked_file_with_short_and_long_flags()
     // Assert
     assert!(!backend.join("src/main.rs").exists());
     assert!(!frontend.join("src/app.rs").exists());
-    assert_eq!(staged_names(&backend), "src/main.rs\n");
-    assert_eq!(staged_names(&frontend), "src/app.rs\n");
+    assert_eq!(staged_names(&backend), "src/main.rs");
+    assert_eq!(staged_names(&frontend), "src/app.rs");
 }
 
 #[test]
@@ -313,8 +265,8 @@ fn rm_cached_removes_file_and_directory_from_index_only()
     assert!(backend.join("src/main.rs").exists());
     assert!(frontend.join("src/app.rs").exists());
     assert!(frontend.join("src/lib.rs").exists());
-    assert_eq!(staged_names(&backend), "src/main.rs\n");
-    assert_eq!(staged_names(&frontend), "src/app.rs\nsrc/lib.rs\n");
+    assert_eq!(staged_names(&backend), "src/main.rs");
+    assert_eq!(staged_names(&frontend), "src/app.rs\nsrc/lib.rs");
 }
 
 #[test]
@@ -423,8 +375,8 @@ fn rm_vmr_root_requires_recursive_and_expands_to_git_children()
         .success();
 
     // Assert
-    assert_eq!(staged_names(&backend), "README.md\n");
-    assert_eq!(staged_names(&frontend), "README.md\n");
+    assert_eq!(staged_names(&backend), "README.md");
+    assert_eq!(staged_names(&frontend), "README.md");
     assert!(tmp.path().join("docs").exists());
 }
 

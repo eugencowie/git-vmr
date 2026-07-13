@@ -1,38 +1,8 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
-use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 #[test]
 fn status_errors_outside_a_vmr()
@@ -57,8 +27,7 @@ fn status_errors_outside_a_vmr()
 fn status_in_vmr_root_reports_child_repo_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -80,8 +49,7 @@ fn status_in_vmr_root_reports_child_repo_changes()
 fn status_reports_clean_summary_for_clean_child_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -99,8 +67,7 @@ fn status_reports_clean_summary_for_clean_child_repo()
 fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let committed = tmp.path().join("committed");
     let new_repo = tmp.path().join("new-repo");
     init_repo(&committed);
@@ -134,8 +101,7 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -159,8 +125,7 @@ fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 fn status_with_no_child_repos_succeeds_with_no_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs"))
         .expect("failed to create non repo dir");
 
@@ -177,8 +142,7 @@ fn status_with_no_child_repos_succeeds_with_no_output()
 fn status_reports_staged_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -201,8 +165,7 @@ fn status_reports_staged_changes()
 fn status_fails_on_corrupted_git_dir()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("broken");
     fs::create_dir(&repo).expect("failed to create repo");
     fs::write(repo.join(".git"), "not a gitfile\n")

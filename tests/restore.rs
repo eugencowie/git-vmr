@@ -1,57 +1,9 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("git output should be utf8")
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    if let Some(parent) = path.join(file).parent()
-    {
-        fs::create_dir_all(parent).expect("failed to create parent dir");
-    }
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn staged_names(repo: &Path) -> String
 {
@@ -178,7 +130,7 @@ fn restore_staged_unstages_without_discarding_worktree_modifications()
         fs::read_to_string(backend.join("src/main.rs")).unwrap(),
         "changed\n"
     );
-    assert_eq!(status_short(&backend), " M src/main.rs\n");
+    assert_eq!(status_short(&backend), "M src/main.rs");
 }
 
 #[test]

@@ -1,38 +1,9 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn branch_exists(path: &Path, branch: &str) -> bool
 {
@@ -59,8 +30,7 @@ fn create_unmerged_branch(path: &Path, branch: &str)
 fn branch_lists_local_branches_across_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -89,8 +59,7 @@ fn branch_lists_local_branches_across_child_repositories()
 fn branch_skips_non_git_children_and_empty_vmr_outputs_nothing()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -121,8 +90,7 @@ fn branch_skips_non_git_children_and_empty_vmr_outputs_nothing()
 fn branch_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -159,8 +127,7 @@ fn branch_uses_nested_working_dir_and_global_c_option_for_discovery()
 fn branch_reports_detached_head_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let frontend = tmp.path().join("frontend");
     init_repo(&frontend);
     commit_file(&frontend, "README.md");
@@ -189,8 +156,7 @@ fn branch_reports_detached_head_repositories()
 fn branch_fails_on_corrupted_git_dir()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("broken");
     fs::create_dir(&repo).expect("failed to create repo");
     fs::write(repo.join(".git"), "not a gitfile\n")
@@ -209,8 +175,7 @@ fn branch_fails_on_corrupted_git_dir()
 fn branch_creates_branch_in_every_child_repository_with_no_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -234,8 +199,7 @@ fn branch_creates_branch_in_every_child_repository_with_no_output()
 fn branch_create_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     init_repo(&backend);
@@ -256,8 +220,7 @@ fn branch_create_skips_non_git_child_directories()
 fn branch_create_partial_failure_does_not_stop_other_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -287,8 +250,7 @@ fn branch_create_partial_failure_does_not_stop_other_repositories()
 fn branch_create_omits_repository_suffix_when_every_repo_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -316,8 +278,7 @@ fn branch_create_omits_repository_suffix_when_every_repo_fails()
 fn branch_create_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let alpha = tmp.path().join("alpha");
     let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
@@ -345,8 +306,7 @@ fn branch_create_reports_multiple_failures_in_repository_name_order()
 fn branch_delete_safely_deletes_branch_in_every_child_repository()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -376,8 +336,7 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
 fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -411,8 +370,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
 fn branch_delete_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     init_repo(&backend);
@@ -439,8 +397,7 @@ fn branch_delete_skips_non_git_child_directories()
 fn branch_delete_partial_failure_does_not_stop_other_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -478,8 +435,7 @@ fn branch_delete_partial_failure_does_not_stop_other_repositories()
 fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -509,8 +465,7 @@ fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
 fn branch_delete_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let alpha = tmp.path().join("alpha");
     let has_branch = tmp.path().join("has-branch");
     let zeta = tmp.path().join("zeta");

@@ -1,61 +1,11 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_output, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
-}
-
-fn init_vmr(path: &Path)
-{
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn stage_file(path: &Path, file: &str, content: &str)
 {

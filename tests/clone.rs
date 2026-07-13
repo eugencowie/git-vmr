@@ -1,35 +1,8 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
-use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-    fs::write(path.join("README.md"), "content\n")
-        .expect("failed to write README");
-    git(path, ["add", "README.md"]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 #[test]
 fn clone_uses_git_inferred_destination_from_non_vmr_directory()
@@ -38,6 +11,7 @@ fn clone_uses_git_inferred_destination_from_non_vmr_directory()
     let source = tmp.path().join("project");
     let workspace = tmp.path().join("workspace");
     init_repo(&source);
+    commit_file(&source, "README.md");
     fs::create_dir(&workspace).expect("failed to create workspace");
 
     git_vmr()
@@ -60,6 +34,7 @@ fn clone_uses_explicit_destination_directory()
     let source = tmp.path().join("project");
     let workspace = tmp.path().join("workspace");
     init_repo(&source);
+    commit_file(&source, "README.md");
     fs::create_dir(&workspace).expect("failed to create workspace");
 
     git_vmr()
@@ -83,6 +58,7 @@ fn clone_destination_is_relative_to_working_dir_argument()
     let workspace = tmp.path().join("workspace");
     let base = workspace.join("base");
     init_repo(&source);
+    commit_file(&source, "README.md");
     fs::create_dir(&workspace).expect("failed to create workspace");
     fs::create_dir(&base).expect("failed to create base");
 
@@ -109,6 +85,7 @@ fn clone_does_not_require_or_create_vmr_metadata()
     let source = tmp.path().join("project");
     let workspace = tmp.path().join("workspace");
     init_repo(&source);
+    commit_file(&source, "README.md");
     fs::create_dir(&workspace).expect("failed to create workspace");
 
     git_vmr()

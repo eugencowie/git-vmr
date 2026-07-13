@@ -1,57 +1,9 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git_output, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
-
-fn git<const N: usize>(dir: &Path, args: [&str; N])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("git output should be utf8")
-}
-
-fn init_repo(path: &Path)
-{
-    fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
-    git(path, ["config", "user.email", "test@example.com"]);
-    git(path, ["config", "user.name", "Test User"]);
-}
-
-fn commit_file(path: &Path, file: &str)
-{
-    if let Some(parent) = path.join(file).parent()
-    {
-        fs::create_dir_all(parent).expect("failed to create parent dir");
-    }
-    fs::write(path.join(file), "content\n").expect("failed to write file");
-    git(path, ["add", file]);
-    git(path, ["commit", "-m", "initial"]);
-}
 
 fn staged_status(repo: &Path) -> String
 {
@@ -93,8 +45,7 @@ fn mv_requires_at_least_source_and_destination_operands_and_rejects_options()
 fn mv_moves_tracked_file_and_directory_within_one_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/old.rs");
@@ -132,8 +83,7 @@ fn mv_moves_tracked_file_and_directory_within_one_repo()
 fn mv_moves_tracked_file_and_directory_between_repos()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -183,8 +133,7 @@ fn mv_moves_tracked_file_and_directory_between_repos()
 fn mv_uses_child_working_dir_and_working_dir_argument()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -221,8 +170,7 @@ fn mv_uses_child_working_dir_and_working_dir_argument()
 fn mv_supports_destination_directory_semantics()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -251,8 +199,7 @@ fn mv_supports_destination_directory_semantics()
 fn mv_moves_multiple_files_within_one_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/a.rs");
@@ -286,8 +233,7 @@ fn mv_moves_multiple_files_within_one_repo()
 fn mv_moves_multiple_files_from_one_repo_into_another_repo_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -330,8 +276,7 @@ fn mv_moves_multiple_files_from_one_repo_into_another_repo_root()
 fn mv_moves_multiple_files_from_multiple_repos_into_one_directory()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -364,8 +309,7 @@ fn mv_moves_multiple_files_from_multiple_repos_into_one_directory()
 fn mv_multi_source_uses_child_working_dir_and_working_dir_argument()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -413,8 +357,7 @@ fn mv_multi_source_uses_child_working_dir_and_working_dir_argument()
 fn mv_rejects_invalid_ownership_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     fs::write(tmp.path().join("README.md"), "vmr\n")
         .expect("failed to write root file");
@@ -447,8 +390,7 @@ fn mv_rejects_invalid_ownership_before_moving()
 fn mv_rejects_cross_repo_untracked_source_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -480,8 +422,7 @@ fn mv_rejects_cross_repo_destination_conflicts_and_missing_parents_before_moving
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -523,8 +464,7 @@ fn mv_rejects_cross_repo_destination_conflicts_and_missing_parents_before_moving
 fn mv_rejects_multi_source_preflight_failures_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -612,8 +552,7 @@ fn mv_rejects_multi_source_preflight_failures_before_moving()
 fn mv_same_repo_git_failure_reports_repo_context()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "tracked.rs");

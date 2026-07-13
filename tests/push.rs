@@ -1,77 +1,14 @@
 mod common;
 
-use common::git_vmr;
+use common::{clone_repo, git, git_output, git_vmr, init_vmr, write_commit};
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-fn git(dir: &Path, args: &[&str])
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed in '{}'\nstderr: {}\nstdout: {}",
-        args,
-        dir.display(),
-        String::from_utf8_lossy(&output.stderr),
-        String::from_utf8_lossy(&output.stdout)
-    );
-}
-
-fn git_output(dir: &Path, args: &[&str]) -> String
-{
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed in '{}'\nstderr: {}\nstdout: {}",
-        args,
-        dir.display(),
-        String::from_utf8_lossy(&output.stderr),
-        String::from_utf8_lossy(&output.stdout)
-    );
-
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
-}
-
-fn init_vmr(path: &Path)
-{
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
-}
-
 fn init_bare_repo(path: &Path)
 {
     fs::create_dir_all(path).expect("failed to create bare repo dir");
-    git(path, &["init", "--bare"]);
-}
-
-fn clone_repo(source: &Path, destination: &Path)
-{
-    let parent = destination.parent().expect("clone destination has parent");
-    git(parent, &[
-        "clone",
-        source.to_str().expect("source path should be UTF-8"),
-        destination
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("destination name should be UTF-8")
-    ]);
-    git(destination, &["config", "user.email", "test@example.com"]);
-    git(destination, &["config", "user.name", "Test User"]);
-}
-
-fn write_commit(path: &Path, file: &str, content: &str, message: &str)
-{
-    fs::write(path.join(file), content).expect("failed to write file");
-    git(path, &["add", file]);
-    git(path, &["commit", "-m", message]);
+    git(path, ["init", "--bare"]);
 }
 
 fn setup_remote_and_clone(
@@ -85,13 +22,13 @@ fn setup_remote_and_clone(
     init_bare_repo(&remote);
     clone_repo(&remote, &work);
     write_commit(&work, file, "initial\n", "initial");
-    git(&work, &["push", "-u", "origin", "master"]);
+    git(&work, ["push", "-u", "origin", "master"]);
     (remote, work)
 }
 
 fn head(path: &Path, rev: &str) -> String
 {
-    git_output(path, &["rev-parse", rev])
+    git_output(path, ["rev-parse", rev])
 }
 
 fn ref_exists(path: &Path, rev: &str) -> bool
@@ -143,7 +80,7 @@ fn push_forwards_repository_and_refspec_arguments()
     init_vmr(&vmr);
     let (remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
-    git(&backend, &["checkout", "-b", "release"]);
+    git(&backend, ["checkout", "-b", "release"]);
     write_commit(&backend, "release.txt", "release\n", "release");
 
     git_vmr()
@@ -166,7 +103,7 @@ fn push_treats_single_positional_argument_as_repository()
     init_vmr(&vmr);
     let (remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
-    git(&backend, &["remote", "rename", "origin", "main"]);
+    git(&backend, ["remote", "rename", "origin", "main"]);
     write_commit(&backend, "README.md", "updated\n", "update");
 
     git_vmr()
@@ -208,7 +145,7 @@ fn push_failure_does_not_stop_successful_repositories()
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (frontend_remote, frontend) =
         setup_remote_and_clone(tmp.path(), "frontend", "README.md");
-    git(&backend, &["remote", "remove", "origin"]);
+    git(&backend, ["remote", "remove", "origin"]);
     write_commit(&backend, "README.md", "backend\n", "backend update");
     write_commit(&frontend, "README.md", "frontend\n", "frontend update");
 
@@ -238,8 +175,8 @@ fn push_reports_success_failure_and_failure_order_with_repository_suffixes()
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (_zeta_remote, zeta) =
         setup_remote_and_clone(tmp.path(), "zeta", "README.md");
-    git(&alpha, &["remote", "remove", "origin"]);
-    git(&zeta, &["remote", "remove", "origin"]);
+    git(&alpha, ["remote", "remove", "origin"]);
+    git(&zeta, ["remote", "remove", "origin"]);
     write_commit(&alpha, "README.md", "alpha\n", "alpha update");
     write_commit(&backend, "README.md", "backend\n", "backend update");
     write_commit(&zeta, "README.md", "zeta\n", "zeta update");
@@ -267,7 +204,7 @@ fn push_delegates_missing_upstream_and_rejected_pushes_to_git_without_rollback()
     init_vmr(&vmr);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
-    git(&backend, &["branch", "--unset-upstream"]);
+    git(&backend, ["branch", "--unset-upstream"]);
 
     git_vmr()
         .current_dir(&vmr)
@@ -285,8 +222,8 @@ fn push_delegates_missing_upstream_and_rejected_pushes_to_git_without_rollback()
     let rejected_clone = tmp.path().join("rejected-clone");
     clone_repo(&backend_remote, &rejected_clone);
     write_commit(&rejected_clone, "README.md", "remote\n", "remote update");
-    git(&rejected_clone, &["push", "origin", "master"]);
-    git(&backend, &["branch", "--set-upstream-to=origin/master", "master"]);
+    git(&rejected_clone, ["push", "origin", "master"]);
+    git(&backend, ["branch", "--set-upstream-to=origin/master", "master"]);
     write_commit(&backend, "README.md", "local\n", "local update");
     write_commit(&frontend, "README.md", "frontend\n", "frontend update");
 
