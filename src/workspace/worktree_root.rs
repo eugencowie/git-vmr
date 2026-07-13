@@ -34,13 +34,17 @@ pub struct WorktreeRoots<'a>
     workspace: &'a Workspace<'a>
 }
 
+impl<'a> Workspace<'a>
+{
+    /// The worktree roots of this workspace.
+    pub fn worktree_roots(&'a self) -> WorktreeRoots<'a>
+    {
+        WorktreeRoots { workspace: self }
+    }
+}
+
 impl<'a> WorktreeRoots<'a>
 {
-    pub fn new(workspace: &'a Workspace<'a>) -> Self
-    {
-        Self { workspace }
-    }
-
     /// Materializes the root at `target`, then adds one child worktree per
     /// child repo at `<target>/<repo name>`. With no explicit branch or
     /// commit-ish, the branch is inferred from the target's basename: each
@@ -408,7 +412,7 @@ mod tests
 
         // Act
         let outcomes =
-            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
+            workspace.worktree_roots().add(&root, None, None).unwrap();
 
         // Assert: the root is materialized, both children succeed, and no
         // repo creates the branch (no -b anywhere)
@@ -463,7 +467,7 @@ mod tests
 
         // Act
         let outcomes =
-            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
+            workspace.worktree_roots().add(&root, None, None).unwrap();
 
         // Assert
         assert_eq!(outcomes.len(), 2);
@@ -518,9 +522,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal = WorktreeRoots::new(&workspace)
-            .remove(&root, 0, true, false)
-            .unwrap();
+        let removal =
+            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
 
         // Assert: the root is deliberately kept (not a dissolve failure),
         // and exactly one outcome is the frontend's failure
@@ -585,9 +588,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal = WorktreeRoots::new(&workspace)
-            .remove(&root, 0, true, false)
-            .unwrap();
+        let removal =
+            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
 
         // Assert: within each repo the lookup precedes the removal, because
         // removal destroys the worktree the lookup reads
@@ -642,9 +644,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal = WorktreeRoots::new(&workspace)
-            .remove(&root, 0, true, false)
-            .unwrap();
+        let removal =
+            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
 
         // Assert: no branch deletion is attempted and the root dissolves
         assert!(removal.dissolved.is_ok());
@@ -689,9 +690,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal = WorktreeRoots::new(&workspace)
-            .remove(&root, 0, false, true)
-            .unwrap();
+        let removal =
+            workspace.worktree_roots().remove(&root, 0, false, true).unwrap();
 
         // Assert: the scripted -D rule answered, once per repo
         assert!(removal.dissolved.is_ok());
@@ -741,9 +741,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal = WorktreeRoots::new(&workspace)
-            .remove(&root, 0, false, false)
-            .unwrap();
+        let removal =
+            workspace.worktree_roots().remove(&root, 0, false, false).unwrap();
 
         // Assert: the child successes are kept beside the dissolve failure
         assert!(removal.dissolved.is_err());
@@ -791,7 +790,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let moved = WorktreeRoots::new(&workspace)
+        let moved = workspace
+            .worktree_roots()
             .move_root(&source, &destination, 0)
             .unwrap();
 
@@ -842,7 +842,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let groups = WorktreeRoots::new(&workspace).list().unwrap();
+        let groups = workspace.worktree_roots().list().unwrap();
 
         // Assert: both children group under the one root, in repo order
         assert_eq!(groups.keys().collect::<Vec<_>>(), vec![&root]);

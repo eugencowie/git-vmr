@@ -1,5 +1,4 @@
 use crate::render::{self, Rendered};
-use crate::workspace::worktree_root::WorktreeRoots;
 use crate::workspace::{Workspace, resolve_target};
 use anyhow::Result;
 use std::path::Path;
@@ -12,7 +11,7 @@ pub fn list(workspace: &Workspace) -> Result<Rendered>
         .map(|repo| repo.name.clone())
         .collect::<Vec<_>>();
 
-    let groups = WorktreeRoots::new(workspace).list()?;
+    let groups = workspace.worktree_roots().list()?;
 
     Ok(render::worktree_list(groups, &repo_names).into())
 }
@@ -27,7 +26,7 @@ pub fn add(
 {
     let target = resolve_target(working_dir, path);
     render::outcomes(
-        WorktreeRoots::new(workspace).add(&target, branch, commit_ish)?
+        workspace.worktree_roots().add(&target, branch, commit_ish)?
     )
 }
 
@@ -41,7 +40,7 @@ pub fn remove(
 ) -> Result<Rendered>
 {
     let target = resolve_target(working_dir, path);
-    let removal = WorktreeRoots::new(workspace).remove(
+    let removal = workspace.worktree_roots().remove(
         &target,
         force,
         delete,
@@ -69,11 +68,8 @@ pub fn move_worktree(
     let source = resolve_target(working_dir, path);
     let destination = resolve_target(working_dir, new_path);
 
-    let moved = WorktreeRoots::new(workspace).move_root(
-        &source,
-        &destination,
-        force
-    )?;
+    let moved =
+        workspace.worktree_roots().move_root(&source, &destination, force)?;
 
     let rendered = render::outcomes(moved.outcomes)?;
 
