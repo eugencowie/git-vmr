@@ -25,13 +25,18 @@ pub fn status(
         BTreeMap::new();
     let mut detached = Vec::new();
 
-    // Group statuses by branch
+    // Group statuses by branch, keeping unborn branches apart from committed
+    // ones that share the name
     for (repo, status) in statuses
     {
         match &status.head
         {
             Head::Branch(branch) => branch_groups
-                .entry((branch, status.initial))
+                .entry((branch, false))
+                .or_default()
+                .push((repo, status)),
+            Head::Unborn(branch) => branch_groups
+                .entry((branch, true))
                 .or_default()
                 .push((repo, status)),
             Head::Detached(hash) => detached.push((repo, hash.as_str(), status))
@@ -91,8 +96,9 @@ fn render_group(
     let context = RenderContext { repos, display_name, working_dir };
 
     // Render initial commit notice
-    let has_initial = repos.iter().any(|(_, status)| status.initial);
-    if has_initial
+    let has_unborn =
+        repos.iter().any(|(_, status)| matches!(status.head, Head::Unborn(_)));
+    if has_unborn
     {
         output.push_str("\nNo commits yet\n");
     }
@@ -139,11 +145,11 @@ fn render_group(
     );
 
     // Render clean summary
-    if has_staged || has_unstaged || has_untracked || has_initial
+    if has_staged || has_unstaged || has_untracked || has_unborn
     {
         output.push('\n');
     }
-    else if repos.iter().all(|(_, status)| !status.initial)
+    else
     {
         output.push_str("\nnothing to commit, working tree clean\n\n");
     }
@@ -383,7 +389,7 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let mut repo_status = repo_status("master");
-        repo_status.initial = true;
+        repo_status.head = Head::Unborn("master".to_owned());
         let statuses = vec![(repo(tmp.path(), "new-repo"), repo_status)];
 
         // Act
@@ -396,15 +402,15 @@ mod tests
     }
 
     #[test]
-    fn renders_initial_repos_separately_from_committed_repos_on_same_branch()
+    fn renders_unborn_repos_separately_from_committed_repos_on_same_branch()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        let mut initial = repo_status("master");
-        initial.initial = true;
+        let mut unborn = repo_status("master");
+        unborn.head = Head::Unborn("master".to_owned());
         let statuses = vec![
             (repo(tmp.path(), "committed"), repo_status("master")),
-            (repo(tmp.path(), "new-repo"), initial),
+            (repo(tmp.path(), "new-repo"), unborn),
         ];
 
         // Act
@@ -502,7 +508,6 @@ mod tests
     {
         RepoStatus {
             head: Head::Branch(branch.to_owned()),
-            initial: false,
             staged_changes: Vec::new(),
             unstaged_changes: Vec::new(),
             untracked_files: Vec::new()

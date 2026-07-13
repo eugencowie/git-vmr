@@ -1,7 +1,7 @@
 use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
-use crate::git::{Git, GitCommandResult};
+use crate::git::{Git, GitCommandResult, Head};
 use anyhow::{Context, Result, bail};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -10,15 +10,7 @@ use std::path::{Path, PathBuf};
 pub struct ChildWorktree
 {
     pub path: PathBuf,
-    pub head: String,
-    pub state: ChildWorktreeState
-}
-
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum ChildWorktreeState
-{
-    Branch(String),
-    Detached
+    pub head: Head
 }
 
 impl Git
@@ -233,13 +225,11 @@ impl WorktreeRecord
                 "fatal: malformed worktree list for '{repo_name}': missing HEAD"
             )
         })?;
-        let state = match self.branch
-        {
-            Some(branch) => ChildWorktreeState::Branch(branch),
-            None => ChildWorktreeState::Detached
-        };
 
-        Ok(ChildWorktree { path, head, state })
+        Ok(ChildWorktree {
+            path,
+            head: Head::from_worktree_record(self.branch, &head)
+        })
     }
 }
 
@@ -341,12 +331,8 @@ mod tests
 
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].path, PathBuf::from("/repo/backend"));
-        assert_eq!(
-            entries[0].state,
-            ChildWorktreeState::Branch("main".to_owned())
-        );
-        assert_eq!(entries[1].head, "abcdef1234567890");
-        assert_eq!(entries[1].state, ChildWorktreeState::Detached);
+        assert_eq!(entries[0].head, Head::Branch("main".to_owned()));
+        assert_eq!(entries[1].head, Head::Detached("abcdef12".to_owned()));
     }
 
     #[test]

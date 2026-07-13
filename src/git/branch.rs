@@ -1,7 +1,7 @@
 use crate::git::report::{
     FailureReport, Streams, SuccessReport, command_result
 };
-use crate::git::{Git, GitCommandResult, GitOutput, Head, RepoBranches};
+use crate::git::{Git, GitCommandResult, RepoBranches};
 use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -91,39 +91,12 @@ impl Git
             .map(str::to_owned)
             .collect::<Vec<_>>();
 
-        let head = match self
-            .output(&repo.path, ["symbolic-ref", "--quiet", "--short", "HEAD"])
-            .with_context(|| {
-                format!(
-                    "fatal: failed to read branch information for '{}'",
-                    repo.path.display()
-                )
-            })?
-        {
-            GitOutput { status, stdout, stderr: _ } if status.success() =>
-                Head::Branch(String::from_utf8_lossy(&stdout).trim().to_owned()),
-            GitOutput { status, .. } if status.code() == Some(1) =>
-            {
-                let hash = String::from_utf8_lossy(
-                    &self
-                        .stdout(&repo.path, ["rev-parse", "--short", "HEAD"])
-                        .with_context(|| {
-                            format!(
-                                "fatal: failed to read branch information for '{}'",
-                                repo.path.display()
-                            )
-                        })?
-                )
-                .trim()
-                .to_owned();
-                Head::Detached(hash)
-            }
-            GitOutput { stderr, .. } => bail!(
-                "fatal: failed to read branch information for '{}': {}",
-                repo.path.display(),
-                String::from_utf8_lossy(&stderr).trim()
+        let head = self.head(&repo.path).with_context(|| {
+            format!(
+                "fatal: failed to read branch information for '{}'",
+                repo.path.display()
             )
-        };
+        })?;
 
         Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
     }
@@ -155,7 +128,7 @@ impl Git
 mod tests
 {
     use super::*;
-    use crate::git::ScriptedFake;
+    use crate::git::{Head, ScriptedFake};
     use std::path::PathBuf;
 
     fn repo() -> Repo
@@ -176,7 +149,7 @@ mod tests
                     ""
                 )
                 .on(["symbolic-ref", "--quiet", "--short", "HEAD"], 1, "", "")
-                .on(["rev-parse", "--short", "HEAD"], 0, "abc1234\n", "")
+                .on(["rev-parse", "--short=8", "HEAD"], 0, "abc12345\n", "")
         );
 
         // Act
@@ -186,7 +159,7 @@ mod tests
         assert_eq!(name, "backend");
         assert_eq!(branches.branches, vec!["develop", "main"]);
         assert!(
-            matches!(&branches.head, Head::Detached(hash) if hash == "abc1234")
+            matches!(&branches.head, Head::Detached(hash) if hash == "abc12345")
         );
     }
 

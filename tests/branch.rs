@@ -132,7 +132,7 @@ fn branch_reports_detached_head_repositories()
     init_repo(&frontend);
     commit_file(&frontend, "README.md");
     let output = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
+        .args(["rev-parse", "--short=8", "HEAD"])
         .current_dir(&frontend)
         .output()
         .expect("failed to read head");
