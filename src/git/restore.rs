@@ -1,4 +1,5 @@
-use crate::git::{Git, GitCommandResult, command_result, stderr};
+use crate::git::report::{FailureReport, SuccessReport, command_result};
+use crate::git::{Git, GitCommandResult};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -31,15 +32,10 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |_| None,
-            |output| {
-                format!(
-                    "git restore failed for '{}': {}",
-                    repo_path.display(),
-                    stderr(output)
-                )
-            }
+            SuccessReport::Quiet,
+            FailureReport::Detailed { command: "restore" }
         )
     }
 }

@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line, stderr
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult, stderr};
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
@@ -17,14 +18,16 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                Some(first_non_empty_line(
-                    &output.stdout,
-                    "git commit succeeded"
-                ))
+            SuccessReport::Line {
+                from: Streams::StdoutOnly,
+                on_empty: OnEmpty::Text("git commit succeeded")
             },
-            |output| first_non_empty_line(&output.stderr, "git commit failed")
+            FailureReport::Line {
+                from: Streams::StderrOnly,
+                fallback: "git commit failed"
+            }
         )
     }
 

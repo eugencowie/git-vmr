@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -24,26 +25,20 @@ impl Git
     {
         let output = self.output(repo_path, ["switch", branch_name])?;
 
-        command_result(
+        Ok(command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                Some(normalize_success_message(
-                    first_non_empty_line_with_fallback(
-                        &output.stdout,
-                        &output.stderr,
-                        "git switch succeeded"
-                    )
-                ))
+            SuccessReport::Line {
+                from: Streams::StdoutThenStderr,
+                on_empty: OnEmpty::Text("git switch succeeded")
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git switch failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git switch failed"
             }
-        )
+        )?
+        .map_success_message(normalize_success_message))
     }
 
     pub fn create(
@@ -58,20 +53,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                Some(first_non_empty_line_with_fallback(
-                    &output.stdout,
-                    &output.stderr,
-                    "git switch succeeded"
-                ))
+            SuccessReport::Line {
+                from: Streams::StdoutThenStderr,
+                on_empty: OnEmpty::Text("git switch succeeded")
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git switch failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git switch failed"
             }
         )
     }

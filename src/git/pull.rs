@@ -1,6 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line_with_fallback
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use std::ffi::OsString;
 use std::path::Path;
 
@@ -27,23 +28,48 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                let message = first_non_empty_line_with_fallback(
-                    &output.stdout,
-                    &output.stderr,
-                    ""
-                );
-
-                if message.is_empty() { None } else { Some(message) }
+            SuccessReport::Line {
+                from: Streams::StdoutThenStderr,
+                on_empty: OnEmpty::Quiet
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git pull failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git pull failed"
             }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::git::RepoOutcome;
+    use crate::git::runner::scripted::ScriptedFake;
+
+    #[test]
+    fn pull_success_reports_stdout_before_stderr()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["pull"],
+            0,
+            "Already up to date.\n",
+            "stderr chatter\n"
+        ));
+
+        // Act
+        let outcome =
+            git.pull("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "Already up to date.");
     }
 }

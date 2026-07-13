@@ -1,7 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, command_result, first_non_empty_line,
-    first_non_empty_line_with_fallback
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult};
 use std::path::Path;
 
 impl Git
@@ -17,19 +17,15 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |output| {
-                Some(first_non_empty_line(
-                    &output.stdout,
-                    "git merge succeeded"
-                ))
+            SuccessReport::Line {
+                from: Streams::StdoutOnly,
+                on_empty: OnEmpty::Text("git merge succeeded")
             },
-            |output| {
-                first_non_empty_line_with_fallback(
-                    &output.stderr,
-                    &output.stdout,
-                    "git merge failed"
-                )
+            FailureReport::Line {
+                from: Streams::StderrThenStdout,
+                fallback: "git merge failed"
             }
         )
     }

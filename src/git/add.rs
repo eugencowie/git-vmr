@@ -1,4 +1,5 @@
-use crate::git::{Git, GitCommandResult, command_result, stderr};
+use crate::git::report::{FailureReport, SuccessReport, command_result};
+use crate::git::{Git, GitCommandResult, stderr};
 use anyhow::{Result, bail};
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -87,15 +88,10 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |_| None,
-            |output| {
-                format!(
-                    "git add failed for '{}': {}",
-                    repo_path.display(),
-                    stderr(output)
-                )
-            }
+            SuccessReport::Quiet,
+            FailureReport::Detailed { command: "add" }
         )
     }
 

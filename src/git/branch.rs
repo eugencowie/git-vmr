@@ -1,7 +1,7 @@
-use crate::git::{
-    Git, GitCommandResult, GitOutput, Head, RepoBranches, command_result,
-    first_non_empty_line
+use crate::git::report::{
+    FailureReport, Streams, SuccessReport, command_result
 };
+use crate::git::{Git, GitCommandResult, GitOutput, Head, RepoBranches};
 use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
@@ -19,9 +19,13 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |_| None,
-            |output| first_non_empty_line(&output.stderr, "git branch failed")
+            SuccessReport::Quiet,
+            FailureReport::Line {
+                from: Streams::StderrOnly,
+                fallback: "git branch failed"
+            }
         )
     }
 
@@ -38,9 +42,13 @@ impl Git
 
         command_result(
             repo_name,
+            repo_path,
             &output,
-            |_| Some(format!("Deleted branch {branch_name}")),
-            |output| first_non_empty_line(&output.stderr, "git branch failed")
+            SuccessReport::Fixed(format!("Deleted branch {branch_name}")),
+            FailureReport::Line {
+                from: Streams::StderrOnly,
+                fallback: "git branch failed"
+            }
         )
     }
 
@@ -62,7 +70,7 @@ impl Git
                 "fatal: failed to check branch '{}' in '{}': {}",
                 branch_name,
                 repo_path.display(),
-                first_non_empty_line(&output.stderr, "git show-ref failed")
+                Streams::StderrOnly.first_line(&output, "git show-ref failed")
             )
         }
     }
