@@ -304,6 +304,8 @@ fn worktree_add_creates_child_worktrees_on_inferred_branch()
         .stdout(
             predicate::str::contains("Preparing worktree (new branch 'wt')")
                 .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -331,6 +333,8 @@ fn worktree_add_checks_out_existing_local_inferred_branch()
         .stdout(
             predicate::str::contains("Preparing worktree (checking out 'wt')")
                 .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -396,6 +400,8 @@ fn worktree_add_explicit_branch_creates_child_worktrees_on_requested_branch()
                 "Preparing worktree (new branch 'feature/auth')"
             )
             .and(predicate::str::contains("(backend, frontend)").not())
+            .and(predicate::str::contains("(backend)").not())
+            .and(predicate::str::contains("(frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -433,6 +439,8 @@ fn worktree_add_explicit_branch_uses_commit_ish_as_start_point()
                 "Preparing worktree (new branch 'feature/auth')"
             )
             .and(predicate::str::contains("(backend, frontend)").not())
+            .and(predicate::str::contains("(backend)").not())
+            .and(predicate::str::contains("(frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -497,6 +505,8 @@ fn worktree_add_explicit_branch_creation_failures_are_reported_per_repository()
                 "fatal: a branch named 'feature/auth' already exists"
             )
             .and(predicate::str::contains("(backend, frontend)").not())
+            .and(predicate::str::contains("(backend)").not())
+            .and(predicate::str::contains("(frontend)").not())
         );
 
     assert!(!tmp.path().join("wt/backend").exists());
@@ -607,6 +617,8 @@ fn worktree_add_invalid_explicit_commit_ish_groups_failures()
         .stderr(
             predicate::str::contains("fatal: invalid reference: new")
                 .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(frontend)").not())
         );
 
     assert!(!branch_exists(&backend, "wt"));
