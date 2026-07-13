@@ -158,7 +158,10 @@ fn pull_forwards_repository_and_refspec_arguments()
         .args(["pull", "origin", "release"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)").not())
+        .stdout(
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "HEAD"), head(&source, "release"));
@@ -185,7 +188,10 @@ fn pull_treats_single_positional_argument_as_repository()
         .args(["pull", "main"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)").not())
+        .stdout(
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "HEAD"), head(&source, "master"));
