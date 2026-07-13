@@ -370,8 +370,10 @@ fn tag_delete_deletes_tag_in_every_child_repository()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend, frontend)").not())
+            predicate::str::is_match(
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+            )
+            .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
@@ -400,8 +402,10 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend, frontend)").not())
+            predicate::str::is_match(
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+            )
+            .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
