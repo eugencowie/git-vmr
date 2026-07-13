@@ -91,6 +91,7 @@ impl<'a> WorktreeRoots<'a>
     ) -> Result<RootOutcomes>
     {
         let removals = self.workspace.map(|git, repo| {
+            // Wrap per-repo errors so map attempts every repository.
             Ok(remove_child(git, repo, target, force, delete, force_delete))
         })?;
 
