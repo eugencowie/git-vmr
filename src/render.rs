@@ -13,6 +13,7 @@ use anyhow::Result;
 pub use branch::branches;
 pub use foreach::{ChildOutput, foreach};
 pub use outcomes::outcomes;
+pub(crate) use outcomes::outcomes_in_scope;
 pub use status::status;
 use std::fmt;
 pub use tag::tags;
@@ -108,9 +109,111 @@ pub(crate) fn paint(style: Style, text: &str) -> String
     format!("{}{text}{}", style.render(), style.render_reset())
 }
 
-/// The repo-list suffix: the parenthesised list of child repo names appended
-/// to a message or heading that does not apply to every child repo.
-pub(crate) fn repo_list_suffix(repo_names: &[&str]) -> String
+/// How the repo-list suffix presents its group: truncated to a few names
+/// when identity is secondary, or every name when identity is the point
+/// (failures).
+#[derive(Clone, Copy)]
+pub(crate) enum SuffixPolicy
 {
-    paint(REPO_LIST, &format!("({})", repo_names.join(", ")))
+    Truncated,
+    Full
+}
+
+const SUFFIX_NAME_LIMIT: usize = 3;
+
+/// The repo-list suffix: the parenthesised list of child repo names appended,
+/// with its leading space, to a line that does not apply to every child repo
+/// in scope. Empty when the group covers all `total` repos — no suffix means
+/// "everyone".
+pub(crate) fn repo_list_suffix(
+    repos: &[&str],
+    total: usize,
+    policy: SuffixPolicy
+) -> String
+{
+    if repos.len() == total
+    {
+        return String::new();
+    }
+
+    let names = match policy
+    {
+        SuffixPolicy::Truncated if repos.len() > SUFFIX_NAME_LIMIT => format!(
+            "{}, +{}",
+            repos[..SUFFIX_NAME_LIMIT].join(", "),
+            repos.len() - SUFFIX_NAME_LIMIT
+        ),
+        SuffixPolicy::Truncated | SuffixPolicy::Full => repos.join(", ")
+    };
+
+    format!(" {}", paint(REPO_LIST, &format!("({names})")))
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn repo_list_suffix_renders_gray_names_with_leading_space()
+    {
+        let suffix = repo_list_suffix(
+            &["backend", "frontend"],
+            3,
+            SuffixPolicy::Truncated
+        );
+
+        assert_eq!(suffix, " \x1b[90m(backend, frontend)\x1b[0m");
+    }
+
+    #[test]
+    fn repo_list_suffix_is_omitted_when_group_covers_scope()
+    {
+        for policy in [SuffixPolicy::Truncated, SuffixPolicy::Full]
+        {
+            assert_eq!(repo_list_suffix(&["a", "b"], 2, policy), "");
+        }
+    }
+
+    #[test]
+    fn truncated_suffix_keeps_all_names_at_the_limit()
+    {
+        let suffix =
+            repo_list_suffix(&["a", "b", "c"], 4, SuffixPolicy::Truncated);
+
+        assert_eq!(suffix, " \x1b[90m(a, b, c)\x1b[0m");
+    }
+
+    #[test]
+    fn truncated_suffix_replaces_names_past_the_limit_with_a_count()
+    {
+        let suffix = repo_list_suffix(
+            &["a", "b", "c", "d", "e"],
+            6,
+            SuffixPolicy::Truncated
+        );
+
+        assert_eq!(suffix, " \x1b[90m(a, b, c, +2)\x1b[0m");
+    }
+
+    #[test]
+    fn full_suffix_never_truncates()
+    {
+        let suffix =
+            repo_list_suffix(&["a", "b", "c", "d", "e"], 6, SuffixPolicy::Full);
+
+        assert_eq!(suffix, " \x1b[90m(a, b, c, d, e)\x1b[0m");
+    }
+
+    #[test]
+    fn single_name_suffix_renders_plainly_under_both_policies()
+    {
+        for policy in [SuffixPolicy::Truncated, SuffixPolicy::Full]
+        {
+            assert_eq!(
+                repo_list_suffix(&["tools"], 2, policy),
+                " \x1b[90m(tools)\x1b[0m"
+            );
+        }
+    }
 }

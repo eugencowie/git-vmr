@@ -247,7 +247,7 @@ fn rebase_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: invalid upstream 'origin/main' \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: invalid upstream 'origin/main' (alpha, zeta)\n"
         ));
 
     assert!(head_contains(&beta, "origin/main"));

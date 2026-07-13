@@ -209,11 +209,9 @@ mod tests
             .run(|git, repo| git.merge(&repo.name, &repo.path, "topic"))
             .unwrap_err();
 
-        // Assert
-        assert_eq!(
-            err.to_string(),
-            "merge failed \x1b[90m(backend, frontend)\x1b[0m"
-        );
+        // Assert: the shared failure groups to one line, and the repo list
+        // is omitted because it covers every repo in scope.
+        assert_eq!(err.to_string(), "merge failed");
     }
 
     #[test]

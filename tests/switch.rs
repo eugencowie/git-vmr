@@ -147,8 +147,7 @@ fn switch_shared_branch_across_multiple_child_repositories()
         .success()
         .stdout(
             predicate::str::contains("Switched to branch 'feature/auth'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -192,7 +191,7 @@ fn switch_normalizes_behind_counts_before_grouping_success_output()
         ),
         1
     );
-    assert!(stdout.contains("(backend, frontend)"));
+    assert!(!stdout.contains("(backend, frontend)"));
     assert!(!stdout.contains("by 20 commits"));
     assert!(!stdout.contains("by 6 commits"));
     assert_eq!(current_branch(&backend), "develop");
@@ -224,10 +223,9 @@ fn switch_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(
-                "Switched to branch 'feature/auth' (backend)"
-            )
-            .and(predicate::str::contains("docs").not())
+            predicate::str::contains("Switched to branch 'feature/auth'")
+                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -259,7 +257,7 @@ fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: feature/auth \x1b[90m(frontend)\x1b[0m"
+            "fatal: invalid reference: feature/auth (frontend)"
         ));
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -287,7 +285,7 @@ fn switch_successes_are_not_rolled_back_after_later_failure()
             "Switched to branch 'feature/auth' (backend)"
         ))
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: feature/auth \x1b[90m(frontend)\x1b[0m"
+            "fatal: invalid reference: feature/auth (frontend)"
         ));
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -300,18 +298,20 @@ fn switch_reports_multiple_failures_in_repository_name_order()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path());
     let alpha = tmp.path().join("alpha");
+    let has_branch = tmp.path().join("has-branch");
     let zeta = tmp.path().join("zeta");
     setup_repo_with_initial_commit(&alpha);
+    setup_repo_with_initial_commit(&has_branch);
     setup_repo_with_initial_commit(&zeta);
+    create_branch(&has_branch, "feature/auth");
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["switch", "feature/auth"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: invalid reference: feature/auth \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: invalid reference: feature/auth (alpha, zeta)\n"
         ));
 }
 
@@ -335,7 +335,7 @@ fn switch_dirty_worktree_protection_is_delegated_to_git()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "error: Your local changes to the following files would be overwritten by checkout: \x1b[90m(backend)\x1b[0m"
+            "error: Your local changes to the following files would be overwritten by checkout:"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -360,8 +360,7 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Switched to branch 'feature/auth'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -376,8 +375,7 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Switched to branch 'feature/auth'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -403,8 +401,7 @@ fn switch_create_shared_branch_across_multiple_child_repositories_deduplicates_s
         .success()
         .stdout(
             predicate::str::contains("Switched to a new branch 'feature/auth'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -427,7 +424,7 @@ fn switch_create_short_form_creates_and_switches()
         .success()
         .stdout(
             predicate::str::contains("Switched to a new branch 'feature/auth'")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(backend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -459,7 +456,7 @@ fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .success()
         .stdout(
             predicate::str::contains("Switched to a new branch 'feature/auth'")
-                .and(predicate::str::contains("backend"))
+                .and(predicate::str::contains("(backend)").not())
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -492,7 +489,7 @@ fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_o
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
+            "fatal: a branch named 'feature/auth' already exists (backend)"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -520,7 +517,7 @@ fn switch_create_successes_are_not_rolled_back_after_failure()
             "Switched to a new branch 'feature/auth'"
         ))
         .stderr(predicate::str::contains(
-            "fatal: a branch named 'feature/auth' already exists \x1b[90m(backend)\x1b[0m"
+            "fatal: a branch named 'feature/auth' already exists (backend)"
         ));
 
     assert_eq!(current_branch(&backend), "master");
@@ -533,8 +530,10 @@ fn switch_create_reports_multiple_failures_in_repository_name_order()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path());
     let alpha = tmp.path().join("alpha");
+    let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
     setup_repo_with_initial_commit(&alpha);
+    setup_repo_with_initial_commit(&clean);
     setup_repo_with_initial_commit(&zeta);
     create_branch(&alpha, "feature/auth");
     create_branch(&zeta, "feature/auth");
@@ -544,9 +543,8 @@ fn switch_create_reports_multiple_failures_in_repository_name_order()
         .args(["switch", "--create", "feature/auth"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: a branch named 'feature/auth' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: a branch named 'feature/auth' already exists (alpha, zeta)\n"
         ));
 
     assert_eq!(current_branch(&alpha), "master");

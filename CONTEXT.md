@@ -94,7 +94,7 @@ Turning per-repo data and outcomes into styled terminal text. Rendering is pure;
 _Avoid_: formatting, displaying, output (for the act of rendering)
 
 **Repo-list suffix**:
-The parenthesised list of child repo names — "(backend, frontend)" — appended to a message or heading that does not apply to every child repo.
+The gray parenthesised list of child repo names — "(backend, frontend)" — appended to a line that does not apply to every child repo in scope, and omitted when it does: no suffix means everyone. Truncated to three names plus a count ("(a, b, c, +2)") except on failures, which name every repo.
 _Avoid_: repo annotation, repo tag
 
 ### Analytics

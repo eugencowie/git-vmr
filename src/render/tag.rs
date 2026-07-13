@@ -1,4 +1,4 @@
-use crate::render::repo_list_suffix;
+use crate::render::{SuffixPolicy, repo_list_suffix};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Renders the tag list grouped across child repos, in tag name order.
@@ -20,12 +20,12 @@ pub fn tags(repos: &[(String, Vec<String>)]) -> String
     {
         output.push_str(tag);
 
-        if tag_repos.len() != repo_count
-        {
-            let repo_names = tag_repos.into_iter().collect::<Vec<_>>();
-            output.push(' ');
-            output.push_str(&repo_list_suffix(&repo_names));
-        }
+        let repo_names = tag_repos.into_iter().collect::<Vec<_>>();
+        output.push_str(&repo_list_suffix(
+            &repo_names,
+            repo_count,
+            SuffixPolicy::Truncated
+        ));
 
         output.push('\n');
     }

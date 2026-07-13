@@ -261,7 +261,7 @@ fn rm_dry_run_reports_preview_without_mutating_short_and_long_flags()
         .success()
         .stdout(
             predicate::str::contains("rm 'src/main.rs'")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(backend)").not())
         );
     git_vmr()
         .current_dir(tmp.path())
@@ -270,7 +270,7 @@ fn rm_dry_run_reports_preview_without_mutating_short_and_long_flags()
         .success()
         .stdout(
             predicate::str::contains("rm 'src/app.rs'")
-                .and(predicate::str::contains("(frontend)"))
+                .and(predicate::str::contains("(frontend)").not())
         );
 
     // Assert
@@ -376,10 +376,8 @@ fn rm_dry_run_root_requires_recursive_and_recursive_preview_does_not_mutate()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("rm 'README.md'").and(
-                predicate::str::contains("(backend, frontend)")
-                    .or(predicate::str::contains("(frontend, backend)"))
-            )
+            predicate::str::contains("rm 'README.md'")
+                .and(predicate::str::contains("(backend, frontend)").not())
         );
 
     // Assert

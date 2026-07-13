@@ -1,10 +1,22 @@
 use crate::git::{GitCommandResult, RepoMessage, RepoOutcome};
-use crate::render::{REPO_LIST, Rendered, fail, paint};
+use crate::render::{Rendered, SuffixPolicy, fail, repo_list_suffix};
 use anyhow::Result;
 
 /// Renders aggregated per-repo outcomes: identical messages are grouped,
 /// successes become stdout, and failures become the command's error.
 pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
+{
+    let total = results.len();
+    outcomes_in_scope(results, total)
+}
+
+/// Renders outcomes against an explicit repository scope. This is used by
+/// commands whose result count is not the same as the number of child repos
+/// involved, such as a move that produces one outcome per moved entry.
+pub(crate) fn outcomes_in_scope(
+    results: Vec<GitCommandResult>,
+    total: usize
+) -> Result<Rendered>
 {
     let mut successes = Vec::new();
     let mut failures = Vec::new();
@@ -23,8 +35,7 @@ pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
     }
 
     let mut stdout = String::new();
-    for message in
-        grouped_messages(successes, RepositoryFormat::NamesUntilLimit)
+    for message in grouped_messages(successes, total, SuffixPolicy::Truncated)
     {
         stdout.push_str(&message);
         stdout.push('\n');
@@ -33,7 +44,7 @@ pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
     let rendered = Rendered { stdout, stderr: String::new() };
 
     let mut rendered_errors =
-        grouped_messages(failures, RepositoryFormat::NamesWithCount);
+        grouped_messages(failures, total, SuffixPolicy::Full);
     rendered_errors
         .extend(errors.into_iter().map(|error| format!("{error:#}")));
 
@@ -45,17 +56,10 @@ pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
     Ok(rendered)
 }
 
-const REPOSITORY_NAME_LIMIT: usize = 5;
-
-enum RepositoryFormat
-{
-    NamesUntilLimit,
-    NamesWithCount
-}
-
 fn grouped_messages(
     messages: Vec<RepoMessage>,
-    format: RepositoryFormat
+    total: usize,
+    policy: SuffixPolicy
 ) -> Vec<String>
 {
     let mut groups: Vec<(String, Vec<String>)> = Vec::new();
@@ -66,7 +70,10 @@ fn grouped_messages(
             .iter_mut()
             .find(|(message, _)| message == &repo_message.message)
         {
-            repos.push(repo_message.repo);
+            if !repos.contains(&repo_message.repo)
+            {
+                repos.push(repo_message.repo);
+            }
         }
         else
         {
@@ -77,43 +84,10 @@ fn grouped_messages(
     groups
         .into_iter()
         .map(|(message, repos)| {
-            format!("{message} {}", repository_suffix(&repos, &format))
+            let repos = repos.iter().map(String::as_str).collect::<Vec<_>>();
+            format!("{message}{}", repo_list_suffix(&repos, total, policy))
         })
         .collect()
-}
-
-fn repository_suffix(repos: &[String], format: &RepositoryFormat) -> String
-{
-    let suffix = if repos.len() == 1
-    {
-        format!("({})", repos[0])
-    }
-    else
-    {
-        match format
-        {
-            RepositoryFormat::NamesUntilLimit
-                if repos.len() > REPOSITORY_NAME_LIMIT =>
-            {
-                format!("({} repos)", repos.len())
-            }
-            RepositoryFormat::NamesUntilLimit =>
-                format!("({})", repos.join(", ")),
-            RepositoryFormat::NamesWithCount
-                if repos.len() > REPOSITORY_NAME_LIMIT =>
-            {
-                format!(
-                    "({} repos: {}, ...)",
-                    repos.len(),
-                    repos[..REPOSITORY_NAME_LIMIT].join(", ")
-                )
-            }
-            RepositoryFormat::NamesWithCount =>
-                format!("({})", repos.join(", ")),
-        }
-    };
-
-    paint(REPO_LIST, &suffix)
 }
 
 #[cfg(test)]
@@ -138,8 +112,7 @@ mod tests
         ];
 
         // Act
-        let rendered =
-            grouped_messages(messages, RepositoryFormat::NamesUntilLimit);
+        let rendered = grouped_messages(messages, 3, SuffixPolicy::Truncated);
 
         // Assert
         assert_eq!(rendered, vec![
@@ -149,7 +122,23 @@ mod tests
     }
 
     #[test]
-    fn grouped_success_messages_use_count_for_large_repository_sets()
+    fn grouped_messages_omit_the_repo_list_when_a_group_covers_all_repos()
+    {
+        // Arrange
+        let messages = vec![
+            repo_message("backend", "Already up to date."),
+            repo_message("frontend", "Already up to date."),
+        ];
+
+        // Act
+        let rendered = grouped_messages(messages, 2, SuffixPolicy::Truncated);
+
+        // Assert
+        assert_eq!(rendered, vec!["Already up to date."]);
+    }
+
+    #[test]
+    fn grouped_success_messages_truncate_large_repository_sets()
     {
         // Arrange
         let messages = (1..=6)
@@ -159,17 +148,16 @@ mod tests
             .collect();
 
         // Act
-        let rendered =
-            grouped_messages(messages, RepositoryFormat::NamesUntilLimit);
+        let rendered = grouped_messages(messages, 7, SuffixPolicy::Truncated);
 
         // Assert
         assert_eq!(rendered, vec![
-            "Already up to date. \x1b[90m(6 repos)\x1b[0m"
+            "Already up to date. \x1b[90m(repo-1, repo-2, repo-3, +3)\x1b[0m"
         ]);
     }
 
     #[test]
-    fn grouped_failure_messages_keep_repository_sample_for_large_sets()
+    fn grouped_failure_messages_name_every_repository()
     {
         // Arrange
         let messages = (1..=6)
@@ -179,12 +167,11 @@ mod tests
             .collect();
 
         // Act
-        let rendered =
-            grouped_messages(messages, RepositoryFormat::NamesWithCount);
+        let rendered = grouped_messages(messages, 7, SuffixPolicy::Full);
 
         // Assert
         assert_eq!(rendered, vec![
-            "remote rejected \x1b[90m(6 repos: repo-1, repo-2, repo-3, repo-4, repo-5, ...)\x1b[0m"
+            "remote rejected \x1b[90m(repo-1, repo-2, repo-3, repo-4, repo-5, repo-6)\x1b[0m"
         ]);
     }
 
@@ -217,9 +204,28 @@ mod tests
         let rendered = outcomes(results).unwrap();
 
         // Assert
+        assert_eq!(rendered.stdout, "Already up to date.\n");
+    }
+
+    #[test]
+    fn outcomes_keep_the_repo_list_when_quiet_successes_share_the_scope()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Success(Some(repo_message(
+                "backend",
+                "Already up to date."
+            )))),
+            Ok(RepoOutcome::Success(None)),
+        ];
+
+        // Act
+        let rendered = outcomes(results).unwrap();
+
+        // Assert
         assert_eq!(
             rendered.stdout,
-            "Already up to date. \x1b[90m(backend, frontend)\x1b[0m\n"
+            "Already up to date. \x1b[90m(backend)\x1b[0m\n"
         );
     }
 
@@ -286,5 +292,31 @@ mod tests
         let failed = err.downcast::<crate::render::Failed>().unwrap();
         assert_eq!(failed.rendered.stdout, "pushed \x1b[90m(backend)\x1b[0m\n");
         assert_eq!(failed.message, "remote rejected \x1b[90m(frontend)\x1b[0m");
+    }
+
+    #[test]
+    fn explicit_scope_deduplicates_repos_from_repeated_entry_outcomes()
+    {
+        // Arrange: two move entries failed in the same destination repo,
+        // within a command whose scope also includes the source repo.
+        let results = vec![
+            Ok(RepoOutcome::Failure(repo_message(
+                "frontend",
+                "unable to stage"
+            ))),
+            Ok(RepoOutcome::Failure(repo_message(
+                "frontend",
+                "unable to stage"
+            ))),
+        ];
+
+        // Act
+        let err = outcomes_in_scope(results, 2).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "unable to stage \x1b[90m(frontend)\x1b[0m"
+        );
     }
 }

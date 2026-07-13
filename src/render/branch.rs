@@ -1,5 +1,5 @@
 use crate::git::{Head, RepoBranches};
-use crate::render::{ACTIVE, paint, repo_list_suffix};
+use crate::render::{ACTIVE, SuffixPolicy, paint, repo_list_suffix};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Renders the branch list grouped across child repos, marking active
@@ -54,19 +54,22 @@ pub fn branches(repos: &[(String, RepoBranches)]) -> String
             output.push_str(branch);
         }
 
-        if branch_repos.len() != repo_count
-        {
-            let repo_names = branch_repos.into_iter().collect::<Vec<_>>();
-            output.push(' ');
-            output.push_str(&repo_list_suffix(&repo_names));
-        }
+        let repo_names = branch_repos.into_iter().collect::<Vec<_>>();
+        output.push_str(&repo_list_suffix(
+            &repo_names,
+            repo_count,
+            SuffixPolicy::Truncated
+        ));
 
         output.push('\n');
     }
 
     for (repo, hash) in detached
     {
-        output.push_str(&format!("* (HEAD detached at {hash}) ({repo})\n"));
+        output.push_str(&format!(
+            "* (HEAD detached at {hash}){}\n",
+            repo_list_suffix(&[repo], repo_count, SuffixPolicy::Truncated)
+        ));
     }
 
     output
@@ -145,8 +148,23 @@ mod tests
         let output = branches(&repos);
 
         assert!(output.contains("  main\n"));
-        assert!(output.contains("* (HEAD detached at a1b2c3d) (backend)\n"));
-        assert!(output.contains("* (HEAD detached at d4e5f6a) (frontend)\n"));
+        assert!(output.contains(
+            "* (HEAD detached at a1b2c3d) \x1b[90m(backend)\x1b[0m\n"
+        ));
+        assert!(output.contains(
+            "* (HEAD detached at d4e5f6a) \x1b[90m(frontend)\x1b[0m\n"
+        ));
+    }
+
+    #[test]
+    fn renders_detached_head_line_without_repo_list_for_single_repo()
+    {
+        let repos =
+            vec![("backend".to_owned(), detached_repo(["main"], "a1b2c3d"))];
+
+        let output = branches(&repos);
+
+        assert!(output.contains("* (HEAD detached at a1b2c3d)\n"));
     }
 
     #[test]

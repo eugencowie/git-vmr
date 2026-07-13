@@ -158,7 +158,10 @@ fn pull_forwards_repository_and_refspec_arguments()
         .args(["pull", "origin", "release"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "HEAD"), head(&source, "release"));
@@ -185,7 +188,10 @@ fn pull_treats_single_positional_argument_as_repository()
         .args(["pull", "main"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)"))
+        .stdout(
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&backend, "HEAD"), head(&source, "master"));
@@ -217,7 +223,10 @@ fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .arg("pull")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Already up to date. (backend)"))
+        .stdout(
+            predicate::str::contains("Already up to date.")
+                .and(predicate::str::contains("(backend)").not())
+        )
         .stderr(predicate::str::is_empty());
 }
 
@@ -248,7 +257,7 @@ fn pull_failure_does_not_stop_successful_repositories()
         .failure()
         .stdout(predicate::str::contains("(frontend)"))
         .stderr(predicate::str::contains(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(backend)\x1b[0m"
+            "fatal: 'origin' does not appear to be a git repository (backend)"
         ));
 
     assert_eq!(head(&frontend, "HEAD"), head(&frontend_source, "master"));
@@ -279,7 +288,7 @@ fn pull_reports_success_failure_and_failure_order_with_repository_suffixes()
         .failure()
         .stdout(predicate::str::contains("(backend)"))
         .stderr(predicate::str::starts_with(
-            "fatal: 'origin' does not appear to be a git repository \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: 'origin' does not appear to be a git repository (alpha, zeta)\n"
         ));
 }
 
@@ -301,7 +310,12 @@ fn pull_delegates_missing_upstream_to_git()
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("(backend)"));
+        .stderr(
+            predicate::str::contains(
+                "There is no tracking information for the current branch."
+            )
+            .and(predicate::str::contains("(backend)").not())
+        );
 }
 
 #[test]
@@ -359,8 +373,8 @@ fn pull_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("backend")
-                .and(predicate::str::contains("frontend"))
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 
@@ -373,8 +387,8 @@ fn pull_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("backend")
-                .and(predicate::str::contains("frontend"))
+            predicate::str::contains("Updating")
+                .and(predicate::str::contains("(backend, frontend)").not())
         )
         .stderr(predicate::str::is_empty());
 

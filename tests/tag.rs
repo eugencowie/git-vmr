@@ -289,7 +289,7 @@ fn tag_create_partial_failure_does_not_stop_other_repositories()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
-            "fatal: tag 'v1.0.0' already exists \x1b[90m(backend)\x1b[0m"
+            "fatal: tag 'v1.0.0' already exists (backend)"
         ));
 
     assert!(tag_exists(&frontend, "v1.0.0"));
@@ -297,7 +297,7 @@ fn tag_create_partial_failure_does_not_stop_other_repositories()
 }
 
 #[test]
-fn tag_create_reports_failures_with_repository_suffixes()
+fn tag_create_omits_repository_suffix_when_every_repo_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     fs::create_dir(tmp.path().join(".gitvmr"))
@@ -314,10 +314,9 @@ fn tag_create_reports_failures_with_repository_suffixes()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(
-            predicate::str::contains(
-                "fatal: tag 'v1.0.0' already exists \x1b[90m(backend)\x1b[0m"
-            )
-            .and(predicate::str::contains("fatal: git tag failed").not())
+            predicate::str::contains("fatal: tag 'v1.0.0' already exists")
+                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("fatal: git tag failed").not())
         );
 }
 
@@ -328,10 +327,13 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
     fs::create_dir(tmp.path().join(".gitvmr"))
         .expect("failed to create marker");
     let alpha = tmp.path().join("alpha");
+    let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
     init_repo(&alpha);
+    init_repo(&clean);
     init_repo(&zeta);
     commit_file(&alpha, "README.md");
+    commit_file(&clean, "README.md");
     commit_file(&zeta, "README.md");
     git(&alpha, ["tag", "v1.0.0"]);
     git(&zeta, ["tag", "v1.0.0"]);
@@ -343,7 +345,7 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: tag 'v1.0.0' already exists \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "fatal: tag 'v1.0.0' already exists (alpha, zeta)\n"
         ));
 }
 
@@ -368,9 +370,10 @@ fn tag_delete_deletes_tag_in_every_child_repository()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+            predicate::str::is_match(
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+            )
+            .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
@@ -399,9 +402,10 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("backend"))
-                .and(predicate::str::contains("frontend"))
+            predicate::str::is_match(
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+            )
+            .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
@@ -428,7 +432,7 @@ fn tag_delete_skips_non_git_child_directories()
         .success()
         .stdout(
             predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(backend)").not())
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -465,7 +469,7 @@ fn tag_delete_partial_failure_does_not_stop_other_repositories()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "error: tag 'v1.0.0' not found. \x1b[90m(backend)\x1b[0m"
+            "error: tag 'v1.0.0' not found. (backend)"
         ));
 
     assert!(!tag_exists(&frontend, "v1.0.0"));
@@ -479,21 +483,24 @@ fn tag_delete_reports_failures_with_repository_suffixes()
     fs::create_dir(tmp.path().join(".gitvmr"))
         .expect("failed to create marker");
     let backend = tmp.path().join("backend");
+    let tagged = tmp.path().join("tagged");
     let tools = tmp.path().join("tools");
     init_repo(&backend);
+    init_repo(&tagged);
     init_repo(&tools);
     commit_file(&backend, "README.md");
+    commit_file(&tagged, "README.md");
     commit_file(&tools, "README.md");
+    git(&tagged, ["tag", "v1.0.0"]);
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["tag", "-d", "v1.0.0"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: tag 'v1.0.0' not found. \x1b[90m(backend, tools)\x1b[0m"
+                "error: tag 'v1.0.0' not found. (backend, tools)"
             )
             .and(predicate::str::contains("fatal: git tag failed").not())
         );
@@ -506,19 +513,22 @@ fn tag_delete_reports_multiple_failures_in_repository_name_order()
     fs::create_dir(tmp.path().join(".gitvmr"))
         .expect("failed to create marker");
     let alpha = tmp.path().join("alpha");
+    let tagged = tmp.path().join("tagged");
     let zeta = tmp.path().join("zeta");
     init_repo(&alpha);
+    init_repo(&tagged);
     init_repo(&zeta);
     commit_file(&alpha, "README.md");
+    commit_file(&tagged, "README.md");
     commit_file(&zeta, "README.md");
+    git(&tagged, ["tag", "v1.0.0"]);
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["tag", "-d", "v1.0.0"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "error: tag 'v1.0.0' not found. \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "error: tag 'v1.0.0' not found. (alpha, zeta)\n"
         ));
 }
