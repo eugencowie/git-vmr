@@ -85,7 +85,7 @@ Grouping repo outcomes with identical messages, so a command reports once per me
 _Avoid_: output grouping, deduplication
 
 **Head**:
-Where a child repo currently points: a branch, an unborn branch (no commits yet), or a detached commit. Not every source can observe unbornness; those that cannot report a plain branch.
+Where a child repo currently points: a branch, an unborn branch (no commits yet), or a detached commit. Not every source can observe unbornness; those that cannot, report a plain branch instead.
 _Avoid_: current branch, HEAD state, initial (for unborn)
 
 ### Output

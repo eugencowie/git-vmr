@@ -8,7 +8,7 @@ const SHORT_HASH_LEN: usize = 8;
 
 /// Where a child repo currently points: a branch, an unborn branch (no
 /// commits yet), or a detached commit's short hash. Only the status header
-/// can observe unbornness; sources that cannot report a plain branch.
+/// can observe unbornness; other sources report a plain branch instead.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Head
 {
