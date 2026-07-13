@@ -180,6 +180,29 @@ mod tests
                     .enabled_for_major_version("1")
             );
         }
+
+        #[test]
+        fn disabled_record_does_not_update_state()
+        {
+            let analytics = Analytics { enabled: Some(false) };
+            let mut state = AnalyticsState {
+                session_id: Some("session-1".to_owned()),
+                last_activity: Some(now() - Duration::hours(4))
+            };
+            let original_state = state.clone();
+
+            record(&analytics, &mut state, CommandEvent {
+                name: "list".to_owned(),
+                success: true,
+                duration_ms: 1,
+                flags: Vec::new(),
+                global_flags: Vec::new()
+            });
+
+            assert_eq!(state.session_id, original_state.session_id);
+            assert_eq!(state.last_activity, original_state.last_activity);
+            assert_eq!(state, original_state);
+        }
     }
 
     mod analytics_state
