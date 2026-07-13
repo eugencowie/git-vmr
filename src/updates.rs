@@ -338,10 +338,9 @@ mod tests
         assert_eq!(version.to_string(), "1.2.3");
     }
 
-    mod update_state
+    mod updates
     {
         use super::*;
-        use std::time::Duration as StdDuration;
 
         #[test]
         fn default_configuration_checks_daily()
@@ -351,6 +350,59 @@ mod tests
 
             // Assert
             assert_eq!(updates.check_frequency, Frequency::from_days(1));
+        }
+
+        #[test]
+        fn to_string_serializes_to_toml()
+        {
+            let updates = Updates::default();
+
+            let toml = toml::to_string(&updates).unwrap();
+
+            assert_eq!(toml, "checkfrequency = \"1day\"\n");
+        }
+
+        #[test]
+        fn from_str_deserializes_from_toml()
+        {
+            let updates: Updates =
+                toml::from_str("checkfrequency = \"1 week\"").unwrap();
+
+            assert_eq!(updates.check_frequency, Frequency::from_days(7));
+        }
+    }
+
+    mod update_state
+    {
+        use super::*;
+        use std::time::Duration as StdDuration;
+
+        #[test]
+        fn to_string_serializes_to_toml()
+        {
+            let state = UpdateState {
+                last_check: Some(now()),
+                last_available: Some("1.2.3".to_owned())
+            };
+
+            let toml = toml::to_string(&state).unwrap();
+
+            assert_eq!(
+                toml,
+                "last_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\"\n"
+            );
+        }
+
+        #[test]
+        fn from_str_deserializes_from_toml()
+        {
+            let state: UpdateState = toml::from_str(
+                "last_check = \"2026-06-06T12:00:00Z\"\nlast_available = \"1.2.3\""
+            )
+            .unwrap();
+
+            assert_eq!(state.last_check, Some(now()));
+            assert_eq!(state.last_available, Some("1.2.3".to_owned()));
         }
 
         #[test]

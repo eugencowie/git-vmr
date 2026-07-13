@@ -187,6 +187,43 @@ mod tests
         use super::*;
 
         #[test]
+        fn default_has_default_values()
+        {
+            let state = AnalyticsState::default();
+
+            assert_eq!(state.session_id, None);
+            assert_eq!(state.last_activity, None);
+        }
+
+        #[test]
+        fn to_string_serializes_to_toml()
+        {
+            let state = AnalyticsState {
+                session_id: Some("session-1".to_owned()),
+                last_activity: Some(now())
+            };
+
+            let toml = toml::to_string(&state).unwrap();
+
+            assert_eq!(
+                toml,
+                "session_id = \"session-1\"\nlast_activity = \"2026-06-06T12:00:00Z\"\n"
+            );
+        }
+
+        #[test]
+        fn from_str_deserializes_from_toml()
+        {
+            let state: AnalyticsState = toml::from_str(
+                "session_id = \"session-1\"\nlast_activity = \"2026-06-06T12:00:00Z\""
+            )
+            .unwrap();
+
+            assert_eq!(state.session_id, Some("session-1".to_owned()));
+            assert_eq!(state.last_activity, Some(now()));
+        }
+
+        #[test]
         fn missing_session_selects_new_id()
         {
             let mut state = AnalyticsState::default();
