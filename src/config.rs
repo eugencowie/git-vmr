@@ -1,15 +1,18 @@
-mod analytics;
-mod core;
-mod updates;
-
+use crate::analytics::Analytics;
 use crate::cli::APP_NAME;
-pub use analytics::Analytics;
+use crate::updates::Updates;
 use anyhow::{Context, Result};
-pub use core::Core;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
-pub use updates::{Frequency, Updates};
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Core
+{
+    /// Configuration schema version
+    #[serde(default)]
+    pub version: u32
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -116,7 +119,7 @@ mod tests
     mod global_config
     {
         use super::*;
-        use updates::Frequency;
+        use crate::updates::Frequency;
 
         #[test]
         fn default_has_default_values()
@@ -158,7 +161,10 @@ mod tests
             // Assert
             assert_eq!(config.core.version, 42);
             assert_eq!(config.updates.check_frequency, Frequency::from_days(7));
-            assert!(!config.analytics.enabled());
+            assert_eq!(
+                toml::to_string(&config.analytics).unwrap(),
+                "enabled = false\n"
+            );
         }
 
         #[test]
@@ -193,7 +199,10 @@ mod tests
             let config: GlobalConfig =
                 toml::from_str("[analytics]\nenabled = true").unwrap();
 
-            assert!(config.analytics.enabled());
+            assert_eq!(
+                toml::to_string(&config.analytics).unwrap(),
+                "enabled = true\n"
+            );
         }
 
         #[test]
@@ -202,7 +211,10 @@ mod tests
             let config: GlobalConfig =
                 toml::from_str("[analytics]\nenabled = false").unwrap();
 
-            assert!(!config.analytics.enabled());
+            assert_eq!(
+                toml::to_string(&config.analytics).unwrap(),
+                "enabled = false\n"
+            );
         }
 
         #[test]

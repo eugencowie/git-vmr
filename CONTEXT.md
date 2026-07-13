@@ -103,9 +103,19 @@ _Avoid_: repo annotation, repo tag
 
 ### Analytics
 
+**Analytics session**:
+The rolling window that groups analytics events: the session ID is reused while activity stays within the window, and rotated once it expires.
+_Avoid_: session (unqualified), tracking session
+
 **Event metadata**:
 The record of what was invoked: the dotted command name and the names of flags explicitly given on the command line, derived generically from the CLI definition. Names only, never values; positionals excluded.
 _Avoid_: telemetry payload, event props, flag list
+
+### Updates
+
+**Update check**:
+The scheduled query for a newer version: due when the configured check frequency has elapsed, with the attempt recorded before the query, so failures don't repeat, and quiet on every failure path.
+_Avoid_: version check, update poll
 
 ### Persistence
 
