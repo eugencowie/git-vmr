@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git, git_vmr, init_repo};
+use common::{commit_file, git, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 
@@ -27,8 +27,7 @@ fn status_errors_outside_a_vmr()
 fn status_in_vmr_root_reports_child_repo_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -50,8 +49,7 @@ fn status_in_vmr_root_reports_child_repo_changes()
 fn status_reports_clean_summary_for_clean_child_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -69,8 +67,7 @@ fn status_reports_clean_summary_for_clean_child_repo()
 fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let committed = tmp.path().join("committed");
     let new_repo = tmp.path().join("new-repo");
     init_repo(&committed);
@@ -104,8 +101,7 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -129,8 +125,7 @@ fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 fn status_with_no_child_repos_succeeds_with_no_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     fs::create_dir(tmp.path().join("docs"))
         .expect("failed to create non repo dir");
 
@@ -147,8 +142,7 @@ fn status_with_no_child_repos_succeeds_with_no_output()
 fn status_reports_staged_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -171,8 +165,7 @@ fn status_reports_staged_changes()
 fn status_fails_on_corrupted_git_dir()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path());
     let repo = tmp.path().join("broken");
     fs::create_dir(&repo).expect("failed to create repo");
     fs::write(repo.join(".git"), "not a gitfile\n")
