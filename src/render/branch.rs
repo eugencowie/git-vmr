@@ -24,8 +24,16 @@ pub fn branches(repos: &[(String, RepoBranches)]) -> String
 
         match &branches.head
         {
-            Head::Branch(branch) | Head::Unborn(branch) =>
+            Head::Branch(branch) =>
             {
+                active_branches.insert(branch.as_str());
+            }
+            Head::Unborn(branch) =>
+            {
+                branch_groups
+                    .entry(branch.as_str())
+                    .or_default()
+                    .insert(repo.as_str());
                 active_branches.insert(branch.as_str());
             }
             Head::Detached(hash) =>
@@ -138,6 +146,19 @@ mod tests
     }
 
     #[test]
+    fn renders_unborn_head_as_an_active_branch()
+    {
+        let repos = vec![
+            ("backend".to_owned(), unborn_repo([], "main")),
+            ("frontend".to_owned(), repo_branches(["main"], "main")),
+        ];
+
+        let output = branches(&repos);
+
+        assert_eq!(output, "* \x1b[32mmain\x1b[0m\n");
+    }
+
+    #[test]
     fn renders_detached_head_lines()
     {
         let repos = vec![
@@ -201,6 +222,20 @@ mod tests
                 .map(|branch| (*branch).to_owned())
                 .collect(),
             head: Head::Detached(hash.to_owned())
+        }
+    }
+
+    fn unborn_repo<const N: usize>(
+        branches: [&str; N],
+        active: &str
+    ) -> RepoBranches
+    {
+        RepoBranches {
+            branches: branches
+                .iter()
+                .map(|branch| (*branch).to_owned())
+                .collect(),
+            head: Head::Unborn(active.to_owned())
         }
     }
 }
