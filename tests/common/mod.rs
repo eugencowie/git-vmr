@@ -35,22 +35,11 @@ pub fn git_vmr() -> Command
 
 pub fn git<const N: usize>(dir: &Path, args: [&str; N])
 {
-    let output = std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .expect("failed to run git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed in '{}'\nstderr: {}\nstdout: {}",
-        args,
-        dir.display(),
-        String::from_utf8_lossy(&output.stderr),
-        String::from_utf8_lossy(&output.stdout)
-    );
+    run_git(dir, args);
 }
 
-pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
+fn run_git<const N: usize>(dir: &Path, args: [&str; N])
+-> std::process::Output
 {
     let output = std::process::Command::new("git")
         .args(args)
@@ -65,6 +54,12 @@ pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
         String::from_utf8_lossy(&output.stderr),
         String::from_utf8_lossy(&output.stdout)
     );
+    output
+}
+
+pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
+{
+    let output = run_git(dir, args);
 
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
@@ -80,6 +75,21 @@ pub fn init_repo(path: &Path)
     git(path, ["init"]);
     git(path, ["config", "user.email", "test@example.com"]);
     git(path, ["config", "user.name", "Test User"]);
+}
+
+pub fn clone_repo(source: &Path, destination: &Path)
+{
+    let parent = destination.parent().expect("clone destination has parent");
+    git(parent, [
+        "clone",
+        source.to_str().expect("source path should be UTF-8"),
+        destination
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("destination name should be UTF-8")
+    ]);
+    git(destination, ["config", "user.email", "test@example.com"]);
+    git(destination, ["config", "user.name", "Test User"]);
 }
 
 pub fn write_commit(path: &Path, file: &str, content: &str, message: &str)

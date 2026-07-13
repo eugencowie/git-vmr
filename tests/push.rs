@@ -1,6 +1,6 @@
 mod common;
 
-use common::{git, git_output, git_vmr, init_vmr, write_commit};
+use common::{clone_repo, git, git_output, git_vmr, init_vmr, write_commit};
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,21 +9,6 @@ fn init_bare_repo(path: &Path)
 {
     fs::create_dir_all(path).expect("failed to create bare repo dir");
     git(path, ["init", "--bare"]);
-}
-
-fn clone_repo(source: &Path, destination: &Path)
-{
-    let parent = destination.parent().expect("clone destination has parent");
-    git(parent, [
-        "clone",
-        source.to_str().expect("source path should be UTF-8"),
-        destination
-            .file_name()
-            .and_then(|name| name.to_str())
-            .expect("destination name should be UTF-8")
-    ]);
-    git(destination, ["config", "user.email", "test@example.com"]);
-    git(destination, ["config", "user.name", "Test User"]);
 }
 
 fn setup_remote_and_clone(

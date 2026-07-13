@@ -367,23 +367,17 @@ fn worktree_add_explicit_branch_creates_child_worktrees_on_requested_branch()
 #[test]
 fn worktree_add_explicit_branch_uses_commit_ish_as_start_point()
 {
-    let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    let vmr = tmp.path().join("vmr");
-    fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
-    let backend = vmr.join("backend");
-    let frontend = vmr.join("frontend");
-    init_repo(&backend);
-    init_repo(&frontend);
-    commit_file(&backend, "README.md");
-    commit_file(&frontend, "README.md");
+    let fixture = TestVmr::with_repos(&["backend", "frontend"]);
+    let vmr = fixture.path();
+    let backend = fixture.repo("backend");
+    let frontend = fixture.repo("frontend");
     git(&backend, ["branch", "main"]);
     git(&frontend, ["branch", "main"]);
     write_commit(&backend, "after-main.txt", "backend\n", "after-main.txt");
     write_commit(&frontend, "after-main.txt", "frontend\n", "after-main.txt");
 
     git_vmr()
-        .current_dir(&vmr)
+        .current_dir(vmr)
         .args(["worktree", "add", "-b", "feature/auth", "../wt", "main"])
         .assert()
         .success()
@@ -397,10 +391,10 @@ fn worktree_add_explicit_branch_uses_commit_ish_as_start_point()
         )
         .stderr(predicate::str::is_empty());
 
-    assert_eq!(current_branch(&tmp.path().join("wt/backend")), "feature/auth");
-    assert_eq!(current_branch(&tmp.path().join("wt/frontend")), "feature/auth");
-    assert!(!tmp.path().join("wt/backend/after-main.txt").exists());
-    assert!(!tmp.path().join("wt/frontend/after-main.txt").exists());
+    assert_eq!(current_branch(&fixture.sibling("wt/backend")), "feature/auth");
+    assert_eq!(current_branch(&fixture.sibling("wt/frontend")), "feature/auth");
+    assert!(!fixture.sibling("wt/backend/after-main.txt").exists());
+    assert!(!fixture.sibling("wt/frontend/after-main.txt").exists());
 }
 
 #[test]
@@ -1125,10 +1119,12 @@ fn worktree_remove_force_delete_does_not_force_delete_unmerged_branch()
     let fixture = TestVmr::with_repos(&["backend"]);
     let vmr = fixture.path();
     add_worktrees(vmr);
-    fs::write(fixture.sibling("wt/backend/README.md"), "dirty\n")
-        .expect("failed to dirty worktree");
-    git(&fixture.sibling("wt/backend"), ["add", "README.md"]);
-    git(&fixture.sibling("wt/backend"), ["commit", "-m", "topic"]);
+    write_commit(
+        &fixture.sibling("wt/backend"),
+        "README.md",
+        "dirty\n",
+        "topic"
+    );
 
     git_vmr()
         .current_dir(vmr)
