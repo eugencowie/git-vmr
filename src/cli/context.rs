@@ -20,8 +20,9 @@ pub struct CliContext
     /// Global runtime state
     pub global_state: FileStore<GlobalState>,
 
-    /// Warnings raised while loading context data
-    pub warnings: Vec<String>,
+    /// Warnings raised while loading context data. Private so the
+    /// constructor is the only way to build a context outside this module.
+    warnings: Vec<String>,
 
     /// Git operations adapter
     pub git: Git
@@ -29,15 +30,17 @@ pub struct CliContext
 
 impl CliContext
 {
-    /// Build context for command execution
+    /// Build context for command execution from resolved file paths
     pub fn new(
         display_name: &str,
-        working_dir: &Option<PathBuf>
+        working_dir: &Option<PathBuf>,
+        config_path: PathBuf,
+        state_path: PathBuf
     ) -> Result<Self>
     {
-        let global_config = FileStore::load(GlobalConfig::resolve_path(None)?)?;
+        let global_config = FileStore::load(config_path)?;
         let (global_state, state_warning) =
-            FileStore::load_or_default(GlobalState::resolve_path(None)?);
+            FileStore::load_or_default(state_path);
 
         // Resolve inputs needed by commands
         Ok(Self {
@@ -48,6 +51,12 @@ impl CliContext
             warnings: state_warning.into_iter().collect(),
             git: Git::subprocess()
         })
+    }
+
+    /// Warnings raised while loading context data
+    pub fn warnings(&self) -> &[String]
+    {
+        &self.warnings
     }
 
     /// Save changes to the context
@@ -94,6 +103,20 @@ mod tests
 {
     use super::*;
     use std::fs;
+    use std::path::Path;
+
+    fn new_context(
+        tmp: &Path,
+        working_dir: &Option<PathBuf>
+    ) -> Result<CliContext>
+    {
+        CliContext::new(
+            "git vmr",
+            working_dir,
+            tmp.join("config.toml"),
+            tmp.join("state.toml")
+        )
+    }
 
     #[test]
     fn saves_global_config_and_state_changes()
@@ -139,7 +162,7 @@ mod tests
         let working_dir = Some(nested.join("..").join("nested"));
 
         // Act
-        let context = CliContext::new("git vmr", &working_dir).unwrap();
+        let context = new_context(tmp.path(), &working_dir).unwrap();
 
         // Assert
         assert_eq!(context.working_dir, nested.canonicalize().unwrap());
@@ -155,7 +178,7 @@ mod tests
         let working_dir = Some(file.clone());
 
         // Act
-        let Err(err) = CliContext::new("git vmr", &working_dir)
+        let Err(err) = new_context(tmp.path(), &working_dir)
         else
         {
             panic!("expected working directory validation to fail");
@@ -180,7 +203,7 @@ mod tests
         let working_dir = Some(missing.clone());
 
         // Act
-        let Err(err) = CliContext::new("git vmr", &working_dir)
+        let Err(err) = new_context(tmp.path(), &working_dir)
         else
         {
             panic!("expected working directory validation to fail");
@@ -200,9 +223,51 @@ mod tests
         let working_dir = None;
 
         // Act
-        let context = CliContext::new("git vmr", &working_dir).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let context = new_context(tmp.path(), &working_dir).unwrap();
 
         // Assert
         assert_eq!(context.working_dir, env::current_dir().unwrap());
+    }
+
+    #[test]
+    fn fails_on_malformed_global_config()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("config.toml"), "not = valid = toml")
+            .unwrap();
+
+        // Act
+        let Err(err) = new_context(tmp.path(), &None)
+        else
+        {
+            panic!("expected strict global config load to fail");
+        };
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "failed to parse {}",
+                tmp.path().join("config.toml").display()
+            )
+        );
+    }
+
+    #[test]
+    fn defaults_and_warns_on_malformed_global_state()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("state.toml"), "not = valid = toml").unwrap();
+
+        // Act
+        let context = new_context(tmp.path(), &None).unwrap();
+
+        // Assert
+        assert_eq!(*context.global_state, GlobalState::default());
+        assert_eq!(context.warnings().len(), 1);
+        assert!(context.warnings()[0].contains("using defaults"));
     }
 }

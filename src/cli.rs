@@ -4,6 +4,8 @@ mod event_meta;
 
 use crate::analytics::CommandEvent;
 use crate::commands::Command;
+use crate::config::GlobalConfig;
+use crate::state::GlobalState;
 use crate::{analytics, render, updates};
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
@@ -78,12 +80,16 @@ impl Cli
     /// Run command
     pub fn run(self) -> Result<()>
     {
-        // Build context
-        let mut context =
-            CliContext::new(&self.display_name, &self.working_dir)?;
+        // Build context from the resolved global config and state paths
+        let mut context = CliContext::new(
+            &self.display_name,
+            &self.working_dir,
+            GlobalConfig::resolve_path(None)?,
+            GlobalState::resolve_path(None)?
+        )?;
 
         // Report context load warnings without failing the command
-        for warning in &context.warnings
+        for warning in context.warnings()
         {
             eprintln!("warning: {warning}");
         }
