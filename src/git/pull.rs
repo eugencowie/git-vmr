@@ -30,14 +30,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Quiet
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git pull failed"
-            }
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(Streams::StderrThenStdout, "git pull failed")
         )
     }
 }

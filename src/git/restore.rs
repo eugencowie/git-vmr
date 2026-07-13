@@ -34,8 +34,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Quiet,
-            FailureReport::Detailed { command: "restore" }
+            SuccessReport::quiet(),
+            FailureReport::detailed("restore")
         )
     }
 }

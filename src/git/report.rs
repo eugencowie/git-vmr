@@ -1,7 +1,7 @@
 //! Report policies: the declarative per-operation rule for how a repo
 //! outcome's message is produced — which output streams are read in which
-//! order, and whether an empty result means quiet success or a canned
-//! fallback.
+//! order, whether an empty result means quiet success or a canned fallback,
+//! and any transform applied to the message before it reports.
 
 use crate::git::{
     GitCommandResult, GitOutput, failure_message, quiet_success, stderr,
@@ -40,8 +40,15 @@ impl Streams
     }
 }
 
-/// How a successful operation reports.
-pub(crate) enum SuccessReport
+/// How a successful operation reports: where the message comes from, and an
+/// optional transform applied to every message the policy emits.
+pub(crate) struct SuccessReport
+{
+    source: SuccessSource,
+    transform: Option<fn(String) -> String>
+}
+
+enum SuccessSource
 {
     /// Never reports.
     Quiet,
@@ -54,15 +61,86 @@ pub(crate) enum SuccessReport
     }
 }
 
-/// What a [`SuccessReport::Line`] reports when its streams are blank.
+impl SuccessReport
+{
+    /// Never reports.
+    pub(crate) fn quiet() -> Self
+    {
+        Self::with_source(SuccessSource::Quiet)
+    }
+
+    /// Always reports this exact message.
+    pub(crate) fn fixed(message: String) -> Self
+    {
+        Self::with_source(SuccessSource::Fixed(message))
+    }
+
+    /// Reports the first non-empty line from `from`.
+    pub(crate) fn line(from: Streams, on_empty: OnEmpty) -> Self
+    {
+        Self::with_source(SuccessSource::Line { from, on_empty })
+    }
+
+    /// Applies `transform` to every message this policy emits.
+    pub(crate) fn map(self, transform: fn(String) -> String) -> Self
+    {
+        Self { transform: Some(transform), ..self }
+    }
+
+    fn with_source(source: SuccessSource) -> Self
+    {
+        Self { source, transform: None }
+    }
+
+    fn message(&self, output: &GitOutput) -> Option<String>
+    {
+        let message = match &self.source
+        {
+            SuccessSource::Quiet => None,
+            SuccessSource::Fixed(message) => Some(message.clone()),
+            SuccessSource::Line { from, on_empty } =>
+            {
+                let line = from.first_line(output, "");
+
+                if line.is_empty()
+                {
+                    match on_empty
+                    {
+                        OnEmpty::Quiet => None,
+                        OnEmpty::Text(text) => Some((*text).to_owned())
+                    }
+                }
+                else
+                {
+                    Some(line)
+                }
+            }
+        };
+
+        match self.transform
+        {
+            Some(transform) => message.map(transform),
+            None => message
+        }
+    }
+}
+
+/// What a [`SuccessReport::line`] reports when its streams are blank.
 pub(crate) enum OnEmpty
 {
     Quiet,
     Text(&'static str)
 }
 
-/// How a failed operation reports.
-pub(crate) enum FailureReport
+/// How a failed operation reports: where the message comes from, and an
+/// optional transform applied to every message the policy emits.
+pub(crate) struct FailureReport
+{
+    source: FailureSource,
+    transform: Option<fn(String) -> String>
+}
+
+enum FailureSource
 {
     /// The first non-empty line from `from`, or `fallback`.
     Line
@@ -82,6 +160,71 @@ pub(crate) enum FailureReport
     }
 }
 
+impl FailureReport
+{
+    /// The first non-empty line from `from`, or `fallback`.
+    pub(crate) fn line(from: Streams, fallback: &'static str) -> Self
+    {
+        Self::with_source(FailureSource::Line { from, fallback })
+    }
+
+    /// `git {command} failed for '{path}': {stderr}`.
+    pub(crate) fn detailed(command: &'static str) -> Self
+    {
+        Self::with_source(FailureSource::Detailed { command })
+    }
+
+    /// The last non-empty stderr line — git prints its summary error last —
+    /// else the first non-empty stdout line, else `fallback`.
+    pub(crate) fn last_stderr_line(fallback: &'static str) -> Self
+    {
+        Self::with_source(FailureSource::LastStderrLine { fallback })
+    }
+
+    /// Applies `transform` to every message this policy emits.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "mirrors SuccessReport::map; no operation transforms \
+                      a failure message yet"
+        )
+    )]
+    pub(crate) fn map(self, transform: fn(String) -> String) -> Self
+    {
+        Self { transform: Some(transform), ..self }
+    }
+
+    fn with_source(source: FailureSource) -> Self
+    {
+        Self { source, transform: None }
+    }
+
+    fn message(&self, repo_path: &Path, output: &GitOutput) -> String
+    {
+        let message = match &self.source
+        {
+            FailureSource::Line { from, fallback } =>
+                from.first_line(output, fallback),
+            FailureSource::Detailed { command } => format!(
+                "git {command} failed for '{}': {}",
+                repo_path.display(),
+                stderr(output)
+            ),
+            FailureSource::LastStderrLine { fallback } =>
+                last_line(&output.stderr).unwrap_or_else(|| {
+                    Streams::StdoutOnly.first_line(output, fallback)
+                }),
+        };
+
+        match self.transform
+        {
+            Some(transform) => transform(message),
+            None => message
+        }
+    }
+}
+
 /// Maps a git invocation's output to a repo outcome by applying the
 /// operation's report policies.
 pub(crate) fn command_result(
@@ -94,49 +237,15 @@ pub(crate) fn command_result(
 {
     if output.status.success()
     {
-        Ok(match success
+        Ok(match success.message(output)
         {
-            SuccessReport::Quiet => quiet_success(),
-            SuccessReport::Fixed(message) =>
-                success_message(repo_name, message),
-            SuccessReport::Line { from, on_empty } =>
-            {
-                let line = from.first_line(output, "");
-
-                if line.is_empty()
-                {
-                    match on_empty
-                    {
-                        OnEmpty::Quiet => quiet_success(),
-                        OnEmpty::Text(text) =>
-                            success_message(repo_name, text.to_owned()),
-                    }
-                }
-                else
-                {
-                    success_message(repo_name, line)
-                }
-            }
+            None => quiet_success(),
+            Some(message) => success_message(repo_name, message)
         })
     }
     else
     {
-        let message = match failure
-        {
-            FailureReport::Line { from, fallback } =>
-                from.first_line(output, fallback),
-            FailureReport::Detailed { command } => format!(
-                "git {command} failed for '{}': {}",
-                repo_path.display(),
-                stderr(output)
-            ),
-            FailureReport::LastStderrLine { fallback } =>
-                last_line(&output.stderr).unwrap_or_else(|| {
-                    Streams::StdoutOnly.first_line(output, fallback)
-                }),
-        };
-
-        Ok(failure_message(repo_name, message))
+        Ok(failure_message(repo_name, failure.message(repo_path, output)))
     }
 }
 
@@ -197,6 +306,11 @@ mod tests
         }
     }
 
+    fn shout(message: String) -> String
+    {
+        message.to_uppercase()
+    }
+
     #[test]
     fn streams_read_in_declared_priority_order()
     {
@@ -246,11 +360,8 @@ mod tests
             "backend",
             repo_path(),
             &output(0, "chatter\n", "chatter\n"),
-            SuccessReport::Quiet,
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "failed"
-            }
+            SuccessReport::quiet(),
+            FailureReport::line(Streams::StderrThenStdout, "failed")
         )
         .unwrap();
 
@@ -264,11 +375,8 @@ mod tests
             "backend",
             repo_path(),
             &output(0, "chatter\n", ""),
-            SuccessReport::Fixed("Deleted branch topic".to_owned()),
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "failed"
-            }
+            SuccessReport::fixed("Deleted branch topic".to_owned()),
+            FailureReport::line(Streams::StderrThenStdout, "failed")
         )
         .unwrap();
 
@@ -290,14 +398,8 @@ mod tests
                 "backend",
                 repo_path(),
                 &output(0, "", ""),
-                SuccessReport::Line {
-                    from: Streams::StdoutThenStderr,
-                    on_empty
-                },
-                FailureReport::Line {
-                    from: Streams::StderrThenStdout,
-                    fallback: "failed"
-                }
+                SuccessReport::line(Streams::StdoutThenStderr, on_empty),
+                FailureReport::line(Streams::StderrThenStdout, "failed")
             )
             .unwrap();
 
@@ -312,14 +414,8 @@ mod tests
             "backend",
             repo_path(),
             &output(0, "\nfirst real line\nsecond line\n", ""),
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Quiet
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "failed"
-            }
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(Streams::StderrThenStdout, "failed")
         )
         .unwrap();
 
@@ -336,11 +432,11 @@ mod tests
                 "backend",
                 repo_path(),
                 &output(1, "", stderr),
-                SuccessReport::Quiet,
-                FailureReport::Line {
-                    from: Streams::StderrThenStdout,
-                    fallback: "git push failed"
-                }
+                SuccessReport::quiet(),
+                FailureReport::line(
+                    Streams::StderrThenStdout,
+                    "git push failed"
+                )
             )
             .unwrap();
 
@@ -355,8 +451,8 @@ mod tests
             "backend",
             repo_path(),
             &output(1, "", "pathspec did not match\n"),
-            SuccessReport::Quiet,
-            FailureReport::Detailed { command: "add" }
+            SuccessReport::quiet(),
+            FailureReport::detailed("add")
         )
         .unwrap();
 
@@ -382,10 +478,75 @@ mod tests
                 "backend",
                 repo_path(),
                 &output(1, stdout, stderr),
-                SuccessReport::Quiet,
-                FailureReport::LastStderrLine {
-                    fallback: "git worktree add failed"
-                }
+                SuccessReport::quiet(),
+                FailureReport::last_stderr_line("git worktree add failed")
+            )
+            .unwrap();
+
+            assert_eq!(failure_text(outcome), expected);
+        }
+    }
+
+    #[test]
+    fn success_transform_applies_to_every_message_the_policy_emits()
+    {
+        for (success, expected) in [
+            (
+                SuccessReport::line(Streams::StdoutOnly, OnEmpty::Quiet),
+                Some("STREAM LINE")
+            ),
+            (
+                SuccessReport::fixed("fixed message".to_owned()),
+                Some("FIXED MESSAGE")
+            ),
+            (
+                SuccessReport::line(
+                    Streams::StderrOnly,
+                    OnEmpty::Text("fallback text")
+                ),
+                Some("FALLBACK TEXT")
+            ),
+            (SuccessReport::quiet(), None)
+        ]
+        {
+            let outcome = command_result(
+                "backend",
+                repo_path(),
+                &output(0, "stream line\n", ""),
+                success.map(shout),
+                FailureReport::line(Streams::StderrThenStdout, "failed")
+            )
+            .unwrap();
+
+            assert_eq!(success_text(outcome), expected.map(str::to_owned));
+        }
+    }
+
+    #[test]
+    fn failure_transform_applies_to_every_message_the_policy_emits()
+    {
+        for (failure, expected) in [
+            (
+                FailureReport::line(Streams::StderrThenStdout, "failed"),
+                "ERROR: DENIED"
+            ),
+            (
+                FailureReport::line(Streams::StdoutOnly, "canned fallback"),
+                "CANNED FALLBACK"
+            ),
+            (
+                FailureReport::detailed("add"),
+                "GIT ADD FAILED FOR '/VMR/BACKEND': ERROR: DENIED"
+            ),
+            (FailureReport::last_stderr_line("failed"), "ERROR: DENIED")
+        ]
+        {
+            let outcome = command_result(
+                "backend",
+                repo_path(),
+                &output(1, "", "error: denied\n"),
+                SuccessReport::quiet(),
+                failure.map(shout)
             )
             .unwrap();
 

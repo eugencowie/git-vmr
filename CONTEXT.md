@@ -76,7 +76,7 @@ The per-repo result of a git operation: success (with an optional message) or fa
 _Avoid_: result, status, exit
 
 **Report policy**:
-The declarative per-operation rule for how a repo outcome's message is produced: which output streams are read in which order, and whether an empty result means quiet success or a canned fallback.
+The declarative per-operation rule for how a repo outcome's message is produced: which output streams are read in which order, whether an empty result means quiet success or a canned fallback, and any transform applied to the message before it reports.
 _Avoid_: message extraction, message rules, output handling
 
 **Result aggregation**:

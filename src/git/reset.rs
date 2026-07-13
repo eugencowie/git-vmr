@@ -78,14 +78,8 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutThenStderr,
-                on_empty: OnEmpty::Quiet
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git reset failed"
-            }
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(Streams::StderrThenStdout, "git reset failed")
         )
     }
 }

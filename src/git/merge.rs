@@ -19,14 +19,11 @@ impl Git
             repo_name,
             repo_path,
             &output,
-            SuccessReport::Line {
-                from: Streams::StdoutOnly,
-                on_empty: OnEmpty::Text("git merge succeeded")
-            },
-            FailureReport::Line {
-                from: Streams::StderrThenStdout,
-                fallback: "git merge failed"
-            }
+            SuccessReport::line(
+                Streams::StdoutOnly,
+                OnEmpty::Text("git merge succeeded")
+            ),
+            FailureReport::line(Streams::StderrThenStdout, "git merge failed")
         )
     }
 }
