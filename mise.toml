@@ -8,10 +8,15 @@ gh = "latest"
 git-cliff = "latest"
 node = "latest"
 "npm:@fission-ai/openspec" = "latest"
+"npm:skills" = "latest"
 pandoc = "latest"
 release-plz = "latest"
 rust = "nightly"
 shellcheck = "latest"
+
+[tasks.init]
+description = "Initialise development environment"
+run = "skills experimental_install"
 
 [tasks.build]
 description = "Build project"

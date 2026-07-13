@@ -226,6 +226,10 @@ url = "https://nodejs.org/dist/v26.4.0/node-v26.4.0-win-x64.zip"
 version = "1.5.0"
 backend = "npm:@fission-ai/openspec"
 
+[[tools."npm:skills"]]
+version = "1.5.16"
+backend = "npm:skills"
+
 [[tools.pandoc]]
 version = "3.10"
 backend = "github:jgm/pandoc"
