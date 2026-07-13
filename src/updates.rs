@@ -205,7 +205,7 @@ mod tests
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
         let state_file = state_file(&tmp);
-        fs::write(tmp.path().join("state"), "not a directory").unwrap();
+        fs::create_dir_all(&state_file).unwrap();
         let calls = Cell::new(0);
 
         // Act
