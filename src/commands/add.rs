@@ -1,6 +1,6 @@
 use crate::cli::CliContext;
 use crate::render::Rendered;
-use crate::workspace::{Scope, Workspace};
+use crate::workspace::{AggregatePolicy, Scope, Workspace};
 use anyhow::Result;
 
 pub fn run(
@@ -18,7 +18,10 @@ pub fn run(
     }
     else
     {
-        Scope::Paths(args.paths.to_vec())
+        Scope::Paths {
+            paths: args.paths.to_vec(),
+            aggregate: AggregatePolicy::Allow
+        }
     };
 
     // Stage routed paths in each owning child repository

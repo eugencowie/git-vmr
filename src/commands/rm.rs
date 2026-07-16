@@ -1,7 +1,7 @@
 use crate::cli::CliContext;
 use crate::render::Rendered;
-use crate::workspace::{Scope, Workspace};
-use anyhow::{Result, bail};
+use crate::workspace::{AggregatePolicy, Scope, Workspace};
+use anyhow::Result;
 
 pub fn run(
     workspace: &Workspace,
@@ -9,22 +9,22 @@ pub fn run(
     args: &RmArgs
 ) -> Result<Rendered>
 {
-    let working_dir = &context.working_dir;
-
-    // Require explicit recursive intent for aggregate path removal
-    if !args.options.recursive
-        && args
-            .paths
-            .iter()
-            .any(|path| workspace.is_aggregate(working_dir, path))
+    // Aggregate path removal requires explicit recursive intent
+    let aggregate = if args.options.recursive
     {
-        bail!("error: cannot remove VMR root without -r");
+        AggregatePolicy::Allow
     }
+    else
+    {
+        AggregatePolicy::Deny(
+            "error: cannot remove VMR root without -r".to_owned()
+        )
+    };
 
     // Remove routed paths in each owning child repository
     workspace.run_routed(
-        working_dir,
-        Scope::Paths(args.paths.to_vec()),
+        &context.working_dir,
+        Scope::Paths { paths: args.paths.to_vec(), aggregate },
         |git, repo, repo_paths| git.rm(repo, repo_paths, &args.options)
     )
 }

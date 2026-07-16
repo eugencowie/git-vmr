@@ -1,6 +1,6 @@
 use crate::cli::CliContext;
 use crate::render::Rendered;
-use crate::workspace::{Scope, Workspace};
+use crate::workspace::{AggregatePolicy, Scope, Workspace};
 use anyhow::Result;
 
 pub fn run(
@@ -9,12 +9,16 @@ pub fn run(
     args: &RestoreArgs
 ) -> Result<Rendered>
 {
-    let working_dir = &context.working_dir;
+    // The aggregate path restores every child repo, matching `git restore`
+    let scope = Scope::Paths {
+        paths: args.paths.to_vec(),
+        aggregate: AggregatePolicy::Allow
+    };
 
     // Restore routed paths in each owning child repository
     workspace.run_routed(
-        working_dir,
-        Scope::Paths(args.paths.to_vec()),
+        &context.working_dir,
+        scope,
         |git, repo, repo_paths| git.restore(repo, repo_paths, &args.options)
     )
 }
