@@ -149,10 +149,26 @@ mod tests
 {
     use super::*;
     use crate::git::{
-        AddOptions, CommitArgs, FetchArgs, MergeArgs, ScriptedFake
+        GitOutput, ScriptedFake, failure_message, quiet_success, stderr
     };
     use crate::test_support::vmr_fixture;
     use std::sync::Arc;
+
+    // The run helpers take any per-repo operation; these tests script a
+    // stand-in git invocation rather than borrowing a command's operation.
+    fn outcome(repo: &Repo, output: GitOutput) -> GitCommandResult
+    {
+        Ok(
+            if output.status.success()
+            {
+                quiet_success()
+            }
+            else
+            {
+                failure_message(&repo.name, stderr(&output))
+            }
+        )
+    }
 
     #[test]
     fn find_snapshots_child_repos_sorted_by_name()
@@ -186,9 +202,8 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace.run(|git, repo| {
-            git.fetch(repo, &FetchArgs { repository: None, refspecs: vec![] })
-        });
+        let result = workspace
+            .run(|git, repo| outcome(repo, git.output(&repo.path, ["fetch"])?));
 
         // Assert
         assert!(result.is_ok());
@@ -217,7 +232,7 @@ mod tests
         // Act
         let err = workspace
             .run(|git, repo| {
-                git.merge(repo, &MergeArgs { commit_ish: "topic".to_owned() })
+                outcome(repo, git.output(&repo.path, ["merge", "topic"])?)
             })
             .unwrap_err();
 
@@ -244,7 +259,7 @@ mod tests
         // Act
         workspace
             .run_in(&subset, |git, repo| {
-                git.commit(repo, &CommitArgs { message: "msg".to_owned() })
+                outcome(repo, git.output(&repo.path, ["commit", "-m", "msg"])?)
             })
             .unwrap();
 
@@ -275,11 +290,10 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), Scope::EntireVmr, |git, repo, paths| {
-                git.add(repo, paths, &AddOptions {
-                    all: true,
-                    force: false,
-                    chmod: None
-                })
+                outcome(
+                    repo,
+                    git.path_output(&repo.path, ["add", "--all", "--"], paths)?
+                )
             })
             .unwrap();
 
@@ -314,11 +328,10 @@ mod tests
         // Act
         workspace
             .run_routed(tmp.path(), scope, |git, repo, paths| {
-                git.add(repo, paths, &AddOptions {
-                    all: false,
-                    force: false,
-                    chmod: None
-                })
+                outcome(
+                    repo,
+                    git.path_output(&repo.path, ["add", "--"], paths)?
+                )
             })
             .unwrap();
 

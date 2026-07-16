@@ -138,8 +138,10 @@ impl Cli
 mod tests
 {
     use super::*;
-    use crate::commands::{ForeachArgs, WorkspaceCommand};
-    use crate::git::{AddArgs, AddOptions, ChmodMode, RmArgs, RmOptions};
+    use crate::commands::{
+        AddArgs, AddOptions, ChmodMode, ForeachArgs, RmArgs, RmOptions,
+        WorkspaceCommand
+    };
     use crate::workspace::{
         MvArgs, WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs,
         WorktreeRemoveArgs

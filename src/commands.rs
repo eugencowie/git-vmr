@@ -19,16 +19,30 @@ mod tag;
 mod worktree;
 
 use crate::cli::CliContext;
-use crate::git::{
-    AddArgs, BranchArgs, CloneArgs, CommitArgs, FetchArgs, MergeArgs, PullArgs,
-    PushArgs, RebaseArgs, ResetArgs, RestoreArgs, RmArgs, SwitchArgs, TagArgs
-};
 use crate::render::Rendered;
 use crate::workspace::{MvArgs, Workspace, WorktreeCommand};
+pub use add::AddArgs;
+#[cfg(test)]
+pub(crate) use add::{AddOptions, ChmodMode};
 use anyhow::Result;
+pub use branch::BranchArgs;
 use clap::Subcommand;
+pub use clone::CloneArgs;
+pub use commit::CommitArgs;
+pub use fetch::FetchArgs;
 pub use foreach::ForeachArgs;
 use init::InitArgs;
+pub use merge::MergeArgs;
+pub use pull::PullArgs;
+pub use push::PushArgs;
+pub use rebase::RebaseArgs;
+pub use reset::ResetArgs;
+pub use restore::RestoreArgs;
+pub use rm::RmArgs;
+#[cfg(test)]
+pub(crate) use rm::RmOptions;
+pub use switch::SwitchArgs;
+pub use tag::TagArgs;
 
 #[derive(Subcommand)]
 pub enum Command

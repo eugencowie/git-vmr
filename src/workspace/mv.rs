@@ -1,4 +1,6 @@
-use crate::git::{Git, GitCommandResult, failure_message, quiet_success};
+use crate::git::{
+    Git, GitCommandResult, failure_message, quiet_success, stderr
+};
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
@@ -70,6 +72,27 @@ impl Workspace<'_>
 
         let plan = MovePlan::build(git, sources, destination)?;
         Ok(MoveOutcomes { outcomes: execute_plan(git, plan), scope_repo_count })
+    }
+}
+
+impl Git
+{
+    /// Stage one path, plainly: move-plan execution stages each landed file
+    /// in its destination repo, outside any report policy.
+    fn add_path(&self, repo_path: &Path, path: &Path) -> Result<()>
+    {
+        let output = self.path_output(repo_path, ["add", "--"], [path])?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "git add failed for '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -294,6 +317,76 @@ fn final_destination_path(
     }
 
     Ok(destination_relative.to_path_buf())
+}
+
+impl Git
+{
+    fn mv(
+        &self,
+        repo_path: &Path,
+        source: &Path,
+        destination: &Path
+    ) -> Result<()>
+    {
+        let output =
+            self.path_output(repo_path, ["mv", "--"], [source, destination])?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "git mv failed for '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(())
+    }
+
+    fn mv_to_directory(
+        &self,
+        repo_path: &Path,
+        sources: &[PathBuf],
+        destination: &Path
+    ) -> Result<()>
+    {
+        let paths = sources
+            .iter()
+            .map(PathBuf::as_path)
+            .chain(std::iter::once(destination));
+        let output = self.path_output(repo_path, ["mv", "--"], paths)?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "git mv failed for '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(())
+    }
+
+    fn ensure_tracked(&self, repo_path: &Path, path: &Path) -> Result<()>
+    {
+        let output = self.path_output(
+            repo_path,
+            ["ls-files", "--error-unmatch", "--"],
+            [path]
+        )?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "source path is not tracked in '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            );
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

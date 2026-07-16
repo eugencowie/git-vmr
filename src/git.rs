@@ -1,50 +1,16 @@
-mod add;
 mod branch;
-mod clone;
-mod commit;
-mod fetch;
 mod head;
-mod merge;
-mod mv;
-mod pull;
-mod push;
-mod rebase;
-mod report;
-mod reset;
-mod restore;
-mod rm;
+pub(crate) mod report;
 mod runner;
-mod status;
-mod switch;
-mod tag;
-mod worktree;
 
-pub use add::AddArgs;
-#[cfg(test)]
-pub(crate) use add::{AddOptions, ChmodMode};
 use anyhow::{Result, bail};
-pub use branch::{BranchAction, BranchArgs};
-pub use clone::CloneArgs;
-pub use commit::CommitArgs;
-pub use fetch::FetchArgs;
 pub use head::Head;
-pub use merge::MergeArgs;
-pub use pull::PullArgs;
-pub use push::PushArgs;
-pub use rebase::RebaseArgs;
-pub use reset::ResetArgs;
-pub use restore::RestoreArgs;
-pub use rm::RmArgs;
-#[cfg(test)]
-pub(crate) use rm::RmOptions;
 #[cfg(test)]
 pub(crate) use runner::scripted::ScriptedFake;
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
-pub use switch::SwitchArgs;
-pub use tag::{TagAction, TagArgs};
 
 /// The deep git module: every operation is a method, and every invocation
 /// flows through the [`GitRunner`] seam owned here.
@@ -110,6 +76,15 @@ impl Git
         }
 
         Ok(output.stdout)
+    }
+
+    pub(crate) fn interactive(
+        &self,
+        working_dir: &Path,
+        args: &[OsString]
+    ) -> Result<ExitStatus>
+    {
+        self.runner.run_interactive(working_dir, args)
     }
 
     pub(crate) fn path_output<I, S, P>(
