@@ -56,6 +56,47 @@ fn branch_lists_local_branches_across_child_repositories()
 }
 
 #[test]
+fn branch_lists_an_unborn_branch_as_active()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("branch")
+        .assert()
+        .success()
+        .stdout(predicate::str::diff("* master\n"))
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn branch_groups_unborn_and_born_branches_together()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    let backend = tmp.path().join("backend");
+    let frontend = tmp.path().join("frontend");
+    init_repo(&backend);
+    init_repo(&frontend);
+    commit_file(&frontend, "README.md");
+    git(&frontend, ["branch", "release/1.2"]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("branch")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("* master\n")
+                .and(predicate::str::contains("  release/1.2 (frontend)"))
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
 fn branch_skips_non_git_children_and_empty_vmr_outputs_nothing()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
