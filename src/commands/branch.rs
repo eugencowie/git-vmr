@@ -1,26 +1,30 @@
+use crate::cli::CliContext;
+use crate::git::{BranchAction, BranchArgs};
 use crate::render::{self, Rendered};
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn branch(workspace: &Workspace, branch_name: &str) -> Result<Rendered>
-{
-    // Branch in each child repository
-    workspace.run(|git, repo| git.branch(&repo.name, &repo.path, branch_name))
-}
-
-pub fn delete(
+pub fn run(
     workspace: &Workspace,
-    branch_name: &str,
-    force: bool
+    _context: &CliContext,
+    args: BranchArgs
 ) -> Result<Rendered>
 {
-    // Delete branch in each child repository
-    workspace.run(|git, repo| {
-        git.delete_branch(&repo.name, &repo.path, branch_name, force)
-    })
+    match args.action()
+    {
+        BranchAction::List => branches(workspace),
+
+        // Branch in each child repository
+        BranchAction::Create(branch_name) =>
+            workspace.run(|git, repo| git.branch(repo, branch_name)),
+
+        // Delete branch in each child repository
+        BranchAction::Delete { branch_name, force } => workspace
+            .run(|git, repo| git.delete_branch(repo, branch_name, force))
+    }
 }
 
-pub fn branches(workspace: &Workspace) -> Result<Rendered>
+fn branches(workspace: &Workspace) -> Result<Rendered>
 {
     // Collect branch information from child repositories, in repo order
     let branches = workspace

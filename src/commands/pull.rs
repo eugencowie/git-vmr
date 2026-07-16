@@ -1,14 +1,15 @@
+use crate::cli::CliContext;
+use crate::git::PullArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn pull(
+pub fn run(
     workspace: &Workspace,
-    repository: Option<&str>,
-    refspecs: &[String]
+    _context: &CliContext,
+    args: PullArgs
 ) -> Result<Rendered>
 {
     // Pull in each child repository
-    workspace
-        .run(|git, repo| git.pull(&repo.name, &repo.path, repository, refspecs))
+    workspace.run(|git, repo| git.pull(repo, &args))
 }

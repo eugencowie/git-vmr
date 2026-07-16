@@ -1,17 +1,17 @@
+use crate::cli::CliContext;
+use crate::git::FetchArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::Result;
 
-pub fn fetch(
+pub fn run(
     workspace: &Workspace,
-    repository: Option<&str>,
-    refspecs: &[String]
+    _context: &CliContext,
+    args: FetchArgs
 ) -> Result<Rendered>
 {
     // Fetch in each child repository
-    workspace.run(|git, repo| {
-        git.fetch(&repo.name, &repo.path, repository, refspecs)
-    })
+    workspace.run(|git, repo| git.fetch(repo, &args))
 }
 
 #[cfg(test)]
@@ -19,7 +19,7 @@ mod tests
 {
     use super::*;
     use crate::git::{Git, ScriptedFake};
-    use crate::test_support::vmr_fixture;
+    use crate::test_support::{cli_context, vmr_fixture};
     use std::sync::Arc;
 
     #[test]
@@ -32,7 +32,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, None, &[]);
+        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
+            repository: None,
+            refspecs: vec![]
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -63,7 +66,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = fetch(&workspace, Some("origin"), &["main".to_owned()]);
+        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
+            repository: Some("origin".to_owned()),
+            refspecs: vec!["main".to_owned()]
+        });
 
         // Assert
         assert!(result.is_ok());

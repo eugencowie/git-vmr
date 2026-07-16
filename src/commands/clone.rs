@@ -1,17 +1,15 @@
-use crate::cli::SilentError;
-use crate::git::Git;
+use crate::cli::{CliContext, SilentError};
+use crate::git::CloneArgs;
 use crate::render::Rendered;
 use anyhow::Result;
-use std::path::Path;
 
-pub fn clone(
-    git: &Git,
-    working_dir: &Path,
-    repository: &str,
-    directory: Option<&Path>
-) -> Result<Rendered>
+pub fn run(context: &CliContext, args: CloneArgs) -> Result<Rendered>
 {
-    let status = git.clone(working_dir, repository, directory)?;
+    let status = context.git.clone(
+        &context.working_dir,
+        &args.repository,
+        args.directory.as_deref()
+    )?;
 
     if !status.success()
     {
@@ -25,8 +23,8 @@ pub fn clone(
 mod tests
 {
     use super::*;
-    use crate::git::ScriptedFake;
-    use std::path::PathBuf;
+    use crate::git::{Git, ScriptedFake};
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
     #[test]
@@ -38,12 +36,11 @@ mod tests
         let git = Git::with(fake);
 
         // Act
-        let result = clone(
-            &git,
-            Path::new("/vmr"),
-            "https://example.com/repo",
-            Some(Path::new("dir"))
-        );
+        let result =
+            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+                repository: "https://example.com/repo".to_owned(),
+                directory: Some(PathBuf::from("dir"))
+            });
 
         // Assert
         assert!(result.is_ok());
@@ -60,8 +57,11 @@ mod tests
         let git = Git::with(Arc::clone(&fake));
 
         // Act
-        clone(&git, Path::new("/vmr"), "https://example.com/repo", None)
-            .unwrap();
+        run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+            repository: "https://example.com/repo".to_owned(),
+            directory: None
+        })
+        .unwrap();
 
         // Assert
         let calls = fake.calls();
@@ -79,8 +79,11 @@ mod tests
 
         // Act
         let error =
-            clone(&git, Path::new("/vmr"), "https://example.com/repo", None)
-                .unwrap_err();
+            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+                repository: "https://example.com/repo".to_owned(),
+                directory: None
+            })
+            .unwrap_err();
 
         // Assert
         assert!(error.is::<SilentError>());

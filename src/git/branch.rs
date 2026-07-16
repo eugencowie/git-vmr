@@ -6,20 +6,79 @@ use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
+/// List, create, or delete branches
+#[derive(clap::Args)]
+pub struct BranchArgs
+{
+    /// Delete a branch. The branch must be fully merged in its upstream
+    /// branch
+    #[arg(
+        short,
+        long,
+        conflicts_with = "force_delete",
+        requires = "branch_name"
+    )]
+    pub delete: bool,
+
+    /// Shortcut for `--delete --force`
+    #[arg(short = 'D', conflicts_with = "delete", requires = "branch_name")]
+    pub force_delete: bool,
+
+    /// In combination with `-d` (or `--delete`), allow deleting the branch
+    /// irrespective of its merged status, or whether it even points to a
+    /// valid commit
+    #[arg(
+        short,
+        long,
+        conflicts_with = "force_delete",
+        requires_all = ["branch_name", "delete"]
+    )]
+    pub force: bool,
+
+    /// Creates a new branch head named [branch-name] which points to the
+    /// current HEAD
+    #[arg(value_name = "branch-name")]
+    pub branch_name: Option<String>
+}
+
+/// What a `branch` invocation asks for. Total: the flag combinations the
+/// arg attributes above reject cannot reach this enum.
+pub enum BranchAction<'a>
+{
+    List,
+    Create(&'a str),
+    Delete
+    {
+        branch_name: &'a str,
+        force: bool
+    }
+}
+
+impl BranchArgs
+{
+    pub fn action(&self) -> BranchAction<'_>
+    {
+        match &self.branch_name
+        {
+            Some(branch_name) if self.delete || self.force_delete =>
+                BranchAction::Delete {
+                    branch_name,
+                    force: self.force || self.force_delete
+                },
+            Some(branch_name) => BranchAction::Create(branch_name),
+            None => BranchAction::List
+        }
+    }
+}
+
 impl Git
 {
-    pub fn branch(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        branch_name: &str
-    ) -> GitCommandResult
+    pub fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
     {
-        let output = self.output(repo_path, ["branch", branch_name])?;
+        let output = self.output(&repo.path, ["branch", branch_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::line(Streams::StderrOnly, "git branch failed")
@@ -28,18 +87,16 @@ impl Git
 
     pub fn delete_branch(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         branch_name: &str,
         force: bool
     ) -> GitCommandResult
     {
         let flag = if force { "-D" } else { "-d" };
-        let output = self.output(repo_path, ["branch", flag, branch_name])?;
+        let output = self.output(&repo.path, ["branch", flag, branch_name])?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::fixed(format!("Deleted branch {branch_name}")),
             FailureReport::line(Streams::StderrOnly, "git branch failed")

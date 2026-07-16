@@ -138,6 +138,12 @@ impl Cli
 mod tests
 {
     use super::*;
+    use crate::commands::{ForeachArgs, WorkspaceCommand};
+    use crate::git::{AddArgs, AddOptions, ChmodMode, RmArgs, RmOptions};
+    use crate::workspace::{
+        MvArgs, WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs,
+        WorktreeRemoveArgs
+    };
     use clap::error::ErrorKind;
 
     #[test]
@@ -187,7 +193,10 @@ mod tests
 
         // Assert
         assert_eq!(cli.working_dir, Some(tmp.path().to_path_buf()));
-        assert!(matches!(cli.command, Command::Status));
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Status)
+        ));
     }
 
     #[test]
@@ -207,12 +216,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Add {
-                all: true,
-                force: true,
-                chmod: Some(crate::git::ChmodMode::Executable),
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: true, chmod: Some(ChmodMode::Executable) },
                 paths
-            } if paths == [PathBuf::from("backend/src.rs")]
+            })) if paths == [PathBuf::from("backend/src.rs")]
         ));
     }
 
@@ -280,12 +287,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Add {
-                all: true,
-                force: true,
-                chmod: Some(crate::git::ChmodMode::NotExecutable),
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: true, chmod: Some(ChmodMode::NotExecutable) },
                 paths
-            } if paths == [PathBuf::from("backend/src.rs")]
+            })) if paths == [PathBuf::from("backend/src.rs")]
         ));
     }
 
@@ -298,12 +303,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Add {
-                all: true,
-                force: false,
-                chmod: None,
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: false, chmod: None },
                 paths
-            } if paths.is_empty()
+            })) if paths.is_empty()
         ));
     }
 
@@ -357,13 +360,15 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Rm {
-                recursive: true,
-                force: true,
-                dry_run: true,
-                cached: false,
+            Command::Workspace(WorkspaceCommand::Rm(RmArgs {
+                options: RmOptions {
+                    recursive: true,
+                    force: true,
+                    dry_run: true,
+                    cached: false
+                },
                 paths
-            } if paths == [PathBuf::from("backend/src.rs")]
+            })) if paths == [PathBuf::from("backend/src.rs")]
         ));
     }
 
@@ -384,13 +389,15 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Rm {
-                recursive: false,
-                force: true,
-                dry_run: true,
-                cached: true,
+            Command::Workspace(WorkspaceCommand::Rm(RmArgs {
+                options: RmOptions {
+                    recursive: false,
+                    force: true,
+                    dry_run: true,
+                    cached: true
+                },
                 paths
-            } if paths == [PathBuf::from("backend/src.rs")]
+            })) if paths == [PathBuf::from("backend/src.rs")]
         ));
     }
 
@@ -404,10 +411,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Mv {
+            Command::Workspace(WorkspaceCommand::Mv(MvArgs {
                 sources,
                 destination
-            } if sources == [PathBuf::from("one"), PathBuf::from("two")]
+            })) if sources == [PathBuf::from("one"), PathBuf::from("two")]
                 && destination == *"three"
         ));
     }
@@ -452,13 +459,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Add {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
                     branch: None,
                     path,
                     commit_ish: None
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -473,13 +480,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Add {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
                     branch: None,
                     path,
                     commit_ish: Some(commit_ish)
-                })
-            } if &path == "../wt" && commit_ish == "main"
+                }))
+            }) if &path == "../wt" && commit_ish == "main"
         ));
     }
 
@@ -500,13 +507,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Add {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
                     branch: Some(branch),
                     path,
                     commit_ish: None
-                })
-            } if branch == "feature/auth" && &path == "../wt"
+                }))
+            }) if branch == "feature/auth" && &path == "../wt"
         ));
     }
 
@@ -528,13 +535,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Add {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
                     branch: Some(branch),
                     path,
                     commit_ish: Some(commit_ish)
-                })
-            } if branch == "feature/auth" && &path == "../wt" && commit_ish == "main"
+                }))
+            }) if branch == "feature/auth" && &path == "../wt" && commit_ish == "main"
         ));
     }
 
@@ -601,10 +608,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Foreach {
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
                 quiet: true,
                 command
-            } if command == ["echo", "ok"]
+            })) if command == ["echo", "ok"]
         ));
     }
 
@@ -619,10 +626,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Foreach {
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
                 quiet: false,
                 command
-            } if command == ["git", "status", "--short"]
+            })) if command == ["git", "status", "--short"]
         ));
     }
 
@@ -641,10 +648,10 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Foreach {
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
                 quiet: false,
                 command
-            } if command == ["echo", "--not-a-vmr-option"]
+            })) if command == ["echo", "--not-a-vmr-option"]
         ));
     }
 
@@ -669,9 +676,12 @@ mod tests
         let cli = Cli::parse_from(["git-vmr", "worktree", "list"]).unwrap();
 
         // Assert
-        assert!(matches!(cli.command, Command::Worktree {
-            command: Some(crate::commands::WorktreeCommand::List)
-        }));
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::List)
+            })
+        ));
     }
 
     #[test]
@@ -681,7 +691,10 @@ mod tests
         let cli = Cli::parse_from(["git-vmr", "worktree"]).unwrap();
 
         // Assert
-        assert!(matches!(cli.command, Command::Worktree { command: None }));
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree { command: None })
+        ));
     }
 
     #[test]
@@ -721,14 +734,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 0,
                     delete: false,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -742,14 +755,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 0,
                     delete: false,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -765,14 +778,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 1,
                     delete: false,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -788,14 +801,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 2,
                     delete: false,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -810,14 +823,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 2,
                     delete: false,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -832,14 +845,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 0,
                     delete: true,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -855,14 +868,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 0,
                     delete: true,
                     force_delete: false,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -877,14 +890,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 0,
                     delete: false,
                     force_delete: true,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -900,14 +913,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 1,
                     delete: false,
                     force_delete: true,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -923,14 +936,14 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Remove {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
                     force: 1,
                     delete: false,
                     force_delete: true,
                     path
-                })
-            } if &path == "../wt"
+                }))
+            }) if &path == "../wt"
         ));
     }
 
@@ -1003,13 +1016,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Move {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
                     force: 0,
                     path,
                     new_path
-                })
-            } if &path == "../wt" && &new_path == "../moved"
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
         ));
     }
 
@@ -1025,13 +1038,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Move {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
                     force: 1,
                     path,
                     new_path
-                })
-            } if &path == "../wt" && &new_path == "../moved"
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
         ));
     }
 
@@ -1048,13 +1061,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Move {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
                     force: 2,
                     path,
                     new_path
-                })
-            } if &path == "../wt" && &new_path == "../moved"
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
         ));
     }
 
@@ -1070,13 +1083,13 @@ mod tests
         // Assert
         assert!(matches!(
             cli.command,
-            Command::Worktree {
-                command: Some(crate::commands::WorktreeCommand::Move {
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
                     force: 2,
                     path,
                     new_path
-                })
-            } if &path == "../wt" && &new_path == "../moved"
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
         ));
     }
 

@@ -1,3 +1,4 @@
+use crate::cli::CliContext;
 use crate::render::{self, ChildOutput, Rendered};
 use crate::workspace::{Repo, Workspace};
 use anyhow::Result;
@@ -37,14 +38,35 @@ impl ChildStatus
     }
 }
 
-pub fn foreach(
+/// Evaluates an arbitrary shell command in each checked out repository
+#[derive(clap::Args)]
+pub struct ForeachArgs
+{
+    /// Only print error messages
+    #[arg(short, long)]
+    pub quiet: bool,
+
+    /// Command to evaluate through the shell
+    #[arg(
+        required = true,
+        num_args = 1..,
+        trailing_var_arg = true,
+        allow_hyphen_values = true,
+        value_name = "command"
+    )]
+    pub command: Vec<String>
+}
+
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    quiet: bool,
-    command: &[String]
+    context: &CliContext,
+    args: ForeachArgs
 ) -> Result<Rendered>
 {
-    let command = command.join(" ");
+    let working_dir = &context.working_dir;
+
+    let quiet = args.quiet;
+    let command = args.command.join(" ");
     let root = workspace.root();
 
     let results = workspace

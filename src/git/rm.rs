@@ -2,50 +2,78 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+/// Remove files from the working tree and from the index
+#[derive(clap::Args)]
+pub struct RmArgs
+{
+    #[command(flatten)]
+    pub options: RmOptions,
+
+    /// Files to remove
+    #[arg(required = true, num_args = 1.., value_name = "pathspec")]
+    pub paths: Vec<PathBuf>
+}
+
+#[derive(clap::Args)]
+pub struct RmOptions
+{
+    /// Allow recursive removal when a leading directory name is given
+    #[arg(short)]
+    pub recursive: bool,
+
+    /// Override the up-to-date check
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Don't actually remove any files
+    #[arg(short = 'n', long)]
+    pub dry_run: bool,
+
+    /// Unstage and remove paths only from the index
+    #[arg(long)]
+    pub cached: bool
+}
 
 impl Git
 {
-    #[expect(clippy::too_many_arguments, reason = "mirrors git rm flags")]
     pub fn rm(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         paths: &[PathBuf],
-        recursive: bool,
-        force: bool,
-        dry_run: bool,
-        cached: bool
+        options: &RmOptions
     ) -> GitCommandResult
     {
         let mut args = vec![OsString::from("rm")];
 
-        if recursive
+        if options.recursive
         {
             args.push(OsString::from("-r"));
         }
 
-        if force
+        if options.force
         {
             args.push(OsString::from("--force"));
         }
 
-        if dry_run
+        if options.dry_run
         {
             args.push(OsString::from("--dry-run"));
         }
 
-        if cached
+        if options.cached
         {
             args.push(OsString::from("--cached"));
         }
 
         args.push(OsString::from("--"));
         args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
-        let success = if dry_run
+        let success = if options.dry_run
         {
             SuccessReport::line(Streams::StdoutOnly, OnEmpty::Quiet)
         }
@@ -54,13 +82,7 @@ impl Git
             SuccessReport::quiet()
         };
 
-        command_result(
-            repo_name,
-            repo_path,
-            &output,
-            success,
-            FailureReport::detailed("rm")
-        )
+        command_result(repo, &output, success, FailureReport::detailed("rm"))
     }
 }
 
@@ -70,6 +92,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn rm_reports_stdout_only_for_dry_runs()
@@ -85,13 +108,14 @@ mod tests
         // Act
         let outcome = git
             .rm(
-                "backend",
-                Path::new("/vmr/backend"),
+                &repo("backend", "/vmr/backend"),
                 &[PathBuf::from("old.rs")],
-                false,
-                false,
-                true,
-                false
+                &RmOptions {
+                    recursive: false,
+                    force: false,
+                    dry_run: true,
+                    cached: false
+                }
             )
             .unwrap();
 

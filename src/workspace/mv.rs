@@ -14,6 +14,19 @@ pub struct MoveOutcomes
     pub scope_repo_count: usize
 }
 
+/// Move or rename a file, a directory, or a symlink
+#[derive(clap::Args)]
+pub struct MvArgs
+{
+    /// Files to move
+    #[arg(required = true, num_args = 1.., value_name = "source")]
+    pub sources: Vec<PathBuf>,
+
+    /// Destination path
+    #[arg(value_name = "destination")]
+    pub destination: PathBuf
+}
+
 impl Workspace<'_>
 {
     /// Moves sources to a destination across the workspace: routes every
@@ -25,20 +38,17 @@ impl Workspace<'_>
     /// When a cross-repo rename lands but staging fails, the entry reports a
     /// failure and the half-done state stays: the file remains moved on
     /// disk, with the deletion and addition left unstaged.
-    pub fn mv(
-        &self,
-        working_dir: &Path,
-        sources: &[PathBuf],
-        destination: &Path
-    ) -> Result<MoveOutcomes>
+    pub fn mv(&self, working_dir: &Path, args: &MvArgs)
+    -> Result<MoveOutcomes>
     {
         // Route all operands before moving anything
         let git = self.git();
-        let sources = sources
+        let sources = args
+            .sources
             .iter()
             .map(|source| self.route_single(working_dir, source))
             .collect::<Result<Vec<_>>>()?;
-        let destination = self.route_single(working_dir, destination)?;
+        let destination = self.route_single(working_dir, &args.destination)?;
         let scope_repo_count = sources
             .iter()
             .map(|(repo, _)| repo.name.as_str())
@@ -325,11 +335,10 @@ mod tests
 
         // Act
         let outcomes = workspace
-            .mv(
-                tmp.path(),
-                &[PathBuf::from("backend/src/old.rs")],
-                Path::new("backend/src/new.rs")
-            )
+            .mv(tmp.path(), &MvArgs {
+                sources: vec![PathBuf::from("backend/src/old.rs")],
+                destination: PathBuf::from("backend/src/new.rs")
+            })
             .unwrap();
 
         // Assert
@@ -365,14 +374,13 @@ mod tests
 
         // Act
         let outcomes = workspace
-            .mv(
-                tmp.path(),
-                &[
+            .mv(tmp.path(), &MvArgs {
+                sources: vec![
                     PathBuf::from("backend/a.txt"),
-                    PathBuf::from("backend/b.txt")
+                    PathBuf::from("backend/b.txt"),
                 ],
-                Path::new("backend/docs")
-            )
+                destination: PathBuf::from("backend/docs")
+            })
             .unwrap();
 
         // Assert
@@ -407,11 +415,10 @@ mod tests
 
         // Act
         let outcomes = workspace
-            .mv(
-                tmp.path(),
-                &[PathBuf::from("backend/config.toml")],
-                Path::new("frontend/settings.toml")
-            )
+            .mv(tmp.path(), &MvArgs {
+                sources: vec![PathBuf::from("backend/config.toml")],
+                destination: PathBuf::from("frontend/settings.toml")
+            })
             .unwrap();
 
         // Assert: the file moved on disk and both repos staged their side
@@ -448,14 +455,13 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace.mv(
-            tmp.path(),
-            &[
+        let result = workspace.mv(tmp.path(), &MvArgs {
+            sources: vec![
                 PathBuf::from("backend/notes.md"),
-                PathBuf::from("frontend/notes.md")
+                PathBuf::from("frontend/notes.md"),
             ],
-            Path::new("backend/docs")
-        );
+            destination: PathBuf::from("backend/docs")
+        });
 
         // Assert: planning fails and no source has moved
         let error = result.err().unwrap().to_string();
@@ -476,11 +482,13 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace.mv(
-            tmp.path(),
-            &[PathBuf::from("backend/a.txt"), PathBuf::from("backend/b.txt")],
-            Path::new("frontend/missing")
-        );
+        let result = workspace.mv(tmp.path(), &MvArgs {
+            sources: vec![
+                PathBuf::from("backend/a.txt"),
+                PathBuf::from("backend/b.txt"),
+            ],
+            destination: PathBuf::from("frontend/missing")
+        });
 
         // Assert
         assert!(
@@ -509,14 +517,13 @@ mod tests
 
         // Act
         let outcomes = workspace
-            .mv(
-                tmp.path(),
-                &[
+            .mv(tmp.path(), &MvArgs {
+                sources: vec![
                     PathBuf::from("backend/a.txt"),
-                    PathBuf::from("backend/b.txt")
+                    PathBuf::from("backend/b.txt"),
                 ],
-                Path::new("frontend/docs")
-            )
+                destination: PathBuf::from("frontend/docs")
+            })
             .unwrap();
 
         // Assert: the failure names its entry, the half-done state stays on
@@ -557,11 +564,10 @@ mod tests
 
         // Act
         let outcomes = workspace
-            .mv(
-                tmp.path(),
-                &[PathBuf::from("backend/config.toml")],
-                Path::new("frontend/settings.toml")
-            )
+            .mv(tmp.path(), &MvArgs {
+                sources: vec![PathBuf::from("backend/config.toml")],
+                destination: PathBuf::from("frontend/settings.toml")
+            })
             .unwrap();
 
         // Assert

@@ -7,6 +7,7 @@ use crate::git::{
     GitCommandResult, GitOutput, failure_message, quiet_success, stderr,
     success_message
 };
+use crate::vmr::Repo;
 use std::path::Path;
 
 /// The output streams a report policy reads, in priority order.
@@ -228,8 +229,7 @@ impl FailureReport
 /// Maps a git invocation's output to a repo outcome by applying the
 /// operation's report policies.
 pub(crate) fn command_result(
-    repo_name: &str,
-    repo_path: &Path,
+    repo: &Repo,
     output: &GitOutput,
     success: SuccessReport,
     failure: FailureReport
@@ -240,12 +240,12 @@ pub(crate) fn command_result(
         Ok(match success.message(output)
         {
             None => quiet_success(),
-            Some(message) => success_message(repo_name, message)
+            Some(message) => success_message(&repo.name, message)
         })
     }
     else
     {
-        Ok(failure_message(repo_name, failure.message(repo_path, output)))
+        Ok(failure_message(&repo.name, failure.message(&repo.path, output)))
     }
 }
 
@@ -272,6 +272,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::exit_status;
+    use crate::test_support::repo;
 
     fn output(code: i32, stdout: &str, stderr: &str) -> GitOutput
     {
@@ -282,9 +283,9 @@ mod tests
         }
     }
 
-    fn repo_path() -> &'static Path
+    fn backend() -> Repo
     {
-        Path::new("/vmr/backend")
+        repo("backend", "/vmr/backend")
     }
 
     fn success_text(outcome: RepoOutcome) -> Option<String>
@@ -357,8 +358,7 @@ mod tests
     fn quiet_success_reports_nothing()
     {
         let outcome = command_result(
-            "backend",
-            repo_path(),
+            &backend(),
             &output(0, "chatter\n", "chatter\n"),
             SuccessReport::quiet(),
             FailureReport::line(Streams::StderrThenStdout, "failed")
@@ -372,8 +372,7 @@ mod tests
     fn fixed_success_reports_the_exact_message()
     {
         let outcome = command_result(
-            "backend",
-            repo_path(),
+            &backend(),
             &output(0, "chatter\n", ""),
             SuccessReport::fixed("Deleted branch topic".to_owned()),
             FailureReport::line(Streams::StderrThenStdout, "failed")
@@ -395,8 +394,7 @@ mod tests
         ]
         {
             let outcome = command_result(
-                "backend",
-                repo_path(),
+                &backend(),
                 &output(0, "", ""),
                 SuccessReport::line(Streams::StdoutThenStderr, on_empty),
                 FailureReport::line(Streams::StderrThenStdout, "failed")
@@ -411,8 +409,7 @@ mod tests
     fn line_success_reports_the_first_non_empty_line()
     {
         let outcome = command_result(
-            "backend",
-            repo_path(),
+            &backend(),
             &output(0, "\nfirst real line\nsecond line\n", ""),
             SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
             FailureReport::line(Streams::StderrThenStdout, "failed")
@@ -429,8 +426,7 @@ mod tests
             [("error: denied\n", "error: denied"), ("", "git push failed")]
         {
             let outcome = command_result(
-                "backend",
-                repo_path(),
+                &backend(),
                 &output(1, "", stderr),
                 SuccessReport::quiet(),
                 FailureReport::line(
@@ -448,8 +444,7 @@ mod tests
     fn detailed_failure_formats_command_path_and_stderr()
     {
         let outcome = command_result(
-            "backend",
-            repo_path(),
+            &backend(),
             &output(1, "", "pathspec did not match\n"),
             SuccessReport::quiet(),
             FailureReport::detailed("add")
@@ -475,8 +470,7 @@ mod tests
         ]
         {
             let outcome = command_result(
-                "backend",
-                repo_path(),
+                &backend(),
                 &output(1, stdout, stderr),
                 SuccessReport::quiet(),
                 FailureReport::last_stderr_line("git worktree add failed")
@@ -510,8 +504,7 @@ mod tests
         ]
         {
             let outcome = command_result(
-                "backend",
-                repo_path(),
+                &backend(),
                 &output(0, "stream line\n", ""),
                 success.map(shout),
                 FailureReport::line(Streams::StderrThenStdout, "failed")
@@ -542,8 +535,7 @@ mod tests
         ]
         {
             let outcome = command_result(
-                "backend",
-                repo_path(),
+                &backend(),
                 &output(1, "", "error: denied\n"),
                 SuccessReport::quiet(),
                 failure.map(shout)

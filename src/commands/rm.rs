@@ -1,21 +1,23 @@
+use crate::cli::CliContext;
+use crate::git::RmArgs;
 use crate::render::Rendered;
 use crate::workspace::{Scope, Workspace};
 use anyhow::{Result, bail};
-use std::path::{Path, PathBuf};
 
-pub fn rm(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    paths: &[PathBuf],
-    recursive: bool,
-    force: bool,
-    dry_run: bool,
-    cached: bool
+    context: &CliContext,
+    args: RmArgs
 ) -> Result<Rendered>
 {
+    let working_dir = &context.working_dir;
+
     // Require explicit recursive intent for aggregate path removal
-    if !recursive
-        && paths.iter().any(|path| workspace.is_aggregate(working_dir, path))
+    if !args.options.recursive
+        && args
+            .paths
+            .iter()
+            .any(|path| workspace.is_aggregate(working_dir, path))
     {
         bail!("error: cannot remove VMR root without -r");
     }
@@ -23,12 +25,7 @@ pub fn rm(
     // Remove routed paths in each owning child repository
     workspace.run_routed(
         working_dir,
-        Scope::Paths(paths.to_vec()),
-        |git, repo, repo_paths| {
-            git.rm(
-                &repo.name, &repo.path, repo_paths, recursive, force, dry_run,
-                cached
-            )
-        }
+        Scope::Paths(args.paths.to_vec()),
+        |git, repo, repo_paths| git.rm(repo, repo_paths, &args.options)
     )
 }

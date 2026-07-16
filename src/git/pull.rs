@@ -2,33 +2,40 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use std::ffi::OsString;
-use std::path::Path;
+
+/// Fetch from and integrate with another repository or a local branch
+#[derive(clap::Args)]
+pub struct PullArgs
+{
+    /// The "remote" repository to pull from
+    #[arg(value_name = "repository")]
+    pub repository: Option<String>,
+
+    /// Which branch or other reference(s) to fetch and integrate into the
+    /// current branch
+    #[arg(value_name = "refspec")]
+    pub refspecs: Vec<String>
+}
 
 impl Git
 {
-    pub fn pull(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        repository: Option<&str>,
-        refspecs: &[String]
-    ) -> GitCommandResult
+    pub fn pull(&self, repo: &Repo, pull: &PullArgs) -> GitCommandResult
     {
         let mut args = vec![OsString::from("pull")];
 
-        if let Some(repository) = repository
+        if let Some(repository) = &pull.repository
         {
             args.push(OsString::from(repository));
         }
 
-        args.extend(refspecs.iter().map(OsString::from));
+        args.extend(pull.refspecs.iter().map(OsString::from));
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
             FailureReport::line(Streams::StderrThenStdout, "git pull failed")
@@ -42,6 +49,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn pull_success_reports_stdout_before_stderr()
@@ -55,8 +63,12 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.pull("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+        let outcome = git
+            .pull(&repo("backend", "/vmr/backend"), &PullArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome

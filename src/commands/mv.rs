@@ -1,15 +1,14 @@
+use crate::cli::CliContext;
 use crate::render::{self, Rendered};
-use crate::workspace::Workspace;
+use crate::workspace::{MvArgs, Workspace};
 use anyhow::Result;
-use std::path::{Path, PathBuf};
 
-pub fn mv(
+pub fn run(
     workspace: &Workspace,
-    working_dir: &Path,
-    sources: &[PathBuf],
-    destination: &Path
+    context: &CliContext,
+    args: MvArgs
 ) -> Result<Rendered>
 {
-    let moved = workspace.mv(working_dir, sources, destination)?;
+    let moved = workspace.mv(&context.working_dir, &args)?;
     render::outcomes_in_scope(moved.outcomes, moved.scope_repo_count)
 }

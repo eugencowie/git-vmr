@@ -2,33 +2,40 @@ use crate::git::report::{
     FailureReport, OnEmpty, Streams, SuccessReport, command_result
 };
 use crate::git::{Git, GitCommandResult};
+use crate::vmr::Repo;
 use std::ffi::OsString;
-use std::path::Path;
+
+/// Download objects and refs from another repository
+#[derive(clap::Args)]
+pub struct FetchArgs
+{
+    /// The "remote" repository that is the source of a fetch or pull
+    /// operation
+    #[arg(value_name = "repository")]
+    pub repository: Option<String>,
+
+    /// Specifies which refs to fetch and which local refs to update
+    #[arg(value_name = "refspec")]
+    pub refspecs: Vec<String>
+}
 
 impl Git
 {
-    pub fn fetch(
-        &self,
-        repo_name: &str,
-        repo_path: &Path,
-        repository: Option<&str>,
-        refspecs: &[String]
-    ) -> GitCommandResult
+    pub fn fetch(&self, repo: &Repo, fetch: &FetchArgs) -> GitCommandResult
     {
         let mut args = vec![OsString::from("fetch")];
 
-        if let Some(repository) = repository
+        if let Some(repository) = &fetch.repository
         {
             args.push(OsString::from(repository));
         }
 
-        args.extend(refspecs.iter().map(OsString::from));
+        args.extend(fetch.refspecs.iter().map(OsString::from));
 
-        let output = self.output(repo_path, args)?;
+        let output = self.output(&repo.path, args)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::line(Streams::StderrThenStdout, OnEmpty::Quiet),
             FailureReport::line(Streams::StderrThenStdout, "git fetch failed")
@@ -42,6 +49,7 @@ mod tests
     use super::*;
     use crate::git::RepoOutcome;
     use crate::git::runner::scripted::ScriptedFake;
+    use crate::test_support::repo;
 
     #[test]
     fn fetch_with_no_output_is_a_quiet_success()
@@ -50,8 +58,12 @@ mod tests
         let git = Git::with(ScriptedFake::new().on(["fetch"], 0, "", ""));
 
         // Act
-        let outcome =
-            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+        let outcome = git
+            .fetch(&repo("backend", "/vmr/backend"), &FetchArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
 
         // Assert
         assert!(matches!(outcome, RepoOutcome::Success(None)));
@@ -69,8 +81,12 @@ mod tests
         ));
 
         // Act
-        let outcome =
-            git.fetch("backend", Path::new("/vmr/backend"), None, &[]).unwrap();
+        let outcome = git
+            .fetch(&repo("backend", "/vmr/backend"), &FetchArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
 
         // Assert
         let RepoOutcome::Success(Some(message)) = outcome

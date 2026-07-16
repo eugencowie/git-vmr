@@ -1,8 +1,14 @@
+use crate::cli::CliContext;
+use crate::git::CommitArgs;
 use crate::render::Rendered;
 use crate::workspace::Workspace;
 use anyhow::{Result, bail};
 
-pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
+pub fn run(
+    workspace: &Workspace,
+    _context: &CliContext,
+    args: CommitArgs
+) -> Result<Rendered>
 {
     // Filter child repositories without staged changes
     let dirty_repos = workspace
@@ -18,9 +24,7 @@ pub fn commit(workspace: &Workspace, message: &str) -> Result<Rendered>
     }
 
     // Commit in each dirty repository
-    workspace.run_in(&dirty_repos, |git, repo| {
-        git.commit(&repo.name, &repo.path, message)
-    })
+    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, &args))
 }
 
 #[cfg(test)]
@@ -28,7 +32,7 @@ mod tests
 {
     use super::*;
     use crate::git::{Git, ScriptedFake};
-    use crate::test_support::vmr_fixture;
+    use crate::test_support::{cli_context, vmr_fixture};
     use std::ffi::OsString;
     use std::sync::Arc;
 
@@ -43,7 +47,10 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let err = commit(&workspace, "message").unwrap_err();
+        let err = run(&workspace, &cli_context(tmp.path()), CommitArgs {
+            message: "message".to_owned()
+        })
+        .unwrap_err();
 
         // Assert
         assert_eq!(
@@ -66,7 +73,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = commit(&workspace, "message");
+        let result = run(&workspace, &cli_context(tmp.path()), CommitArgs {
+            message: "message".to_owned()
+        });
 
         // Assert
         assert!(result.is_ok());

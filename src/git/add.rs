@@ -1,5 +1,6 @@
 use crate::git::report::{FailureReport, SuccessReport, command_result};
 use crate::git::{Git, GitCommandResult, stderr};
+use crate::vmr::Repo;
 use anyhow::{Result, bail};
 use std::ffi::OsString;
 use std::fmt::{Display, Formatter};
@@ -48,21 +49,51 @@ impl FromStr for ChmodMode
     }
 }
 
-fn add_args(all: bool, force: bool, chmod: Option<ChmodMode>) -> Vec<OsString>
+/// Add file contents to the index
+#[derive(clap::Args)]
+pub struct AddArgs
+{
+    #[command(flatten)]
+    pub options: AddOptions,
+
+    /// Files to add content from
+    #[arg(required_unless_present = "all", num_args = 0.., value_name = "pathspec")]
+    pub paths: Vec<PathBuf>
+}
+
+#[derive(clap::Args)]
+pub struct AddOptions
+{
+    /// Allow adding otherwise ignored files
+    #[arg(short, long)]
+    pub force: bool,
+
+    /// Update the index not only where the working tree has a file
+    /// matching [pathspec] but also where the index already has an
+    /// entry
+    #[arg(short = 'A', long)]
+    pub all: bool,
+
+    /// Override the executable bit of added files
+    #[arg(long, value_name = "(+|-)x")]
+    pub chmod: Option<ChmodMode>
+}
+
+fn add_args(options: &AddOptions) -> Vec<OsString>
 {
     let mut args = vec![OsString::from("add")];
 
-    if all
+    if options.all
     {
         args.push(OsString::from("--all"));
     }
 
-    if force
+    if options.force
     {
         args.push(OsString::from("--force"));
     }
 
-    if let Some(chmod) = chmod
+    if let Some(chmod) = options.chmod
     {
         args.push(OsString::from(format!("--chmod={chmod}")));
     }
@@ -75,20 +106,15 @@ impl Git
 {
     pub fn add(
         &self,
-        repo_name: &str,
-        repo_path: &Path,
+        repo: &Repo,
         paths: &[PathBuf],
-        all: bool,
-        force: bool,
-        chmod: Option<ChmodMode>
+        options: &AddOptions
     ) -> GitCommandResult
     {
-        let output =
-            self.path_output(repo_path, add_args(all, force, chmod), paths)?;
+        let output = self.path_output(&repo.path, add_args(options), paths)?;
 
         command_result(
-            repo_name,
-            repo_path,
+            repo,
             &output,
             SuccessReport::quiet(),
             FailureReport::detailed("add")

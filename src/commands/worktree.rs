@@ -1,9 +1,31 @@
+use crate::cli::CliContext;
 use crate::render::{self, Rendered};
-use crate::workspace::{Workspace, resolve_target};
+use crate::workspace::{
+    Workspace, WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs,
+    WorktreeRemoveArgs, resolve_target
+};
 use anyhow::Result;
 use std::path::Path;
 
-pub fn list(workspace: &Workspace) -> Result<Rendered>
+pub fn run(
+    workspace: &Workspace,
+    context: &CliContext,
+    command: Option<WorktreeCommand>
+) -> Result<Rendered>
+{
+    let working_dir = &context.working_dir;
+
+    match command.unwrap_or(WorktreeCommand::List)
+    {
+        WorktreeCommand::Add(args) => add(workspace, working_dir, &args),
+        WorktreeCommand::List => list(workspace),
+        WorktreeCommand::Move(args) =>
+            move_worktree(workspace, working_dir, &args),
+        WorktreeCommand::Remove(args) => remove(workspace, working_dir, &args)
+    }
+}
+
+fn list(workspace: &Workspace) -> Result<Rendered>
 {
     let repo_names = workspace
         .repos()
@@ -16,35 +38,32 @@ pub fn list(workspace: &Workspace) -> Result<Rendered>
     Ok(render::worktree_list(groups, &repo_names).into())
 }
 
-pub fn add(
+fn add(
     workspace: &Workspace,
     working_dir: &Path,
-    path: &Path,
-    branch: Option<&str>,
-    commit_ish: Option<&str>
+    args: &WorktreeAddArgs
 ) -> Result<Rendered>
 {
-    let target = resolve_target(working_dir, path);
-    render::outcomes(
-        workspace.worktree_roots().add(&target, branch, commit_ish)?
-    )
+    let target = resolve_target(working_dir, &args.path);
+    render::outcomes(workspace.worktree_roots().add(
+        &target,
+        args.branch.as_deref(),
+        args.commit_ish.as_deref()
+    )?)
 }
 
-pub fn remove(
+fn remove(
     workspace: &Workspace,
     working_dir: &Path,
-    path: &Path,
-    force: u8,
-    delete: bool,
-    force_delete: bool
+    args: &WorktreeRemoveArgs
 ) -> Result<Rendered>
 {
-    let target = resolve_target(working_dir, path);
+    let target = resolve_target(working_dir, &args.path);
     let removal = workspace.worktree_roots().remove(
         &target,
-        force,
-        delete,
-        force_delete
+        args.force,
+        args.delete,
+        args.force_delete
     )?;
 
     let rendered = render::outcomes(removal.outcomes)?;
@@ -57,19 +76,20 @@ pub fn remove(
     }
 }
 
-pub fn move_worktree(
+fn move_worktree(
     workspace: &Workspace,
     working_dir: &Path,
-    path: &Path,
-    new_path: &Path,
-    force: u8
+    args: &WorktreeMoveArgs
 ) -> Result<Rendered>
 {
-    let source = resolve_target(working_dir, path);
-    let destination = resolve_target(working_dir, new_path);
+    let source = resolve_target(working_dir, &args.path);
+    let destination = resolve_target(working_dir, &args.new_path);
 
-    let moved =
-        workspace.worktree_roots().move_root(&source, &destination, force)?;
+    let moved = workspace.worktree_roots().move_root(
+        &source,
+        &destination,
+        args.force
+    )?;
 
     let rendered = render::outcomes(moved.outcomes)?;
 
