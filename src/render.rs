@@ -6,7 +6,6 @@ mod outcomes;
 use anstyle::{AnsiColor, Color, Style};
 use anyhow::Result;
 pub use outcomes::outcomes;
-pub(crate) use outcomes::outcomes_in_scope;
 use std::fmt;
 
 /// Rendered terminal text for one command, per stream. Commands return this

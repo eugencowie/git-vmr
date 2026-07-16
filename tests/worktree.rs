@@ -1103,8 +1103,9 @@ fn worktree_remove_delete_failure_cleans_worktree_root()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(
+            // The failure covers every repo in scope: no suffix
             predicate::str::contains("branch 'wt'")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(backend)").not())
         );
 
     assert!(!fixture.sibling("wt/backend").exists());
@@ -1133,8 +1134,9 @@ fn worktree_remove_force_delete_does_not_force_delete_unmerged_branch()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(
+            // The failure covers every repo in scope: no suffix
             predicate::str::contains("branch 'wt'")
-                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("(backend)").not())
         );
 
     assert!(!fixture.sibling("wt/backend").exists());
@@ -1144,7 +1146,9 @@ fn worktree_remove_force_delete_does_not_force_delete_unmerged_branch()
 #[test]
 fn worktree_remove_delete_reports_branch_failures_in_repository_name_order()
 {
-    let fixture = TestVmr::with_repos(&["alpha", "zeta"]);
+    // The middle repo stays merged, so the failure group does not cover
+    // the whole scope and the suffix names the failing repos.
+    let fixture = TestVmr::with_repos(&["alpha", "mid", "zeta"]);
     let vmr = fixture.path();
     add_worktrees(vmr);
     write_commit(
@@ -1165,7 +1169,7 @@ fn worktree_remove_delete_reports_branch_failures_in_repository_name_order()
         .args(["worktree", "remove", "--delete", "../wt"])
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::contains("Deleted branch wt (mid)"))
         .stderr(predicate::str::contains("(alpha, zeta)"));
 }
 

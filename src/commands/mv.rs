@@ -29,16 +29,20 @@ pub fn run(
 ) -> Result<Rendered>
 {
     let moved = mv(workspace, &context.working_dir, args)?;
-    render::outcomes_in_scope(moved.outcomes, moved.scope_repo_count)
+    render::outcomes(
+        moved.outcomes,
+        moved.scope_repos.iter().map(String::as_str)
+    )
 }
 
 /// The result of a move: one outcome per executed move entry, plus the
-/// number of distinct child repos in the command's routed scope. The two
-/// counts can differ when several entries move between the same repos.
+/// names of the child repos in the command's routed scope — every source's
+/// repo and the destination's, duplicates included. Entries and scope can
+/// differ when several entries move between the same repos.
 struct MoveOutcomes
 {
     outcomes: Vec<GitCommandResult>,
-    scope_repo_count: usize
+    scope_repos: Vec<String>
 }
 
 /// Moves sources to a destination across the workspace: routes every
@@ -64,12 +68,11 @@ fn mv(
         .map(|source| workspace.route_single(working_dir, source))
         .collect::<Result<Vec<_>>>()?;
     let destination = workspace.route_single(working_dir, &args.destination)?;
-    let scope_repo_count = sources
+    let scope_repos = sources
         .iter()
-        .map(|(repo, _)| repo.name.as_str())
-        .chain(std::iter::once(destination.0.name.as_str()))
-        .collect::<HashSet<_>>()
-        .len();
+        .map(|(repo, _)| repo.name.clone())
+        .chain(std::iter::once(destination.0.name.clone()))
+        .collect::<Vec<_>>();
 
     if sources.len() == 1 && sources[0].0 == destination.0
     {
@@ -79,12 +82,12 @@ fn mv(
                 repo,
                 git.mv(&repo.path, source_relative, &destination.1)
             )],
-            scope_repo_count
+            scope_repos
         });
     }
 
     let plan = MovePlan::build(git, sources, destination)?;
-    Ok(MoveOutcomes { outcomes: execute_plan(git, plan), scope_repo_count })
+    Ok(MoveOutcomes { outcomes: execute_plan(git, plan), scope_repos })
 }
 
 impl Git

@@ -115,11 +115,20 @@ fn add(
 ) -> Result<Rendered>
 {
     let target = resolve_target(working_dir, &args.path);
-    outcomes(WorktreeRoots::new(workspace).add(
-        &target,
-        args.branch.as_deref(),
-        args.commit_ish.as_deref()
-    )?)
+    outcomes(
+        WorktreeRoots::new(workspace).add(
+            &target,
+            args.branch.as_deref(),
+            args.commit_ish.as_deref()
+        )?,
+        repo_scope(workspace)
+    )
+}
+
+/// The scope of a root operation: one child worktree per child repo.
+fn repo_scope<'a>(workspace: &'a Workspace) -> impl Iterator<Item = &'a str>
+{
+    workspace.repos().iter().map(|repo| repo.name.as_str())
 }
 
 fn remove(
@@ -136,7 +145,7 @@ fn remove(
         args.force_delete
     )?;
 
-    let rendered = outcomes(removal.outcomes)?;
+    let rendered = outcomes(removal.outcomes, repo_scope(workspace))?;
 
     // Keep the per-repo successes if dissolving the root fails
     match removal.dissolved
@@ -161,7 +170,7 @@ fn mv(
         args.force
     )?;
 
-    let rendered = outcomes(moved.outcomes)?;
+    let rendered = outcomes(moved.outcomes, repo_scope(workspace))?;
 
     // Keep the per-repo successes if dissolving the source root fails
     match moved.dissolved

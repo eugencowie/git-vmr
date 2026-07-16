@@ -81,7 +81,8 @@ impl<'a> Workspace<'a>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
         render::outcomes(
-            repos.par_iter().map(|repo| op(self.git, repo)).collect::<Vec<_>>()
+            repos.par_iter().map(|repo| op(self.git, repo)).collect::<Vec<_>>(),
+            repos.iter().map(|repo| repo.name.as_str())
         )
     }
 
@@ -103,7 +104,8 @@ impl<'a> Workspace<'a>
             routed
                 .par_iter()
                 .map(|(repo, repo_paths)| op(self.git, repo, repo_paths))
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            routed.iter().map(|(repo, _)| repo.name.as_str())
         )
     }
 
