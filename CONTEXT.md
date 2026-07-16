@@ -42,6 +42,10 @@ _Avoid_: mapping, dispatching, resolving
 A path that expands to more than one child repo — the VMR root itself, as in `add -A`. "Aggregate" is reserved for this routing sense alone.
 _Avoid_: root path, wildcard path, aggregate worktree (say worktree root)
 
+**Aggregate policy**:
+The declared per-command rule for what happens when a user-supplied path resolves to the aggregate path: allowed to expand across the workspace, or denied with a command-supplied message.
+_Avoid_: aggregate guard, root check
+
 **Scope**:
 What a path-taking command operates over: explicit paths, or the entire VMR via the aggregate path.
 _Avoid_: target, selection
