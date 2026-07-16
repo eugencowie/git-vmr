@@ -91,7 +91,7 @@ The declarative per-operation rule for how a repo outcome's message is produced:
 _Avoid_: message extraction, message rules, output handling
 
 **Result aggregation**:
-Grouping repo outcomes with identical messages, so a command reports once per message across many child repos, not once per repo.
+Grouping repo outcomes with identical messages, so a command reports once per message across many child repos, not once per repo. Consumes the outcomes together with the child repos in scope — supplied by the command, since outcomes cannot self-describe their scope — and omits the repo-list suffix when a group covers every repo in scope.
 _Avoid_: output grouping, deduplication
 
 **Head**:

@@ -1,23 +1,23 @@
 use crate::git::{GitCommandResult, RepoMessage, RepoOutcome};
 use crate::render::{Rendered, SuffixPolicy, fail, repo_list_suffix};
 use anyhow::Result;
+use std::collections::HashSet;
 
-/// Renders aggregated per-repo outcomes: identical messages are grouped,
-/// successes become stdout, and failures become the command's error.
-pub fn outcomes(results: Vec<GitCommandResult>) -> Result<Rendered>
-{
-    let total = results.len();
-    outcomes_in_scope(results, total)
-}
-
-/// Renders outcomes against an explicit repository scope. This is used by
-/// commands whose result count is not the same as the number of child repos
-/// involved, such as a move that produces one outcome per moved entry.
-pub(crate) fn outcomes_in_scope(
+/// Renders aggregated per-repo outcomes against the child repos in scope:
+/// identical messages are grouped, successes become stdout, and failures
+/// become the command's error. The suffix is omitted when a group covers
+/// every repo in scope.
+///
+/// The scope — repo names, duplicates allowed — must be supplied by the
+/// caller: outcomes cannot self-describe it, because quiet successes and
+/// hard errors carry no repo name, and a repo in scope (a move's
+/// destination) may produce no outcome at all.
+pub fn outcomes<'a>(
     results: Vec<GitCommandResult>,
-    total: usize
+    scope: impl IntoIterator<Item = &'a str>
 ) -> Result<Rendered>
 {
+    let total = scope.into_iter().collect::<HashSet<_>>().len();
     let mut successes = Vec::new();
     let mut failures = Vec::new();
     let mut errors = Vec::new();
@@ -179,7 +179,8 @@ mod tests
     fn outcomes_succeeds_for_empty_or_quiet_success_results()
     {
         // Act
-        let result = outcomes(vec![Ok(RepoOutcome::Success(None))]);
+        let result =
+            outcomes(vec![Ok(RepoOutcome::Success(None))], ["backend"]);
 
         // Assert
         assert!(result.unwrap().stdout.is_empty());
@@ -201,7 +202,7 @@ mod tests
         ];
 
         // Act
-        let rendered = outcomes(results).unwrap();
+        let rendered = outcomes(results, ["backend", "frontend"]).unwrap();
 
         // Assert
         assert_eq!(rendered.stdout, "Already up to date.\n");
@@ -220,7 +221,7 @@ mod tests
         ];
 
         // Act
-        let rendered = outcomes(results).unwrap();
+        let rendered = outcomes(results, ["backend", "frontend"]).unwrap();
 
         // Assert
         assert_eq!(
@@ -246,7 +247,8 @@ mod tests
         ];
 
         // Act
-        let err = outcomes(results).unwrap_err();
+        let err =
+            outcomes(results, ["backend", "frontend", "tools"]).unwrap_err();
 
         // Assert
         assert_eq!(
@@ -264,7 +266,7 @@ mod tests
                 .context("failed to fetch repository"));
 
         // Act
-        let err = outcomes(vec![error]).unwrap_err();
+        let err = outcomes(vec![error], ["backend"]).unwrap_err();
 
         // Assert
         assert_eq!(
@@ -286,7 +288,7 @@ mod tests
         ];
 
         // Act
-        let err = outcomes(results).unwrap_err();
+        let err = outcomes(results, ["backend", "frontend"]).unwrap_err();
 
         // Assert
         let failed = err.downcast::<crate::render::Failed>().unwrap();
@@ -295,10 +297,10 @@ mod tests
     }
 
     #[test]
-    fn explicit_scope_deduplicates_repos_from_repeated_entry_outcomes()
+    fn scope_deduplicates_repeated_repo_names()
     {
         // Arrange: two move entries failed in the same destination repo,
-        // within a command whose scope also includes the source repo.
+        // within a command whose scope names that repo once per entry.
         let results = vec![
             Ok(RepoOutcome::Failure(repo_message(
                 "frontend",
@@ -311,12 +313,45 @@ mod tests
         ];
 
         // Act
-        let err = outcomes_in_scope(results, 2).unwrap_err();
+        let err =
+            outcomes(results, ["backend", "frontend", "frontend"]).unwrap_err();
 
         // Assert
         assert_eq!(
             err.to_string(),
             "unable to stage \x1b[90m(frontend)\x1b[0m"
         );
+    }
+
+    #[test]
+    fn scope_repos_without_outcomes_widen_the_denominator()
+    {
+        // Arrange: a move's destination repo is in scope but produces no
+        // outcome, so a failure confined to the source must keep its suffix.
+        let results =
+            vec![Ok(RepoOutcome::Failure(repo_message("backend", "fatal")))];
+
+        // Act
+        let err = outcomes(results, ["backend", "frontend"]).unwrap_err();
+
+        // Assert
+        assert_eq!(err.to_string(), "fatal \x1b[90m(backend)\x1b[0m");
+    }
+
+    #[test]
+    fn suffix_is_omitted_when_a_group_covers_the_whole_scope()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Success(Some(repo_message("backend", "pushed")))),
+            Ok(RepoOutcome::Success(Some(repo_message("frontend", "pushed")))),
+        ];
+
+        // Act
+        let rendered =
+            outcomes(results, ["backend", "frontend", "backend"]).unwrap();
+
+        // Assert
+        assert_eq!(rendered.stdout, "pushed\n");
     }
 }
