@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git, git_vmr, init_repo};
+use common::{commit_file, git, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -334,6 +334,10 @@ fn tag_delete_deletes_tag_in_every_child_repository()
     commit_file(&frontend, "README.md");
     git(&backend, ["tag", "v1.0.0"]);
     git(&frontend, ["tag", "v1.0.0"]);
+    assert_eq!(
+        git_output(&backend, ["rev-parse", "v1.0.0"]),
+        git_output(&frontend, ["rev-parse", "v1.0.0"])
+    );
 
     git_vmr()
         .current_dir(tmp.path())
@@ -366,6 +370,10 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
     commit_file(&frontend, "README.md");
     git(&backend, ["tag", "v1.0.0"]);
     git(&frontend, ["tag", "v1.0.0"]);
+    assert_eq!(
+        git_output(&backend, ["rev-parse", "v1.0.0"]),
+        git_output(&frontend, ["rev-parse", "v1.0.0"])
+    );
 
     git_vmr()
         .current_dir(tmp.path())

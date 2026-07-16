@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
 
 static NEXT_TEST_ENV_ID: AtomicUsize = AtomicUsize::new(0);
+const TEST_GIT_DATE: &str = "2000-01-01T00:00:00Z";
 
 pub fn git_vmr() -> Command
 {
@@ -44,6 +45,8 @@ fn run_git<const N: usize>(dir: &Path, args: [&str; N])
     let output = std::process::Command::new("git")
         .args(args)
         .current_dir(dir)
+        .env("GIT_AUTHOR_DATE", TEST_GIT_DATE)
+        .env("GIT_COMMITTER_DATE", TEST_GIT_DATE)
         .output()
         .expect("failed to run git");
     assert!(
