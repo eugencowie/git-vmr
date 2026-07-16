@@ -6,11 +6,11 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: RebaseArgs
+    args: &RebaseArgs
 ) -> Result<Rendered>
 {
     // Rebase in each child repository
-    workspace.run(|git, repo| git.rebase(repo, &args))
+    workspace.run(|git, repo| git.rebase(repo, args))
 }
 
 use crate::git::report::{

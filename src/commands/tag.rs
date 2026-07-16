@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: TagArgs
+    args: &TagArgs
 ) -> Result<Rendered>
 {
     match args.action()

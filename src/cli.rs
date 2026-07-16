@@ -11,7 +11,7 @@ use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
 pub use error::SilentError;
-use event_meta::{CommandEventMeta, event_meta};
+use event_meta::CliMetadata;
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -23,13 +23,13 @@ pub const APP_NAME: &str = "git-vmr";
 #[command(name = APP_NAME, version, disable_version_flag = true)]
 pub struct Cli
 {
+    /// Metadata derived from the command line arguments
+    #[arg(skip)]
+    metadata: CliMetadata,
+
     /// Display name of the application
     #[arg(skip)]
     display_name: String,
-
-    /// Event metadata derived from the parsed command line
-    #[arg(skip)]
-    event_meta: CommandEventMeta,
 
     /// Run as if git-vmr was started in <path> instead of the current working
     /// directory
@@ -47,26 +47,30 @@ pub struct Cli
 
 impl Cli
 {
-    /// Parse arguments
+    /// Parse command line arguments
     pub fn parse() -> Self
     {
         Self::parse_from(env::args_os()).unwrap_or_else(|err| err.exit())
     }
 
-    /// Parse arguments from iterator
+    /// Parse the given arguments
     pub(crate) fn parse_from<I, T>(args: I) -> Result<Self, Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone
     {
-        // Parse arguments
+        // Parse valid command arguments
         let mut command = Self::command();
         let mut matches = command.try_get_matches_from_mut(args)?;
-        let meta = event_meta(&command, &matches);
-        let mut cli = Self::from_arg_matches_mut(&mut matches)?;
-        cli.event_meta = meta;
 
-        // Set display name
+        // Build command metadata
+        let metadata = event_meta::event_meta(&command, &matches);
+
+        // Map valid arguments to typed struct
+        let mut cli = Self::from_arg_matches_mut(&mut matches)?;
+
+        // Enrich with metadata
+        cli.metadata = metadata;
         cli.display_name =
             match command.get_bin_name().unwrap_or_else(|| command.get_name())
             {
@@ -96,24 +100,21 @@ impl Cli
 
         // Run command
         let start = Instant::now();
-        let meta = self.event_meta;
         let result = self.command.run(&context);
+        let result = render::emit(result);
 
-        // Record analytics event
+        // Record analytics
         analytics::record(
             &context.global_config.analytics,
             &mut context.global_state.analytics,
             CommandEvent {
-                name: meta.name,
+                name: self.metadata.name,
                 success: result.is_ok(),
                 duration_ms: start.elapsed().as_millis(),
-                flags: meta.flags,
-                global_flags: meta.global_flags
+                flags: self.metadata.flags,
+                global_flags: self.metadata.global_flags
             }
         );
-
-        // Print rendered command output at the single choke point
-        let result = render::emit(result);
 
         // Check for updates
         if let Some(update) = updates::check(
@@ -207,9 +208,9 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.event_meta.global_flags, ["working_dir"]);
-        assert_eq!(cli.event_meta.name, "add");
-        assert_eq!(cli.event_meta.flags, ["chmod"]);
+        assert_eq!(cli.metadata.global_flags, ["working_dir"]);
+        assert_eq!(cli.metadata.name, "add");
+        assert_eq!(cli.metadata.flags, ["chmod"]);
     }
 
     #[test]
@@ -225,8 +226,8 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.event_meta.name, "worktree.remove");
-        assert_eq!(cli.event_meta.flags, ["force", "delete"]);
+        assert_eq!(cli.metadata.name, "worktree.remove");
+        assert_eq!(cli.metadata.flags, ["force", "delete"]);
     }
 
     #[test]
@@ -237,8 +238,8 @@ mod tests
         ])
         .unwrap();
 
-        assert_eq!(cli.event_meta.name, "foreach");
-        assert_eq!(cli.event_meta.flags, ["quiet"]);
+        assert_eq!(cli.metadata.name, "foreach");
+        assert_eq!(cli.metadata.flags, ["quiet"]);
     }
 
     #[test]

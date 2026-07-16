@@ -2,7 +2,7 @@ use crate::cli::{CliContext, SilentError};
 use crate::render::Rendered;
 use anyhow::Result;
 
-pub fn run(context: &CliContext, args: CloneArgs) -> Result<Rendered>
+pub fn run(context: &CliContext, args: &CloneArgs) -> Result<Rendered>
 {
     let status = context.git.clone(
         &context.working_dir,
@@ -78,7 +78,7 @@ mod tests
 
         // Act
         let result =
-            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+            run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
                 repository: "https://example.com/repo".to_owned(),
                 directory: Some(PathBuf::from("dir"))
             });
@@ -98,7 +98,7 @@ mod tests
         let git = Git::with(Arc::clone(&fake));
 
         // Act
-        run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+        run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
             repository: "https://example.com/repo".to_owned(),
             directory: None
         })
@@ -120,7 +120,7 @@ mod tests
 
         // Act
         let error =
-            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+            run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
                 repository: "https://example.com/repo".to_owned(),
                 directory: None
             })

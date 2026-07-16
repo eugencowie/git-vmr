@@ -5,7 +5,7 @@ use clap::{ArgMatches, Command};
 /// and the names of flags explicitly given on the command line. Names only,
 /// never values; positionals excluded.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct CommandEventMeta
+pub struct CliMetadata
 {
     pub name: String,
     pub flags: Vec<String>,
@@ -13,9 +13,9 @@ pub struct CommandEventMeta
 }
 
 /// Derive event metadata from the CLI definition and its parsed matches.
-pub fn event_meta(command: &Command, matches: &ArgMatches) -> CommandEventMeta
+pub fn event_meta(command: &Command, matches: &ArgMatches) -> CliMetadata
 {
-    let mut meta = CommandEventMeta {
+    let mut meta = CliMetadata {
         name: String::new(),
         flags: Vec::new(),
         global_flags: present_flags(command, matches)
@@ -63,7 +63,7 @@ mod tests
     use crate::cli::Cli;
     use clap::CommandFactory;
 
-    fn meta(args: &[&str]) -> CommandEventMeta
+    fn meta(args: &[&str]) -> CliMetadata
     {
         let mut command = Cli::command();
         let matches = command

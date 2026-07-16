@@ -25,10 +25,10 @@ pub struct MvArgs
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    args: MvArgs
+    args: &MvArgs
 ) -> Result<Rendered>
 {
-    let moved = mv(workspace, &context.working_dir, &args)?;
+    let moved = mv(workspace, &context.working_dir, args)?;
     render::outcomes_in_scope(moved.outcomes, moved.scope_repo_count)
 }
 

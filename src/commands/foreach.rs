@@ -68,7 +68,7 @@ pub struct ForeachArgs
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    args: ForeachArgs
+    args: &ForeachArgs
 ) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;

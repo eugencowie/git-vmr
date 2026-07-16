@@ -81,18 +81,17 @@ pub struct WorktreeRemoveArgs
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    command: Option<WorktreeCommand>
+    command: &Option<WorktreeCommand>
 ) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;
 
-    match command.unwrap_or(WorktreeCommand::List)
+    match command.as_ref().unwrap_or(&WorktreeCommand::List)
     {
-        WorktreeCommand::Add(args) => add(workspace, working_dir, &args),
+        WorktreeCommand::Add(args) => add(workspace, working_dir, args),
         WorktreeCommand::List => list(workspace),
-        WorktreeCommand::Move(args) =>
-            move_worktree(workspace, working_dir, &args),
-        WorktreeCommand::Remove(args) => remove(workspace, working_dir, &args)
+        WorktreeCommand::Move(args) => mv(workspace, working_dir, args),
+        WorktreeCommand::Remove(args) => remove(workspace, working_dir, args)
     }
 }
 
@@ -147,7 +146,7 @@ fn remove(
     }
 }
 
-fn move_worktree(
+fn mv(
     workspace: &Workspace,
     working_dir: &Path,
     args: &WorktreeMoveArgs

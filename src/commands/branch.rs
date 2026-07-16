@@ -6,7 +6,7 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: BranchArgs
+    args: &BranchArgs
 ) -> Result<Rendered>
 {
     match args.action()

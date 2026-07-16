@@ -6,11 +6,11 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: MergeArgs
+    args: &MergeArgs
 ) -> Result<Rendered>
 {
     // Merge in each child repository
-    workspace.run(|git, repo| git.merge(repo, &args))
+    workspace.run(|git, repo| git.merge(repo, args))
 }
 
 use crate::git::report::{

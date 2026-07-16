@@ -91,7 +91,7 @@ pub enum WorkspaceCommand
 
 impl Command
 {
-    pub fn run(self, context: &CliContext) -> Result<Rendered>
+    pub fn run(&self, context: &CliContext) -> Result<Rendered>
     {
         match self
         {
@@ -112,7 +112,7 @@ impl Command
 impl WorkspaceCommand
 {
     fn run(
-        self,
+        &self,
         workspace: &Workspace,
         context: &CliContext
     ) -> Result<Rendered>

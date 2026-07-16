@@ -6,11 +6,11 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: PushArgs
+    args: &PushArgs
 ) -> Result<Rendered>
 {
     // Push in each child repository
-    workspace.run(|git, repo| git.push(repo, &args))
+    workspace.run(|git, repo| git.push(repo, args))
 }
 
 use crate::git::report::{

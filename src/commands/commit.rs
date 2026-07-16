@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: CommitArgs
+    args: &CommitArgs
 ) -> Result<Rendered>
 {
     // Filter child repositories without staged changes
@@ -23,7 +23,7 @@ pub fn run(
     }
 
     // Commit in each dirty repository
-    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, &args))
+    workspace.run_in(&dirty_repos, |git, repo| git.commit(repo, args))
 }
 
 use crate::git::report::{
@@ -104,7 +104,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let err = run(&workspace, &cli_context(tmp.path()), CommitArgs {
+        let err = run(&workspace, &cli_context(tmp.path()), &CommitArgs {
             message: "message".to_owned()
         })
         .unwrap_err();
@@ -130,7 +130,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = run(&workspace, &cli_context(tmp.path()), CommitArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), &CommitArgs {
             message: "message".to_owned()
         });
 

@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    args: RmArgs
+    args: &RmArgs
 ) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;

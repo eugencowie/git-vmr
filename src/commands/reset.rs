@@ -6,7 +6,7 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: ResetArgs
+    args: &ResetArgs
 ) -> Result<Rendered>
 {
     let mode = args.mode();

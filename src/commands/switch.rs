@@ -6,11 +6,11 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: SwitchArgs
+    args: &SwitchArgs
 ) -> Result<Rendered>
 {
     // Switch in each child repository, creating the branch when asked
-    workspace.run(|git, repo| git.switch(repo, &args))
+    workspace.run(|git, repo| git.switch(repo, args))
 }
 
 use crate::git::report::{

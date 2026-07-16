@@ -12,6 +12,7 @@ mod updates;
 mod vmr;
 mod workspace;
 
+use anstream::eprintln;
 use cli::{Cli, SilentError};
 use std::process::ExitCode;
 
@@ -20,13 +21,13 @@ fn main() -> ExitCode
     // Parse arguments
     let cli = Cli::parse();
 
-    // Run command and handle errors
+    // Run command
     if let Err(e) = cli.run()
     {
-        // A silent error should not be displayed
+        // Suppress silent errors
         if !e.is::<SilentError>()
         {
-            anstream::eprintln!("{e:#}");
+            eprintln!("{e:#}");
         }
 
         return ExitCode::FAILURE;

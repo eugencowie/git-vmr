@@ -6,11 +6,11 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     _context: &CliContext,
-    args: FetchArgs
+    args: &FetchArgs
 ) -> Result<Rendered>
 {
     // Fetch in each child repository
-    workspace.run(|git, repo| git.fetch(repo, &args))
+    workspace.run(|git, repo| git.fetch(repo, args))
 }
 
 use crate::git::report::{
@@ -76,7 +76,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), &FetchArgs {
             repository: None,
             refspecs: vec![]
         });
@@ -110,7 +110,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = run(&workspace, &cli_context(tmp.path()), FetchArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), &FetchArgs {
             repository: Some("origin".to_owned()),
             refspecs: vec!["main".to_owned()]
         });

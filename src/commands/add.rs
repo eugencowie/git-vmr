@@ -6,7 +6,7 @@ use anyhow::Result;
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    args: AddArgs
+    args: &AddArgs
 ) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;
@@ -177,7 +177,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = run(&workspace, &cli_context(tmp.path()), AddArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), &AddArgs {
             options: AddOptions { all: true, force: false, chmod: None },
             paths: vec![]
         });
@@ -212,7 +212,7 @@ mod tests
         let paths = vec![PathBuf::from("backend/src/main.rs")];
 
         // Act
-        let result = run(&workspace, &cli_context(tmp.path()), AddArgs {
+        let result = run(&workspace, &cli_context(tmp.path()), &AddArgs {
             options: AddOptions { all: false, force: false, chmod: None },
             paths
         });
