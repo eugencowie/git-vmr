@@ -108,6 +108,10 @@ _Avoid_: session (unqualified), tracking session
 The record of what was invoked: the dotted command name and the names of flags explicitly given on the command line, derived generically from the CLI definition. Names only, never values; positionals excluded.
 _Avoid_: telemetry payload, event props, flag list
 
+**Analytics sink**:
+The seam through which every analytics emission passes, receiving a session ID and fully-built event props. Three adapters satisfy it: a file log, the hosted collector, and a no-op. Failures are swallowed at the seam, never in an adapter.
+_Avoid_: transport, emitter, backend
+
 ### Updates
 
 **Update check**:

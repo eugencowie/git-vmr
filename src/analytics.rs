@@ -1,8 +1,10 @@
+use anyhow::Result;
 use aptabase_rs::Builder;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::env;
+use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Duration as StdDuration;
@@ -82,13 +84,40 @@ pub fn record(
     event: CommandEvent
 )
 {
+    if let Some(path) = env::var_os("GITVMR_ANALYTICS_LOG")
+    {
+        record_with_sink(config, state, event, Utc::now(), |_, props| {
+            log_to_file(&path, &props)
+        });
+    }
+    else if let Some(app_key) = APP_KEY
+    {
+        record_with_sink(config, state, event, Utc::now(), |session, props| {
+            emit_to_aptabase(app_key, session, props)
+        });
+    }
+    else
+    {
+        record_with_sink(config, state, event, Utc::now(), |_, _| Ok(()));
+    }
+}
+
+/// Evaluate the session and hand the built event to the analytics sink
+fn record_with_sink(
+    config: &Analytics,
+    state: &mut AnalyticsState,
+    event: CommandEvent,
+    now: DateTime<Utc>,
+    sink: impl FnOnce(String, serde_json::Value) -> Result<()>
+)
+{
     // Disabled analytics record nothing
     if !config.enabled()
     {
         return;
     }
 
-    let session_id = state.eval_session_id(Utc::now());
+    let session_id = state.eval_session_id(now);
 
     let mut props = json!({
         "name": event.name,
@@ -109,38 +138,37 @@ pub fn record(
         }
     }
 
-    if let Some(path) = env::var_os("GITVMR_ANALYTICS_LOG")
-    {
-        let _ = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .and_then(|mut file| writeln!(file, "{props}"));
-        return;
-    }
+    // Analytics failures are always quiet
+    let _ = sink(session_id, props);
+}
 
-    let Some(app_key) = APP_KEY
-    else
-    {
-        return;
-    };
+/// Append event props to the analytics log file
+fn log_to_file(path: &OsStr, props: &serde_json::Value) -> Result<()>
+{
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    writeln!(file, "{props}")?;
+    Ok(())
+}
 
-    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+/// Emit an event to the hosted collector
+fn emit_to_aptabase(
+    app_key: &str,
+    session_id: String,
+    props: serde_json::Value
+) -> Result<()>
+{
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .enable_io()
-        .build()
-    else
-    {
-        return;
-    };
-
+        .build()?;
     let client = Builder::new(app_key, env!("CARGO_PKG_VERSION"))
         .with_session_id(session_id)
         .build();
-    let _ = client.track_event(EVENT_NAME, Some(props));
-    let _ = runtime.block_on(async {
+    client.track_event(EVENT_NAME, Some(props)).map_err(anyhow::Error::msg)?;
+    runtime.block_on(async {
         tokio::time::timeout(FLUSH_TIMEOUT, client.flush()).await
-    });
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -180,9 +208,54 @@ mod tests
                     .enabled_for_major_version("1")
             );
         }
+    }
+
+    mod record_with_sink
+    {
+        use super::*;
+        use std::cell::{Cell, RefCell};
+
+        fn enabled() -> Analytics
+        {
+            Analytics { enabled: Some(true) }
+        }
+
+        fn event(name: &str) -> CommandEvent
+        {
+            CommandEvent {
+                name: name.to_owned(),
+                success: true,
+                duration_ms: 1,
+                flags: Vec::new(),
+                global_flags: Vec::new()
+            }
+        }
+
+        /// Record one event and return what reached the sink
+        fn emit(
+            state: &mut AnalyticsState,
+            event: CommandEvent,
+            now: DateTime<Utc>
+        ) -> (String, serde_json::Value)
+        {
+            let emitted = RefCell::new(None);
+
+            record_with_sink(
+                &enabled(),
+                state,
+                event,
+                now,
+                |session, props| {
+                    *emitted.borrow_mut() = Some((session, props));
+                    Ok(())
+                }
+            );
+
+            emitted.into_inner().expect("sink was not called")
+        }
 
         #[test]
-        fn disabled_record_does_not_update_state()
+        fn disabled_record_does_not_update_state_or_emit()
         {
             let analytics = Analytics { enabled: Some(false) };
             let mut state = AnalyticsState {
@@ -190,18 +263,104 @@ mod tests
                 last_activity: Some(now() - Duration::hours(4))
             };
             let original_state = state.clone();
+            let emitted = Cell::new(false);
 
-            record(&analytics, &mut state, CommandEvent {
-                name: "list".to_owned(),
-                success: true,
-                duration_ms: 1,
-                flags: Vec::new(),
-                global_flags: Vec::new()
-            });
+            record_with_sink(
+                &analytics,
+                &mut state,
+                event("list"),
+                now(),
+                |_, _| {
+                    emitted.set(true);
+                    Ok(())
+                }
+            );
 
-            assert_eq!(state.session_id, original_state.session_id);
-            assert_eq!(state.last_activity, original_state.last_activity);
+            assert!(!emitted.get());
             assert_eq!(state, original_state);
+        }
+
+        #[test]
+        fn props_carry_name_success_and_duration()
+        {
+            let mut state = AnalyticsState::default();
+
+            let (_, props) = emit(&mut state, event("status.list"), now());
+
+            assert_eq!(props["name"], "status.list");
+            assert_eq!(props["success"], true);
+            assert_eq!(props["duration_ms"], 1);
+        }
+
+        #[test]
+        fn explicit_flags_are_suffixed()
+        {
+            let mut state = AnalyticsState::default();
+            let event = CommandEvent {
+                flags: vec!["all".to_owned()],
+                global_flags: vec!["directory".to_owned()],
+                ..event("add")
+            };
+
+            let (_, props) = emit(&mut state, event, now());
+
+            assert_eq!(props["all_flag"], true);
+            assert_eq!(props["directory_global_flag"], true);
+        }
+
+        #[test]
+        fn missing_session_selects_new_id()
+        {
+            let mut state = AnalyticsState::default();
+
+            let (session_id, _) = emit(&mut state, event("list"), now());
+
+            assert!(!session_id.is_empty());
+            assert_eq!(state.session_id, Some(session_id));
+            assert_eq!(state.last_activity, Some(now()));
+        }
+
+        #[test]
+        fn active_session_reuses_id()
+        {
+            let mut state = AnalyticsState::default();
+
+            let (first, _) = emit(&mut state, event("list"), now());
+            let (second, _) =
+                emit(&mut state, event("list"), now() + Duration::hours(3));
+
+            assert_eq!(second, first);
+            assert_eq!(state.last_activity, Some(now() + Duration::hours(3)));
+        }
+
+        #[test]
+        fn expired_session_rotates_id()
+        {
+            let mut state = AnalyticsState::default();
+
+            let (first, _) = emit(&mut state, event("list"), now());
+            let (second, _) =
+                emit(&mut state, event("list"), now() + Duration::hours(4));
+
+            assert_ne!(second, first);
+            assert_eq!(state.session_id, Some(second));
+        }
+
+        #[test]
+        fn sink_failure_is_quiet_and_keeps_state()
+        {
+            let mut state = AnalyticsState::default();
+
+            record_with_sink(
+                &enabled(),
+                &mut state,
+                event("list"),
+                now(),
+                |_, _| anyhow::bail!("collector unreachable")
+            );
+
+            assert!(state.session_id.is_some());
+            assert_eq!(state.last_activity, Some(now()));
         }
     }
 
@@ -243,47 +402,6 @@ mod tests
             .unwrap();
 
             assert_eq!(state.session_id, Some("session-1".to_owned()));
-            assert_eq!(state.last_activity, Some(now()));
-        }
-
-        #[test]
-        fn missing_session_selects_new_id()
-        {
-            let mut state = AnalyticsState::default();
-
-            let session_id = state.eval_session_id(now());
-
-            assert!(!session_id.is_empty());
-            assert_eq!(state.session_id, Some(session_id));
-            assert_eq!(state.last_activity, Some(now()));
-        }
-
-        #[test]
-        fn active_session_reuses_id()
-        {
-            let mut state = AnalyticsState {
-                session_id: Some("session-1".to_owned()),
-                last_activity: Some(now() - Duration::hours(3))
-            };
-
-            let session_id = state.eval_session_id(now());
-
-            assert_eq!(session_id, "session-1");
-            assert_eq!(state.last_activity, Some(now()));
-        }
-
-        #[test]
-        fn expired_session_rotates_id()
-        {
-            let mut state = AnalyticsState {
-                session_id: Some("session-1".to_owned()),
-                last_activity: Some(now() - Duration::hours(4))
-            };
-
-            let session_id = state.eval_session_id(now());
-
-            assert_ne!(session_id, "session-1");
-            assert_eq!(state.session_id, Some(session_id));
             assert_eq!(state.last_activity, Some(now()));
         }
     }
