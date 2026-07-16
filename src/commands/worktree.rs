@@ -244,3 +244,640 @@ mod render_tests
         }
     }
 }
+
+#[cfg(test)]
+mod parse_tests
+{
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
+    use crate::workspace::{
+        WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs, WorktreeRemoveArgs
+    };
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn parses_worktree_add_target_path()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "add", "../wt"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
+                    branch: None,
+                    path,
+                    commit_ish: None
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_add_optional_commit_ish()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "add", "../wt", "main"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
+                    branch: None,
+                    path,
+                    commit_ish: Some(commit_ish)
+                }))
+            }) if &path == "../wt" && commit_ish == "main"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_add_branch()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "-b",
+            "feature/auth",
+            "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
+                    branch: Some(branch),
+                    path,
+                    commit_ish: None
+                }))
+            }) if branch == "feature/auth" && &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_add_branch_with_commit_ish()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "-b",
+            "feature/auth",
+            "../wt",
+            "main"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Add(WorktreeAddArgs {
+                    branch: Some(branch),
+                    path,
+                    commit_ish: Some(commit_ish)
+                }))
+            }) if branch == "feature/auth" && &path == "../wt" && commit_ish == "main"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_add_branch_without_value()
+    {
+        // Act
+        let err = Cli::parse_from(["git-vmr", "worktree", "add", "-b"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn rejects_worktree_add_long_branch_alias()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr",
+            "worktree",
+            "add",
+            "--branch",
+            "feature/auth",
+            "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_add_without_target_path()
+    {
+        // Act
+        let err =
+            Cli::parse_from(["git-vmr", "worktree", "add"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_add_extra_operands()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr", "worktree", "add", "../wt", "main", "extra"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn parses_worktree_list()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "worktree", "list"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::List)
+            })
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_without_subcommand_as_default_list()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "worktree"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree { command: None })
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_list_extra_operands()
+    {
+        // Act
+        let err = Cli::parse_from(["git-vmr", "worktree", "list", "extra"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_list_options()
+    {
+        for option in ["--porcelain", "-z", "-v"]
+        {
+            // Act
+            let err = Cli::parse_from(["git-vmr", "worktree", "list", option])
+                .err()
+                .unwrap();
+
+            // Assert
+            assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+        }
+    }
+
+    #[test]
+    fn parses_worktree_remove_target_path()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "worktree", "remove", "../wt"])
+            .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 0,
+                    delete: false,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_rm_alias_target_path()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "rm", "../wt"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 0,
+                    delete: false,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_single_force()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "--force", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 1,
+                    delete: false,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_repeated_long_force()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "--force", "--force", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 2,
+                    delete: false,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_repeated_short_force()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "remove", "-ff", "../wt"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 2,
+                    delete: false,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_short_delete()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "remove", "-d", "../wt"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 0,
+                    delete: true,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_long_delete()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "--delete", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 0,
+                    delete: true,
+                    force_delete: false,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_force_delete()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "worktree", "remove", "-D", "../wt"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 0,
+                    delete: false,
+                    force_delete: true,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_force_and_force_delete()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "--force", "-D", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 1,
+                    delete: false,
+                    force_delete: true,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_remove_rm_alias_force_and_force_delete()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "rm", "--force", "-D", "../wt"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Remove(WorktreeRemoveArgs {
+                    force: 1,
+                    delete: false,
+                    force_delete: true,
+                    path
+                }))
+            }) if &path == "../wt"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_remove_conflicting_delete_modes()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "-d", "-D", "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn rejects_worktree_remove_long_force_delete()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr",
+            "worktree",
+            "remove",
+            "--force-delete",
+            "../wt"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_remove_without_target_path()
+    {
+        // Act
+        let err =
+            Cli::parse_from(["git-vmr", "worktree", "remove"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_remove_extra_operands()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr", "worktree", "remove", "../wt", "extra"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn parses_worktree_move_paths()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "move", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
+                    force: 0,
+                    path,
+                    new_path
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_single_force()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "move", "--force", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
+                    force: 1,
+                    path,
+                    new_path
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_repeated_long_force()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "move", "--force", "--force", "../wt",
+            "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
+                    force: 2,
+                    path,
+                    new_path
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn parses_worktree_move_repeated_short_force()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr", "worktree", "move", "-ff", "../wt", "../moved"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Worktree {
+                command: Some(WorktreeCommand::Move(WorktreeMoveArgs {
+                    force: 2,
+                    path,
+                    new_path
+                }))
+            }) if &path == "../wt" && &new_path == "../moved"
+        ));
+    }
+
+    #[test]
+    fn rejects_worktree_move_without_source_path()
+    {
+        // Act
+        let err =
+            Cli::parse_from(["git-vmr", "worktree", "move"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_move_without_destination_path()
+    {
+        // Act
+        let err = Cli::parse_from(["git-vmr", "worktree", "move", "../wt"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_worktree_move_extra_operands()
+    {
+        // Act
+        let err = Cli::parse_from([
+            "git-vmr", "worktree", "move", "../wt", "../moved", "extra"
+        ])
+        .err()
+        .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::UnknownArgument);
+    }
+
+    #[test]
+    fn rejects_unsupported_worktree_subcommands()
+    {
+        // Act
+        Cli::parse_from(["git-vmr", "worktree", "list"]).unwrap();
+        let err = Cli::parse_from(["git-vmr", "worktree", "lock", "../wt"])
+            .err()
+            .unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::InvalidSubcommand);
+    }
+}

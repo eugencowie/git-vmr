@@ -246,3 +246,80 @@ mod render_tests
         assert_eq!(rendered.stdout, "built\n");
     }
 }
+
+#[cfg(test)]
+mod parse_tests
+{
+    use super::ForeachArgs;
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn rejects_foreach_without_command()
+    {
+        // Act
+        let err = Cli::parse_from(["git-vmr", "foreach"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_foreach_quiet_mode()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "foreach", "--quiet", "echo", "ok"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: true,
+                command
+            })) if command == ["echo", "ok"]
+        ));
+    }
+
+    #[test]
+    fn parses_foreach_multi_word_command()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "foreach", "git", "status", "--short"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: false,
+                command
+            })) if command == ["git", "status", "--short"]
+        ));
+    }
+
+    #[test]
+    fn captures_foreach_child_command_options()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "foreach",
+            "echo",
+            "--not-a-vmr-option"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: false,
+                command
+            })) if command == ["echo", "--not-a-vmr-option"]
+        ));
+    }
+}

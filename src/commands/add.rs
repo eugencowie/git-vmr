@@ -154,8 +154,11 @@ impl Git
 mod tests
 {
     use super::*;
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
     use crate::git::{Git, ScriptedFake};
     use crate::test_support::{cli_context, vmr_fixture};
+    use clap::error::ErrorKind;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -223,5 +226,102 @@ mod tests
                 .collect::<Vec<_>>(),
             vec![tmp.path().join("backend")]
         );
+    }
+
+    #[test]
+    fn parses_add_flags()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "add",
+            "-A",
+            "-f",
+            "--chmod=+x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: true, chmod: Some(ChmodMode::Executable) },
+                paths
+            })) if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_long_flags()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "add",
+            "--all",
+            "--force",
+            "--chmod=-x",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: true, chmod: Some(ChmodMode::NotExecutable) },
+                paths
+            })) if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_add_all_without_pathspecs()
+    {
+        // Act
+        let cli = Cli::parse_from(["git-vmr", "add", "-A"]).unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Add(AddArgs {
+                options: AddOptions { all: true, force: false, chmod: None },
+                paths
+            })) if paths.is_empty()
+        ));
+    }
+
+    #[test]
+    fn rejects_add_without_pathspecs_or_all()
+    {
+        // Act
+        let err = match Cli::parse_from(["git-vmr", "add"])
+        {
+            Ok(_) => panic!("expected add without pathspecs or all to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn rejects_add_invalid_chmod()
+    {
+        // Act
+        let err = match Cli::parse_from([
+            "git-vmr",
+            "add",
+            "--chmod=bad",
+            "backend/src.rs"
+        ])
+        {
+            Ok(_) => panic!("expected invalid chmod to fail"),
+            Err(err) => err
+        };
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 }

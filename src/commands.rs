@@ -22,8 +22,6 @@ use crate::cli::CliContext;
 use crate::render::Rendered;
 use crate::workspace::{MvArgs, Workspace, WorktreeCommand};
 pub use add::AddArgs;
-#[cfg(test)]
-pub(crate) use add::{AddOptions, ChmodMode};
 use anyhow::Result;
 pub use branch::BranchArgs;
 use clap::Subcommand;
@@ -39,8 +37,6 @@ pub use rebase::RebaseArgs;
 pub use reset::ResetArgs;
 pub use restore::RestoreArgs;
 pub use rm::RmArgs;
-#[cfg(test)]
-pub(crate) use rm::RmOptions;
 pub use switch::SwitchArgs;
 pub use tag::TagArgs;
 

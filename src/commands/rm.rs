@@ -121,8 +121,11 @@ impl Git
 mod tests
 {
     use super::*;
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
     use crate::git::{RepoOutcome, ScriptedFake};
     use crate::test_support::repo;
+    use std::path::PathBuf;
 
     #[test]
     fn rm_reports_stdout_only_for_dry_runs()
@@ -156,5 +159,63 @@ mod tests
             panic!("expected success with message");
         };
         assert_eq!(message.message, "rm 'old.rs'");
+    }
+
+    #[test]
+    fn parses_rm_short_flags()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "rm",
+            "-r",
+            "-f",
+            "-n",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Rm(RmArgs {
+                options: RmOptions {
+                    recursive: true,
+                    force: true,
+                    dry_run: true,
+                    cached: false
+                },
+                paths
+            })) if paths == [PathBuf::from("backend/src.rs")]
+        ));
+    }
+
+    #[test]
+    fn parses_rm_long_flags()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "rm",
+            "--force",
+            "--dry-run",
+            "--cached",
+            "backend/src.rs"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Rm(RmArgs {
+                options: RmOptions {
+                    recursive: false,
+                    force: true,
+                    dry_run: true,
+                    cached: true
+                },
+                paths
+            })) if paths == [PathBuf::from("backend/src.rs")]
+        ));
     }
 }
