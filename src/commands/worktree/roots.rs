@@ -2,81 +2,10 @@ use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
-use clap::ArgAction;
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-
-#[derive(clap::Subcommand)]
-pub enum WorktreeCommand
-{
-    /// Create a worktree at <path> and checkout [commit-ish] into it
-    Add(WorktreeAddArgs),
-
-    /// List details of each worktree
-    List,
-
-    /// Move a worktree to a new location
-    Move(WorktreeMoveArgs),
-
-    /// Remove a worktree
-    #[command(visible_alias = "rm")]
-    Remove(WorktreeRemoveArgs)
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeAddArgs
-{
-    /// With add, create a new branch named <new-branch> starting at
-    /// [commit-ish], and check out <new-branch> into the new worktree
-    #[arg(short, value_name = "new-branch")]
-    pub branch: Option<String>,
-
-    #[arg(value_name = "path")]
-    pub path: PathBuf,
-
-    #[arg(value_name = "commit-ish")]
-    pub commit_ish: Option<String>
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeMoveArgs
-{
-    /// Move a worktree even when Git would otherwise refuse. Specify twice
-    /// for cases that require two force flags.
-    #[arg(short, long, action = ArgAction::Count)]
-    pub force: u8,
-
-    /// Worktrees can be identified by path, either relative or absolute
-    #[arg(value_name = "worktree")]
-    pub path: PathBuf,
-
-    /// New location for the worktree
-    #[arg(value_name = "new-path")]
-    pub new_path: PathBuf
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeRemoveArgs
-{
-    /// By default, remove refuses to remove an unclean worktree unless
-    /// --force is used. To remove a locked worktree, specify --force twice
-    #[arg(short, long, action = ArgAction::Count)]
-    pub force: u8,
-
-    /// Delete the branch
-    #[arg(short, long, conflicts_with = "force_delete")]
-    pub delete: bool,
-
-    /// Force-delete the branch
-    #[arg(short = 'D')]
-    pub force_delete: bool,
-
-    /// Worktrees can be identified by path, either relative or absolute
-    #[arg(value_name = "worktree")]
-    pub path: PathBuf
-}
 
 /// One child repo's entry under a worktree root, as gathered for listing.
 #[derive(Clone, Eq, PartialEq)]
@@ -105,17 +34,14 @@ pub struct WorktreeRoots<'a>
     workspace: &'a Workspace<'a>
 }
 
-impl<'a> Workspace<'a>
-{
-    /// The worktree roots of this workspace.
-    pub fn worktree_roots(&'a self) -> WorktreeRoots<'a>
-    {
-        WorktreeRoots { workspace: self }
-    }
-}
-
 impl<'a> WorktreeRoots<'a>
 {
+    /// The worktree roots of one workspace.
+    pub fn new(workspace: &'a Workspace<'a>) -> Self
+    {
+        WorktreeRoots { workspace }
+    }
+
     /// Materializes the root at `target`, then adds one child worktree per
     /// child repo at `<target>/<repo name>`. With no explicit branch or
     /// commit-ish, the branch is inferred from the target's basename: each
@@ -685,7 +611,7 @@ mod tests
 
         // Act
         let outcomes =
-            workspace.worktree_roots().add(&root, None, None).unwrap();
+            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert: the root is materialized, both children succeed, and no
         // repo creates the branch (no -b anywhere)
@@ -740,7 +666,7 @@ mod tests
 
         // Act
         let outcomes =
-            workspace.worktree_roots().add(&root, None, None).unwrap();
+            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert
         assert_eq!(outcomes.len(), 2);
@@ -796,7 +722,7 @@ mod tests
 
         // Act
         let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
 
         // Assert: the root is deliberately kept (not a dissolve failure),
         // and exactly one outcome is the frontend's failure
@@ -862,7 +788,7 @@ mod tests
 
         // Act
         let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
 
         // Assert: within each repo the lookup precedes the removal, because
         // removal destroys the worktree the lookup reads
@@ -918,7 +844,7 @@ mod tests
 
         // Act
         let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
 
         // Assert: no branch deletion is attempted and the root dissolves
         assert!(removal.dissolved.is_ok());
@@ -964,7 +890,7 @@ mod tests
 
         // Act
         let removal =
-            workspace.worktree_roots().remove(&root, 0, false, true).unwrap();
+            WorktreeRoots::new(&workspace).remove(&root, 0, false, true).unwrap();
 
         // Assert: the scripted -D rule answered, once per repo
         assert!(removal.dissolved.is_ok());
@@ -1015,7 +941,7 @@ mod tests
 
         // Act
         let removal =
-            workspace.worktree_roots().remove(&root, 0, false, false).unwrap();
+            WorktreeRoots::new(&workspace).remove(&root, 0, false, false).unwrap();
 
         // Assert: the child successes are kept beside the dissolve failure
         assert!(removal.dissolved.is_err());
@@ -1063,8 +989,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let moved = workspace
-            .worktree_roots()
+        let moved = WorktreeRoots::new(&workspace)
             .move_root(&source, &destination, 0)
             .unwrap();
 
@@ -1115,7 +1040,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let groups = workspace.worktree_roots().list().unwrap();
+        let groups = WorktreeRoots::new(&workspace).list().unwrap();
 
         // Assert: both children group under the one root, in repo order
         assert_eq!(groups.keys().collect::<Vec<_>>(), vec![&root]);

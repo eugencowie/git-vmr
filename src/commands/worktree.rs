@@ -1,11 +1,82 @@
+mod roots;
+
 use crate::cli::CliContext;
 use crate::render::{Rendered, SuffixPolicy, fail, outcomes, repo_list_suffix};
-use crate::workspace::{
-    Workspace, WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs,
-    WorktreeRemoveArgs, resolve_target
-};
+use crate::workspace::{Workspace, resolve_target};
 use anyhow::Result;
+use clap::ArgAction;
+use roots::WorktreeRoots;
 use std::path::Path;
+
+#[derive(clap::Subcommand)]
+pub enum WorktreeCommand
+{
+    /// Create a worktree at <path> and checkout [commit-ish] into it
+    Add(WorktreeAddArgs),
+
+    /// List details of each worktree
+    List,
+
+    /// Move a worktree to a new location
+    Move(WorktreeMoveArgs),
+
+    /// Remove a worktree
+    #[command(visible_alias = "rm")]
+    Remove(WorktreeRemoveArgs)
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeAddArgs
+{
+    /// With add, create a new branch named <new-branch> starting at
+    /// [commit-ish], and check out <new-branch> into the new worktree
+    #[arg(short, value_name = "new-branch")]
+    pub branch: Option<String>,
+
+    #[arg(value_name = "path")]
+    pub path: PathBuf,
+
+    #[arg(value_name = "commit-ish")]
+    pub commit_ish: Option<String>
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeMoveArgs
+{
+    /// Move a worktree even when Git would otherwise refuse. Specify twice
+    /// for cases that require two force flags.
+    #[arg(short, long, action = ArgAction::Count)]
+    pub force: u8,
+
+    /// Worktrees can be identified by path, either relative or absolute
+    #[arg(value_name = "worktree")]
+    pub path: PathBuf,
+
+    /// New location for the worktree
+    #[arg(value_name = "new-path")]
+    pub new_path: PathBuf
+}
+
+#[derive(clap::Args)]
+pub struct WorktreeRemoveArgs
+{
+    /// By default, remove refuses to remove an unclean worktree unless
+    /// --force is used. To remove a locked worktree, specify --force twice
+    #[arg(short, long, action = ArgAction::Count)]
+    pub force: u8,
+
+    /// Delete the branch
+    #[arg(short, long, conflicts_with = "force_delete")]
+    pub delete: bool,
+
+    /// Force-delete the branch
+    #[arg(short = 'D')]
+    pub force_delete: bool,
+
+    /// Worktrees can be identified by path, either relative or absolute
+    #[arg(value_name = "worktree")]
+    pub path: PathBuf
+}
 
 pub fn run(
     workspace: &Workspace,
@@ -33,7 +104,7 @@ fn list(workspace: &Workspace) -> Result<Rendered>
         .map(|repo| repo.name.clone())
         .collect::<Vec<_>>();
 
-    let groups = workspace.worktree_roots().list()?;
+    let groups = WorktreeRoots::new(workspace).list()?;
 
     Ok(render(groups, &repo_names).into())
 }
@@ -45,7 +116,7 @@ fn add(
 ) -> Result<Rendered>
 {
     let target = resolve_target(working_dir, &args.path);
-    outcomes(workspace.worktree_roots().add(
+    outcomes(WorktreeRoots::new(workspace).add(
         &target,
         args.branch.as_deref(),
         args.commit_ish.as_deref()
@@ -59,7 +130,7 @@ fn remove(
 ) -> Result<Rendered>
 {
     let target = resolve_target(working_dir, &args.path);
-    let removal = workspace.worktree_roots().remove(
+    let removal = WorktreeRoots::new(workspace).remove(
         &target,
         args.force,
         args.delete,
@@ -85,7 +156,7 @@ fn move_worktree(
     let source = resolve_target(working_dir, &args.path);
     let destination = resolve_target(working_dir, &args.new_path);
 
-    let moved = workspace.worktree_roots().move_root(
+    let moved = WorktreeRoots::new(workspace).move_root(
         &source,
         &destination,
         args.force
@@ -102,7 +173,7 @@ fn move_worktree(
 }
 
 use crate::git::{self, Head};
-use crate::workspace::worktree_root::WorktreeRootEntry;
+use roots::WorktreeRootEntry;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -248,11 +319,11 @@ mod render_tests
 #[cfg(test)]
 mod parse_tests
 {
-    use crate::cli::Cli;
-    use crate::commands::{Command, WorkspaceCommand};
-    use crate::workspace::{
+    use super::{
         WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs, WorktreeRemoveArgs
     };
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
     use clap::error::ErrorKind;
 
     #[test]

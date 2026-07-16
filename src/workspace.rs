@@ -1,18 +1,11 @@
-pub mod mv;
-pub mod worktree_root;
-
 use crate::git::{Git, GitCommandResult};
 use crate::render::{self, Rendered};
 use crate::vmr::Vmr;
 pub use crate::vmr::{Repo, resolve_target};
 use anyhow::Result;
-pub use mv::MvArgs;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-pub use worktree_root::{
-    WorktreeAddArgs, WorktreeCommand, WorktreeMoveArgs, WorktreeRemoveArgs
-};
 
 /// What a path-taking command operates over: explicit paths, or the entire
 /// VMR via the aggregate path.

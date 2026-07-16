@@ -20,7 +20,7 @@ mod worktree;
 
 use crate::cli::CliContext;
 use crate::render::Rendered;
-use crate::workspace::{MvArgs, Workspace, WorktreeCommand};
+use crate::workspace::Workspace;
 pub use add::AddArgs;
 use anyhow::Result;
 pub use branch::BranchArgs;
@@ -31,6 +31,7 @@ pub use fetch::FetchArgs;
 pub use foreach::ForeachArgs;
 use init::InitArgs;
 pub use merge::MergeArgs;
+pub use mv::MvArgs;
 pub use pull::PullArgs;
 pub use push::PushArgs;
 pub use rebase::RebaseArgs;
@@ -39,6 +40,7 @@ pub use restore::RestoreArgs;
 pub use rm::RmArgs;
 pub use switch::SwitchArgs;
 pub use tag::TagArgs;
+pub use worktree::WorktreeCommand;
 
 #[derive(Subcommand)]
 pub enum Command
