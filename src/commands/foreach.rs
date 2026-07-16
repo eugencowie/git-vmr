@@ -1,9 +1,17 @@
 use crate::cli::CliContext;
-use crate::render::{self, ChildOutput, Rendered};
+use crate::render::{Rendered, fail};
 use crate::workspace::{Repo, Workspace};
 use anyhow::Result;
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+/// One child repo's captured command output, ready for rendering.
+struct ChildOutput<'a>
+{
+    repo: &'a str,
+    stdout: &'a [u8],
+    stderr: &'a [u8]
+}
 
 struct ChildResult
 {
@@ -72,7 +80,7 @@ pub fn run(
     let results = workspace
         .map(|_git, repo| run_child(repo, root, working_dir, &command))?;
 
-    let rendered = render::foreach(
+    let rendered = render(
         &results
             .iter()
             .map(|result| ChildOutput {
@@ -98,7 +106,7 @@ pub fn run(
     if !failures.is_empty()
     {
         failures.push("fatal: foreach failed".to_owned());
-        return Err(render::fail(rendered, failures.join("\n")));
+        return Err(fail(rendered, failures.join("\n")));
     }
 
     Ok(rendered)
@@ -151,6 +159,30 @@ fn run_child(
     })
 }
 
+/// Renders foreach results: per-repo chrome and child stdout in repo order,
+/// then every child's stderr replayed in repo order.
+fn render(children: &[ChildOutput], quiet: bool) -> Rendered
+{
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+
+    for child in children
+    {
+        if !quiet
+        {
+            stdout.push_str(&format!("Entering '{}'\n", child.repo));
+        }
+        stdout.push_str(&String::from_utf8_lossy(child.stdout));
+    }
+
+    for child in children
+    {
+        stderr.push_str(&String::from_utf8_lossy(child.stderr));
+    }
+
+    Rendered { stdout, stderr }
+}
+
 fn shell_command(command: &str) -> Command
 {
     #[cfg(windows)]
@@ -165,5 +197,52 @@ fn shell_command(command: &str) -> Command
         let mut child = Command::new("sh");
         child.arg("-c").arg(command);
         child
+    }
+}
+
+#[cfg(test)]
+mod render_tests
+{
+    use super::*;
+
+    #[test]
+    fn renders_chrome_and_stdout_in_repo_order_then_stderr()
+    {
+        // Arrange
+        let children = vec![
+            ChildOutput {
+                repo: "backend",
+                stdout: b"built\n",
+                stderr: b"warning: slow\n"
+            },
+            ChildOutput { repo: "frontend", stdout: b"ok\n", stderr: b"" },
+        ];
+
+        // Act
+        let rendered = render(&children, false);
+
+        // Assert
+        assert_eq!(
+            rendered.stdout,
+            "Entering 'backend'\nbuilt\nEntering 'frontend'\nok\n"
+        );
+        assert_eq!(rendered.stderr, "warning: slow\n");
+    }
+
+    #[test]
+    fn quiet_suppresses_chrome_but_not_child_output()
+    {
+        // Arrange
+        let children = vec![ChildOutput {
+            repo: "backend",
+            stdout: b"built\n",
+            stderr: b""
+        }];
+
+        // Act
+        let rendered = render(&children, true);
+
+        // Assert
+        assert_eq!(rendered.stdout, "built\n");
     }
 }

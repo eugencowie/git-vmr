@@ -9,7 +9,7 @@ pub use head::Head;
 pub(crate) use runner::scripted::ScriptedFake;
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::ExitStatus;
 
 /// The deep git module: every operation is a method, and every invocation
@@ -110,40 +110,6 @@ impl Git
             .collect::<Vec<_>>();
         self.output(repo_path, args)
     }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct RepoBranches
-{
-    pub branches: Vec<String>,
-    pub head: Head
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FileChange
-{
-    NewFile,
-    Modified,
-    Deleted,
-    Renamed,
-    TypeChange,
-    Copied
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FileEntry
-{
-    pub path: PathBuf,
-    pub change: FileChange
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct RepoStatus
-{
-    pub head: Head,
-    pub staged_changes: Vec<FileEntry>,
-    pub unstaged_changes: Vec<FileEntry>,
-    pub untracked_files: Vec<FileEntry>
 }
 
 pub struct GitOutput

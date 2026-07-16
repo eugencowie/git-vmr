@@ -18,5 +18,5 @@ The rule that produced this shape: an operation lives with its single caller unt
 
 - The git core's interface shrinks to what is genuinely shared: the runner seam (ADR-0001, untouched), the report engine (policies stay in slices, ADR-0002), head resolution, invocation plumbing, and the output types.
 - "What can `Git` do?" is no longer answerable from `git.rs` alone — the commands say what for. The core answers "run git and report outcomes".
-- Query result types (`RepoStatus`, `RepoBranches`, and friends) remain in the git core only while the per-command render modules live outside the slices; they move with their render modules when those fuse.
+- Per-command rendering lives in its slice as a private `render` function; the render core keeps what every slice shares — the `Rendered` type, the outcomes engine, the palette, and the repo-list suffix. The query result types moved with their render modules when those fused (`RepoStatus` and friends into status, `RepoBranches` into branch, `ChildOutput` into foreach).
 - Future deepenings follow the same rule: a helper stays private to its caller until a second caller appears; promotion to a core is driven by callers, not speculation.
