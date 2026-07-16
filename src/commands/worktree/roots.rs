@@ -721,8 +721,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: the root is deliberately kept (not a dissolve failure),
         // and exactly one outcome is the frontend's failure
@@ -787,8 +788,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: within each repo the lookup precedes the removal, because
         // removal destroys the worktree the lookup reads
@@ -843,8 +845,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            WorktreeRoots::new(&workspace).remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: no branch deletion is attempted and the root dissolves
         assert!(removal.dissolved.is_ok());
@@ -889,8 +892,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            WorktreeRoots::new(&workspace).remove(&root, 0, false, true).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, false, true)
+            .unwrap();
 
         // Assert: the scripted -D rule answered, once per repo
         assert!(removal.dissolved.is_ok());
@@ -940,8 +944,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            WorktreeRoots::new(&workspace).remove(&root, 0, false, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, false, false)
+            .unwrap();
 
         // Assert: the child successes are kept beside the dissolve failure
         assert!(removal.dissolved.is_err());
