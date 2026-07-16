@@ -13,12 +13,12 @@ This project uses mise to manage the development environment.
 
 ### Issue tracker
 
-Tickets live as local Markdown files in `openspec/specs/`. See `docs/agents/issue-tracker.md`.
+Tickets live as local Markdown files in `openspec/specs/`. See `openspec/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default canonical labels. See `docs/agents/triage-labels.md`.
+Default canonical labels. See `openspec/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context layout: `CONTEXT.md` at the repo root and ADRs in `docs/decisions/`. See `docs/agents/domain.md`.
+Single-context layout: `CONTEXT.md` at the repo root and ADRs in `openspec/decisions/`. See `openspec/agents/domain.md`.

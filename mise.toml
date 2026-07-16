@@ -32,7 +32,7 @@ run = "cargo +nightly fmt"
 
 [tasks.lint]
 description = "Fix linting issues"
-run = "cargo clippy --all-targets --fix"
+run = "cargo clippy --all-targets --fix --allow-dirty"
 
 [tasks.check]
 description = "Check formatting/linting/tests"
