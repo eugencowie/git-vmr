@@ -1,9 +1,8 @@
 use crate::cli::{CliContext, SilentError};
-use crate::git::CloneArgs;
 use crate::render::Rendered;
 use anyhow::Result;
 
-pub fn run(context: &CliContext, args: CloneArgs) -> Result<Rendered>
+pub fn run(context: &CliContext, args: &CloneArgs) -> Result<Rendered>
 {
     let status = context.git.clone(
         &context.working_dir,
@@ -17,6 +16,48 @@ pub fn run(context: &CliContext, args: CloneArgs) -> Result<Rendered>
     }
 
     Ok(Rendered::default())
+}
+
+use crate::git::Git;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+use std::process::ExitStatus;
+
+/// Clone a repository into a new directory
+#[derive(clap::Args)]
+pub struct CloneArgs
+{
+    /// The (possibly remote) <repository> to clone from
+    #[arg(value_name = "repository")]
+    pub repository: String,
+
+    /// The name of a new directory to clone into
+    #[arg(value_name = "directory")]
+    pub directory: Option<PathBuf>
+}
+
+impl Git
+{
+    /// Runs git clone with inherited stdio so credential prompts and
+    /// progress reach the user. Git reports its own errors on stderr; the
+    /// caller decides what a non-success exit status means.
+    fn clone(
+        &self,
+        working_dir: &Path,
+        repository: &str,
+        directory: Option<&Path>
+    ) -> Result<ExitStatus>
+    {
+        let mut args =
+            vec![OsString::from("clone"), OsString::from(repository)];
+
+        if let Some(directory) = directory
+        {
+            args.push(directory.as_os_str().to_owned());
+        }
+
+        self.interactive(working_dir, &args)
+    }
 }
 
 #[cfg(test)]
@@ -37,7 +78,7 @@ mod tests
 
         // Act
         let result =
-            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+            run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
                 repository: "https://example.com/repo".to_owned(),
                 directory: Some(PathBuf::from("dir"))
             });
@@ -57,7 +98,7 @@ mod tests
         let git = Git::with(Arc::clone(&fake));
 
         // Act
-        run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+        run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
             repository: "https://example.com/repo".to_owned(),
             directory: None
         })
@@ -79,7 +120,7 @@ mod tests
 
         // Act
         let error =
-            run(&CliContext::for_tests(Path::new("/vmr"), git), CloneArgs {
+            run(&CliContext::for_tests(Path::new("/vmr"), git), &CloneArgs {
                 repository: "https://example.com/repo".to_owned(),
                 directory: None
             })

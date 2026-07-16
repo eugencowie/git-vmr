@@ -1,91 +1,17 @@
 use crate::git::report::{
     FailureReport, Streams, SuccessReport, command_result
 };
-use crate::git::{Git, GitCommandResult, RepoBranches};
+use crate::git::{Git, GitCommandResult};
 use crate::vmr::Repo;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use std::path::Path;
 
-/// List, create, or delete branches
-#[derive(clap::Args)]
-pub struct BranchArgs
-{
-    /// Delete a branch. The branch must be fully merged in its upstream
-    /// branch
-    #[arg(
-        short,
-        long,
-        conflicts_with = "force_delete",
-        requires = "branch_name"
-    )]
-    pub delete: bool,
-
-    /// Shortcut for `--delete --force`
-    #[arg(short = 'D', conflicts_with = "delete", requires = "branch_name")]
-    pub force_delete: bool,
-
-    /// In combination with `-d` (or `--delete`), allow deleting the branch
-    /// irrespective of its merged status, or whether it even points to a
-    /// valid commit
-    #[arg(
-        short,
-        long,
-        conflicts_with = "force_delete",
-        requires_all = ["branch_name", "delete"]
-    )]
-    pub force: bool,
-
-    /// Creates a new branch head named [branch-name] which points to the
-    /// current HEAD
-    #[arg(value_name = "branch-name")]
-    pub branch_name: Option<String>
-}
-
-/// What a `branch` invocation asks for. Total: the flag combinations the
-/// arg attributes above reject cannot reach this enum.
-pub enum BranchAction<'a>
-{
-    List,
-    Create(&'a str),
-    Delete
-    {
-        branch_name: &'a str,
-        force: bool
-    }
-}
-
-impl BranchArgs
-{
-    pub fn action(&self) -> BranchAction<'_>
-    {
-        match &self.branch_name
-        {
-            Some(branch_name) if self.delete || self.force_delete =>
-                BranchAction::Delete {
-                    branch_name,
-                    force: self.force || self.force_delete
-                },
-            Some(branch_name) => BranchAction::Create(branch_name),
-            None => BranchAction::List
-        }
-    }
-}
-
+// Shared branch primitives: both the branch command and the worktree-root
+// lifecycle delete branches and probe for their existence, which is what
+// earns these methods a place in the git core.
 impl Git
 {
-    pub fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
-    {
-        let output = self.output(&repo.path, ["branch", branch_name])?;
-
-        command_result(
-            repo,
-            &output,
-            SuccessReport::quiet(),
-            FailureReport::line(Streams::StderrOnly, "git branch failed")
-        )
-    }
-
-    pub fn delete_branch(
+    pub(crate) fn delete_branch(
         &self,
         repo: &Repo,
         branch_name: &str,
@@ -103,7 +29,7 @@ impl Git
         )
     }
 
-    pub fn branch_exists(
+    pub(crate) fn branch_exists(
         &self,
         repo_path: &Path,
         branch_name: &str
@@ -125,100 +51,13 @@ impl Git
             )
         }
     }
-
-    pub fn branches(
-        &self,
-        repo: &Repo
-    ) -> Result<Option<(String, RepoBranches)>>
-    {
-        let branches_output = self
-            .stdout(&repo.path, [
-                "for-each-ref",
-                "--format=%(refname:short)",
-                "refs/heads"
-            ])
-            .with_context(|| {
-                format!(
-                    "fatal: failed to read branch information for '{}'",
-                    repo.path.display()
-                )
-            })?;
-        let branches = String::from_utf8_lossy(&branches_output)
-            .lines()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-
-        let head = self.head(&repo.path).with_context(|| {
-            format!(
-                "fatal: failed to read branch information for '{}'",
-                repo.path.display()
-            )
-        })?;
-
-        Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
-    }
-
-    pub fn tags(&self, repo: &Repo) -> Result<Option<(String, Vec<String>)>>
-    {
-        let tags_output = self
-            .stdout(&repo.path, [
-                "for-each-ref",
-                "--format=%(refname:short)",
-                "refs/tags"
-            ])
-            .with_context(|| {
-                format!(
-                    "fatal: failed to read tag information for '{}'",
-                    repo.path.display()
-                )
-            })?;
-        let tags = String::from_utf8_lossy(&tags_output)
-            .lines()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-
-        Ok(Some((repo.name.clone(), tags)))
-    }
 }
 
 #[cfg(test)]
 mod tests
 {
     use super::*;
-    use crate::git::{Head, ScriptedFake};
-    use std::path::PathBuf;
-
-    fn repo() -> Repo
-    {
-        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
-    }
-
-    #[test]
-    fn branches_resolves_detached_head_through_rev_parse_fallback()
-    {
-        // Arrange
-        let git = Git::with(
-            ScriptedFake::new()
-                .on(
-                    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
-                    0,
-                    "develop\nmain\n",
-                    ""
-                )
-                .on(["symbolic-ref", "--quiet", "--short", "HEAD"], 1, "", "")
-                .on(["rev-parse", "--short=8", "HEAD"], 0, "abc12345\n", "")
-        );
-
-        // Act
-        let (name, branches) = git.branches(&repo()).unwrap().unwrap();
-
-        // Assert
-        assert_eq!(name, "backend");
-        assert_eq!(branches.branches, vec!["develop", "main"]);
-        assert!(
-            matches!(&branches.head, Head::Detached(hash) if hash == "abc12345")
-        );
-    }
+    use crate::git::ScriptedFake;
 
     #[test]
     fn branch_exists_maps_show_ref_exit_codes()

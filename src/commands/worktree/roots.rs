@@ -2,81 +2,10 @@ use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
-use clap::ArgAction;
 use path_clean::PathClean;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-
-#[derive(clap::Subcommand)]
-pub enum WorktreeCommand
-{
-    /// Create a worktree at <path> and checkout [commit-ish] into it
-    Add(WorktreeAddArgs),
-
-    /// List details of each worktree
-    List,
-
-    /// Move a worktree to a new location
-    Move(WorktreeMoveArgs),
-
-    /// Remove a worktree
-    #[command(visible_alias = "rm")]
-    Remove(WorktreeRemoveArgs)
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeAddArgs
-{
-    /// With add, create a new branch named <new-branch> starting at
-    /// [commit-ish], and check out <new-branch> into the new worktree
-    #[arg(short, value_name = "new-branch")]
-    pub branch: Option<String>,
-
-    #[arg(value_name = "path")]
-    pub path: PathBuf,
-
-    #[arg(value_name = "commit-ish")]
-    pub commit_ish: Option<String>
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeMoveArgs
-{
-    /// Move a worktree even when Git would otherwise refuse. Specify twice
-    /// for cases that require two force flags.
-    #[arg(short, long, action = ArgAction::Count)]
-    pub force: u8,
-
-    /// Worktrees can be identified by path, either relative or absolute
-    #[arg(value_name = "worktree")]
-    pub path: PathBuf,
-
-    /// New location for the worktree
-    #[arg(value_name = "new-path")]
-    pub new_path: PathBuf
-}
-
-#[derive(clap::Args)]
-pub struct WorktreeRemoveArgs
-{
-    /// By default, remove refuses to remove an unclean worktree unless
-    /// --force is used. To remove a locked worktree, specify --force twice
-    #[arg(short, long, action = ArgAction::Count)]
-    pub force: u8,
-
-    /// Delete the branch
-    #[arg(short, long, conflicts_with = "force_delete")]
-    pub delete: bool,
-
-    /// Force-delete the branch
-    #[arg(short = 'D')]
-    pub force_delete: bool,
-
-    /// Worktrees can be identified by path, either relative or absolute
-    #[arg(value_name = "worktree")]
-    pub path: PathBuf
-}
 
 /// One child repo's entry under a worktree root, as gathered for listing.
 #[derive(Clone, Eq, PartialEq)]
@@ -105,17 +34,14 @@ pub struct WorktreeRoots<'a>
     workspace: &'a Workspace<'a>
 }
 
-impl<'a> Workspace<'a>
-{
-    /// The worktree roots of this workspace.
-    pub fn worktree_roots(&'a self) -> WorktreeRoots<'a>
-    {
-        WorktreeRoots { workspace: self }
-    }
-}
-
 impl<'a> WorktreeRoots<'a>
 {
+    /// The worktree roots of one workspace.
+    pub fn new(workspace: &'a Workspace<'a>) -> Self
+    {
+        WorktreeRoots { workspace }
+    }
+
     /// Materializes the root at `target`, then adds one child worktree per
     /// child repo at `<target>/<repo name>`. With no explicit branch or
     /// commit-ish, the branch is inferred from the target's basename: each
@@ -397,6 +323,229 @@ fn owning_root(
     if Vmr::is_root(&root) { Some(root) } else { None }
 }
 
+use crate::git::report::{
+    FailureReport, OnEmpty, Streams, SuccessReport, command_result
+};
+use anyhow::bail;
+use std::ffi::OsString;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChildWorktree
+{
+    pub path: PathBuf,
+    pub head: Head
+}
+
+impl Git
+{
+    fn worktree_add(
+        &self,
+        repo: &Repo,
+        target: &Path,
+        branch: Option<&str>,
+        commit_ish: Option<&str>
+    ) -> GitCommandResult
+    {
+        let mut args = vec![OsString::from("worktree"), OsString::from("add")];
+
+        if let Some(branch) = branch
+        {
+            args.push(OsString::from("-b"));
+            args.push(OsString::from(branch));
+        }
+
+        args.push(target.as_os_str().to_owned());
+
+        if let Some(commit_ish) = commit_ish
+        {
+            args.push(OsString::from(commit_ish));
+        }
+
+        let output = self.output(&repo.path, args)?;
+
+        command_result(
+            repo,
+            &output,
+            SuccessReport::line(
+                Streams::StderrThenStdout,
+                OnEmpty::Text("git worktree add succeeded")
+            ),
+            FailureReport::last_stderr_line("git worktree add failed")
+        )
+    }
+
+    fn worktree_remove(
+        &self,
+        repo: &Repo,
+        target: &Path,
+        force: u8
+    ) -> GitCommandResult
+    {
+        let mut args =
+            vec![OsString::from("worktree"), OsString::from("remove")];
+
+        for _ in 0..force
+        {
+            args.push(OsString::from("-f"));
+        }
+
+        args.push(target.as_os_str().to_owned());
+
+        let output = self.output(&repo.path, args)?;
+
+        command_result(
+            repo,
+            &output,
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(
+                Streams::StderrThenStdout,
+                "git worktree remove failed"
+            )
+        )
+    }
+
+    fn worktree_move(
+        &self,
+        repo: &Repo,
+        source: &Path,
+        destination: &Path,
+        force: u8
+    ) -> GitCommandResult
+    {
+        let mut args = vec![OsString::from("worktree"), OsString::from("move")];
+
+        for _ in 0..force
+        {
+            args.push(OsString::from("-f"));
+        }
+
+        args.push(source.as_os_str().to_owned());
+        args.push(destination.as_os_str().to_owned());
+
+        let output = self.output(&repo.path, args)?;
+
+        command_result(
+            repo,
+            &output,
+            SuccessReport::line(Streams::StdoutThenStderr, OnEmpty::Quiet),
+            FailureReport::line(
+                Streams::StderrThenStdout,
+                "git worktree move failed"
+            )
+        )
+    }
+
+    fn worktree_list(&self, repo: &Repo) -> Result<Vec<ChildWorktree>>
+    {
+        let output = self.output(&repo.path, [
+            OsString::from("worktree"),
+            OsString::from("list"),
+            OsString::from("--porcelain"),
+            OsString::from("-z")
+        ])?;
+
+        if !output.status.success()
+        {
+            bail!(
+                "fatal: failed to list worktrees for '{}': {}",
+                repo.name,
+                Streams::StderrThenStdout
+                    .first_line(&output, "git worktree list failed")
+            );
+        }
+
+        parse_worktree_list(&repo.name, &output.stdout)
+    }
+}
+
+fn parse_worktree_list(
+    repo_name: &str,
+    output: &[u8]
+) -> Result<Vec<ChildWorktree>>
+{
+    let mut entries = Vec::new();
+    let mut current = WorktreeRecord::default();
+
+    for field in output.split(|byte| *byte == 0)
+    {
+        if field.is_empty()
+        {
+            if !current.is_empty()
+            {
+                entries.push(current.finish(repo_name)?);
+                current = WorktreeRecord::default();
+            }
+            continue;
+        }
+
+        if let Some(value) = field.strip_prefix(b"worktree ")
+        {
+            if !current.is_empty()
+            {
+                entries.push(current.finish(repo_name)?);
+                current = WorktreeRecord::default();
+            }
+            current.path = Some(PathBuf::from(
+                String::from_utf8_lossy(value).into_owned()
+            ));
+        }
+        else if let Some(value) = field.strip_prefix(b"HEAD ")
+        {
+            current.head = Some(String::from_utf8_lossy(value).into_owned());
+        }
+        else if let Some(value) = field.strip_prefix(b"branch ")
+        {
+            let branch = String::from_utf8_lossy(value);
+            current.branch = Some(
+                branch
+                    .strip_prefix("refs/heads/")
+                    .unwrap_or(&branch)
+                    .to_owned()
+            );
+        }
+    }
+
+    if !current.is_empty()
+    {
+        entries.push(current.finish(repo_name)?);
+    }
+
+    Ok(entries)
+}
+
+#[derive(Default)]
+struct WorktreeRecord
+{
+    path: Option<PathBuf>,
+    head: Option<String>,
+    branch: Option<String>
+}
+
+impl WorktreeRecord
+{
+    fn is_empty(&self) -> bool
+    {
+        self.path.is_none() && self.head.is_none() && self.branch.is_none()
+    }
+
+    fn finish(self, repo_name: &str) -> Result<ChildWorktree>
+    {
+        let path = self.path.with_context(|| {
+            format!("fatal: malformed worktree list for '{repo_name}': missing worktree path")
+        })?;
+        let head = self.head.with_context(|| {
+            format!(
+                "fatal: malformed worktree list for '{repo_name}': missing HEAD"
+            )
+        })?;
+
+        Ok(ChildWorktree {
+            path,
+            head: Head::from_worktree_record(self.branch, &head)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -462,7 +611,7 @@ mod tests
 
         // Act
         let outcomes =
-            workspace.worktree_roots().add(&root, None, None).unwrap();
+            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert: the root is materialized, both children succeed, and no
         // repo creates the branch (no -b anywhere)
@@ -517,7 +666,7 @@ mod tests
 
         // Act
         let outcomes =
-            workspace.worktree_roots().add(&root, None, None).unwrap();
+            WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert
         assert_eq!(outcomes.len(), 2);
@@ -572,8 +721,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: the root is deliberately kept (not a dissolve failure),
         // and exactly one outcome is the frontend's failure
@@ -638,8 +788,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: within each repo the lookup precedes the removal, because
         // removal destroys the worktree the lookup reads
@@ -694,8 +845,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            workspace.worktree_roots().remove(&root, 0, true, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, true, false)
+            .unwrap();
 
         // Assert: no branch deletion is attempted and the root dissolves
         assert!(removal.dissolved.is_ok());
@@ -740,8 +892,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            workspace.worktree_roots().remove(&root, 0, false, true).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, false, true)
+            .unwrap();
 
         // Assert: the scripted -D rule answered, once per repo
         assert!(removal.dissolved.is_ok());
@@ -791,8 +944,9 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let removal =
-            workspace.worktree_roots().remove(&root, 0, false, false).unwrap();
+        let removal = WorktreeRoots::new(&workspace)
+            .remove(&root, 0, false, false)
+            .unwrap();
 
         // Assert: the child successes are kept beside the dissolve failure
         assert!(removal.dissolved.is_err());
@@ -840,8 +994,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let moved = workspace
-            .worktree_roots()
+        let moved = WorktreeRoots::new(&workspace)
             .move_root(&source, &destination, 0)
             .unwrap();
 
@@ -892,7 +1045,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let groups = workspace.worktree_roots().list().unwrap();
+        let groups = WorktreeRoots::new(&workspace).list().unwrap();
 
         // Assert: both children group under the one root, in repo order
         assert_eq!(groups.keys().collect::<Vec<_>>(), vec![&root]);
@@ -902,5 +1055,115 @@ mod tests
             vec!["backend", "frontend"]
         );
         assert_eq!(entries[0].head, Head::Branch("feature".to_owned()));
+    }
+
+    use crate::test_support::repo;
+
+    #[test]
+    fn worktree_remove_with_no_output_is_a_quiet_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "remove", "/wt/backend"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_remove(
+                &repo("backend", "/vmr/backend"),
+                Path::new("/wt/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn worktree_remove_reports_gits_own_output_when_present()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "remove", "/wt/backend"],
+            0,
+            "Removing worktree\n",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_remove(
+                &repo("backend", "/vmr/backend"),
+                Path::new("/wt/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Success(Some(message)) = outcome
+        else
+        {
+            panic!("expected success with message");
+        };
+        assert_eq!(message.message, "Removing worktree");
+    }
+
+    #[test]
+    fn worktree_move_with_no_output_is_a_quiet_success()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(
+            ["worktree", "move", "/wt/backend", "/wt2/backend"],
+            0,
+            "",
+            ""
+        ));
+
+        // Act
+        let outcome = git
+            .worktree_move(
+                &repo("backend", "/vmr/backend"),
+                Path::new("/wt/backend"),
+                Path::new("/wt2/backend"),
+                0
+            )
+            .unwrap();
+
+        // Assert
+        assert!(matches!(outcome, RepoOutcome::Success(None)));
+    }
+
+    #[test]
+    fn parses_branch_detached_and_unknown_fields()
+    {
+        let entries = parse_worktree_list(
+            "backend",
+            b"worktree /repo/backend\0HEAD 1234567890abcdef\0branch refs/heads/main\0unknown value\0\0worktree /wt/backend\0HEAD abcdef1234567890\0detached\0locked reason\0prunable stale\0\0"
+        )
+        .unwrap();
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].path, PathBuf::from("/repo/backend"));
+        assert_eq!(entries[0].head, Head::Branch("main".to_owned()));
+        assert_eq!(entries[1].head, Head::Detached("abcdef12".to_owned()));
+    }
+
+    #[test]
+    fn reports_malformed_records_with_repository_context()
+    {
+        let error =
+            parse_worktree_list("frontend", b"worktree /repo/frontend\0\0")
+                .err()
+                .unwrap();
+
+        assert!(
+            error
+                .to_string()
+                .contains("malformed worktree list for 'frontend'")
+        );
     }
 }

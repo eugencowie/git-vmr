@@ -1,23 +1,13 @@
 //! Rendering: turning per-repo data and outcomes into styled terminal text.
 //! Rendering is pure — printing happens once, at the [`emit`] choke point.
 
-mod branch;
-mod foreach;
 mod outcomes;
-mod status;
-mod tag;
-mod worktree;
 
 use anstyle::{AnsiColor, Color, Style};
 use anyhow::Result;
-pub use branch::branches;
-pub use foreach::{ChildOutput, foreach};
 pub use outcomes::outcomes;
 pub(crate) use outcomes::outcomes_in_scope;
-pub use status::status;
 use std::fmt;
-pub use tag::tags;
-pub use worktree::worktree_list;
 
 /// Rendered terminal text for one command, per stream. Commands return this
 /// instead of printing.

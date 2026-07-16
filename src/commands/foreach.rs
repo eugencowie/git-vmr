@@ -1,9 +1,17 @@
 use crate::cli::CliContext;
-use crate::render::{self, ChildOutput, Rendered};
+use crate::render::{Rendered, fail};
 use crate::workspace::{Repo, Workspace};
 use anyhow::Result;
 use std::path::Path;
 use std::process::{Command, Stdio};
+
+/// One child repo's captured command output, ready for rendering.
+struct ChildOutput<'a>
+{
+    repo: &'a str,
+    stdout: &'a [u8],
+    stderr: &'a [u8]
+}
 
 struct ChildResult
 {
@@ -60,7 +68,7 @@ pub struct ForeachArgs
 pub fn run(
     workspace: &Workspace,
     context: &CliContext,
-    args: ForeachArgs
+    args: &ForeachArgs
 ) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;
@@ -72,7 +80,7 @@ pub fn run(
     let results = workspace
         .map(|_git, repo| run_child(repo, root, working_dir, &command))?;
 
-    let rendered = render::foreach(
+    let rendered = render(
         &results
             .iter()
             .map(|result| ChildOutput {
@@ -98,7 +106,7 @@ pub fn run(
     if !failures.is_empty()
     {
         failures.push("fatal: foreach failed".to_owned());
-        return Err(render::fail(rendered, failures.join("\n")));
+        return Err(fail(rendered, failures.join("\n")));
     }
 
     Ok(rendered)
@@ -151,6 +159,30 @@ fn run_child(
     })
 }
 
+/// Renders foreach results: per-repo chrome and child stdout in repo order,
+/// then every child's stderr replayed in repo order.
+fn render(children: &[ChildOutput], quiet: bool) -> Rendered
+{
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+
+    for child in children
+    {
+        if !quiet
+        {
+            stdout.push_str(&format!("Entering '{}'\n", child.repo));
+        }
+        stdout.push_str(&String::from_utf8_lossy(child.stdout));
+    }
+
+    for child in children
+    {
+        stderr.push_str(&String::from_utf8_lossy(child.stderr));
+    }
+
+    Rendered { stdout, stderr }
+}
+
 fn shell_command(command: &str) -> Command
 {
     #[cfg(windows)]
@@ -165,5 +197,129 @@ fn shell_command(command: &str) -> Command
         let mut child = Command::new("sh");
         child.arg("-c").arg(command);
         child
+    }
+}
+
+#[cfg(test)]
+mod render_tests
+{
+    use super::*;
+
+    #[test]
+    fn renders_chrome_and_stdout_in_repo_order_then_stderr()
+    {
+        // Arrange
+        let children = vec![
+            ChildOutput {
+                repo: "backend",
+                stdout: b"built\n",
+                stderr: b"warning: slow\n"
+            },
+            ChildOutput { repo: "frontend", stdout: b"ok\n", stderr: b"" },
+        ];
+
+        // Act
+        let rendered = render(&children, false);
+
+        // Assert
+        assert_eq!(
+            rendered.stdout,
+            "Entering 'backend'\nbuilt\nEntering 'frontend'\nok\n"
+        );
+        assert_eq!(rendered.stderr, "warning: slow\n");
+    }
+
+    #[test]
+    fn quiet_suppresses_chrome_but_not_child_output()
+    {
+        // Arrange
+        let children = vec![ChildOutput {
+            repo: "backend",
+            stdout: b"built\n",
+            stderr: b""
+        }];
+
+        // Act
+        let rendered = render(&children, true);
+
+        // Assert
+        assert_eq!(rendered.stdout, "built\n");
+    }
+}
+
+#[cfg(test)]
+mod parse_tests
+{
+    use super::ForeachArgs;
+    use crate::cli::Cli;
+    use crate::commands::{Command, WorkspaceCommand};
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn rejects_foreach_without_command()
+    {
+        // Act
+        let err = Cli::parse_from(["git-vmr", "foreach"]).err().unwrap();
+
+        // Assert
+        assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn parses_foreach_quiet_mode()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "foreach", "--quiet", "echo", "ok"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: true,
+                command
+            })) if command == ["echo", "ok"]
+        ));
+    }
+
+    #[test]
+    fn parses_foreach_multi_word_command()
+    {
+        // Act
+        let cli =
+            Cli::parse_from(["git-vmr", "foreach", "git", "status", "--short"])
+                .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: false,
+                command
+            })) if command == ["git", "status", "--short"]
+        ));
+    }
+
+    #[test]
+    fn captures_foreach_child_command_options()
+    {
+        // Act
+        let cli = Cli::parse_from([
+            "git-vmr",
+            "foreach",
+            "echo",
+            "--not-a-vmr-option"
+        ])
+        .unwrap();
+
+        // Assert
+        assert!(matches!(
+            cli.command,
+            Command::Workspace(WorkspaceCommand::Foreach(ForeachArgs {
+                quiet: false,
+                command
+            })) if command == ["echo", "--not-a-vmr-option"]
+        ));
     }
 }

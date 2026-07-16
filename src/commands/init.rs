@@ -15,7 +15,7 @@ pub struct InitArgs
     pub directory: Option<PathBuf>
 }
 
-pub fn run(context: &CliContext, args: InitArgs) -> Result<Rendered>
+pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
 {
     let working_dir = &context.working_dir;
 
@@ -75,7 +75,7 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs { directory: None }).unwrap();
+        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
 
         // Assert
         assert!(tmp.path().join(".gitvmr").exists());
@@ -90,7 +90,7 @@ mod tests
         let target = tmp.path().join("project");
 
         // Act
-        run(&cli_context(Path::new("/ignored")), InitArgs {
+        run(&cli_context(Path::new("/ignored")), &InitArgs {
             directory: Some(target.clone())
         })
         .unwrap();
@@ -106,7 +106,7 @@ mod tests
         let tmp = tempfile::tempdir().unwrap();
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs { directory: None }).unwrap();
+        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let contents =
@@ -120,12 +120,12 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        run(&cli_context(tmp.path()), InitArgs { directory: None }).unwrap();
+        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
         let first =
             fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs { directory: None }).unwrap();
+        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let second =
@@ -143,7 +143,7 @@ mod tests
         fs::write(config_dir.join("config"), "custom content").unwrap();
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs { directory: None }).unwrap();
+        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
 
         // Assert
         let contents = fs::read_to_string(config_dir.join("config")).unwrap();
@@ -159,7 +159,7 @@ mod tests
         fs::write(&file, "").unwrap();
 
         // Act
-        let err = run(&cli_context(tmp.path()), InitArgs {
+        let err = run(&cli_context(tmp.path()), &InitArgs {
             directory: Some(PathBuf::from("file"))
         })
         .unwrap_err();
@@ -178,7 +178,7 @@ mod tests
         let target = tmp.path().join("project");
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs {
+        run(&cli_context(tmp.path()), &InitArgs {
             directory: Some(PathBuf::from("project"))
         })
         .unwrap();
@@ -197,7 +197,7 @@ mod tests
         fs::create_dir(&target).unwrap();
 
         // Act
-        run(&cli_context(tmp.path()), InitArgs {
+        run(&cli_context(tmp.path()), &InitArgs {
             directory: Some(PathBuf::from("project"))
         })
         .unwrap();

@@ -19,16 +19,28 @@ mod tag;
 mod worktree;
 
 use crate::cli::CliContext;
-use crate::git::{
-    AddArgs, BranchArgs, CloneArgs, CommitArgs, FetchArgs, MergeArgs, PullArgs,
-    PushArgs, RebaseArgs, ResetArgs, RestoreArgs, RmArgs, SwitchArgs, TagArgs
-};
 use crate::render::Rendered;
-use crate::workspace::{MvArgs, Workspace, WorktreeCommand};
+use crate::workspace::Workspace;
+pub use add::AddArgs;
 use anyhow::Result;
+pub use branch::BranchArgs;
 use clap::Subcommand;
+pub use clone::CloneArgs;
+pub use commit::CommitArgs;
+pub use fetch::FetchArgs;
 pub use foreach::ForeachArgs;
 use init::InitArgs;
+pub use merge::MergeArgs;
+pub use mv::MvArgs;
+pub use pull::PullArgs;
+pub use push::PushArgs;
+pub use rebase::RebaseArgs;
+pub use reset::ResetArgs;
+pub use restore::RestoreArgs;
+pub use rm::RmArgs;
+pub use switch::SwitchArgs;
+pub use tag::TagArgs;
+pub use worktree::WorktreeCommand;
 
 #[derive(Subcommand)]
 pub enum Command
@@ -79,7 +91,7 @@ pub enum WorkspaceCommand
 
 impl Command
 {
-    pub fn run(self, context: &CliContext) -> Result<Rendered>
+    pub fn run(&self, context: &CliContext) -> Result<Rendered>
     {
         match self
         {
@@ -100,7 +112,7 @@ impl Command
 impl WorkspaceCommand
 {
     fn run(
-        self,
+        &self,
         workspace: &Workspace,
         context: &CliContext
     ) -> Result<Rendered>
