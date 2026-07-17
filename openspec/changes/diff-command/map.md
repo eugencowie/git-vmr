@@ -24,11 +24,11 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 <!-- one line per closed ticket -->
 
 - [Validate --src-prefix/--dst-prefix for combined diffs](tickets/01-prefix-rewriting-research.md) — prefixes work everywhere except rename/copy lines; use `--no-renames --no-color --no-ext-diff --binary` per repo and the concatenated patch applies with `git apply -p1` from the VMR root (flags since git 1.5.4, CLI overrides all diff.* prefix config).
+- [Where does the pager live?](tickets/02-pager-seam.md) — at the emit choke point: `Rendered` gains `pager: Option<String>`, the diff command fills it (TTY-gated, resolved via `git var GIT_PAGER` through the runner seam), emit spawns `sh -c` and pages the buffered diff, stderr lands after the pager exits. Also: rename/copy lines are fixed by a diff-local pure transform (prepend `<repo>/`), verified applyable with `git apply -p1` — the `--no-renames` workaround from ticket 01 is dissolved; renames stay on.
 
 ## Not yet specified
 
-- Whether v1 promises an applyable patch at all: research shows applyability requires `--no-renames --no-color`, while the human view wants colour and (ideally) rename detection. The spec ticket must reconcile — e.g. colour+renames on TTY, apply-safe form when piped.
-- Nothing else substantial beyond the live tickets — the effort is compact. Revisit after the pager-seam decision in case it surfaces render-layer restructuring.
+- Nothing — the way to the destination is clear once the live tickets ([03](tickets/03-testing-strategy.md), [04](tickets/04-write-spec.md)) resolve.
 
 ## Out of scope
 

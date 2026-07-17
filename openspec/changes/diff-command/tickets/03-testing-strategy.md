@@ -13,3 +13,5 @@ How is `diff` tested? The scripted fake covers git invocations, but this command
 - Asserting the combined output (prefixed paths, repo ordering, failure aggregation) against scripted diffs.
 
 Depends on where the pager seam lands ([02-pager-seam](02-pager-seam.md)).
+
+Note: ticket 02's answer (decision 5) already proposes positions on the first two bullets — TTY as an injected bool on the CLI context, no pager trait (the pager command string is the seam; emit tests pass `cat` or a recording script), resolution via the scripted fake answering `var GIT_PAGER`. This ticket confirms or overturns them and settles the third bullet, plus fixtures for the rename-rewrite transform (decision 6).
