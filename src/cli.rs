@@ -1,12 +1,9 @@
 mod context;
 mod error;
 mod event_meta;
+mod pipeline;
 
-use crate::analytics::CommandEvent;
 use crate::commands::Command;
-use crate::config::GlobalConfig;
-use crate::state::GlobalState;
-use crate::{analytics, render, updates};
 use anyhow::Result;
 use clap::{ArgAction, CommandFactory, Error, FromArgMatches, Parser};
 pub use context::CliContext;
@@ -15,7 +12,6 @@ use event_meta::CliMetadata;
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::time::Instant;
 
 pub const APP_NAME: &str = "git-vmr";
 
@@ -81,57 +77,10 @@ impl Cli
         Ok(cli)
     }
 
-    /// Run command
+    /// Run the parsed command through the run pipeline
     pub fn run(self) -> Result<()>
     {
-        // Build context from the resolved global config and state paths
-        let mut context = CliContext::new(
-            &self.display_name,
-            &self.working_dir,
-            GlobalConfig::resolve_path(None)?,
-            GlobalState::resolve_path(None)?
-        )?;
-
-        // Report context load warnings without failing the command
-        for warning in context.warnings()
-        {
-            eprintln!("warning: {warning}");
-        }
-
-        // Run command
-        let start = Instant::now();
-        let result = self.command.run(&context);
-        let result = render::emit(result);
-
-        // Record analytics
-        analytics::record(
-            &context.global_config.analytics,
-            &mut context.global_state.analytics,
-            CommandEvent {
-                name: self.metadata.name,
-                success: result.is_ok(),
-                duration_ms: start.elapsed().as_millis(),
-                flags: self.metadata.flags,
-                global_flags: self.metadata.global_flags
-            }
-        );
-
-        // Check for updates
-        if let Some(update) = updates::check(
-            context.global_config.updates.check_frequency,
-            &mut context.global_state
-        )
-        {
-            eprintln!("{update}");
-        }
-
-        // Save changed context data
-        if let Err(err) = context.save()
-        {
-            eprintln!("warning: {err:#}");
-        }
-
-        result
+        pipeline::run(self)
     }
 }
 
