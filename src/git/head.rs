@@ -7,8 +7,8 @@ use std::path::Path;
 const SHORT_HASH_LEN: usize = 8;
 
 /// Where a child repo currently points: a branch, an unborn branch (no
-/// commits yet), or a detached commit's short hash. Only the status header
-/// can observe unbornness; other sources report a plain branch instead.
+/// commits yet), or a detached commit's short hash. Only the worktree record
+/// cannot observe unbornness; it reports a plain branch instead.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Head
 {
@@ -38,8 +38,9 @@ impl Head
 
 impl Git
 {
-    /// Resolves a repo's head directly: the branch `symbolic-ref` names, or
-    /// the detached commit when it answers with exit code 1.
+    /// Resolves a repo's head directly: the branch `symbolic-ref` names
+    /// (unborn until its ref verifiably exists), or the detached commit when
+    /// it answers with exit code 1.
     pub(crate) fn head(&self, repo_path: &Path) -> Result<Head>
     {
         match self.output(repo_path, [
@@ -49,10 +50,11 @@ impl Git
             "HEAD"
         ])?
         {
-            GitOutput { status, stdout, stderr: _ } if status.success() =>
-                Ok(Head::Branch(
+            GitOutput { status, stdout, stderr: _ } if status.success() => self
+                .verified_branch(
+                    repo_path,
                     String::from_utf8_lossy(&stdout).trim().to_owned()
-                )),
+                ),
             GitOutput { status, .. } if status.code() == Some(1) =>
                 self.detached_head(repo_path),
             output => bail!(
@@ -93,6 +95,30 @@ impl Git
         Ok(Head::Branch(branch))
     }
 
+    /// Distinguishes a born branch from an unborn one: the branch is unborn
+    /// while `show-ref` cannot verify its ref exists.
+    fn verified_branch(&self, repo_path: &Path, branch: String)
+    -> Result<Head>
+    {
+        match self.output(repo_path, [
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}")
+        ])?
+        {
+            GitOutput { status, .. } if status.success() =>
+                Ok(Head::Branch(branch)),
+            GitOutput { status, .. } if status.code() == Some(1) =>
+                Ok(Head::Unborn(branch)),
+            output => bail!(
+                "fatal: failed to resolve HEAD for '{}': {}",
+                repo_path.display(),
+                stderr(&output)
+            )
+        }
+    }
+
     fn detached_head(&self, repo_path: &Path) -> Result<Head>
     {
         let hash = String::from_utf8_lossy(&self.stdout(repo_path, [
@@ -119,18 +145,82 @@ mod tests
     fn head_names_the_branch_symbolic_ref_answers()
     {
         // Arrange
-        let git = Git::with(ScriptedFake::new().on(
-            ["symbolic-ref", "--quiet", "--short", "HEAD"],
-            0,
-            "develop\n",
-            ""
-        ));
+        let git = Git::with(
+            ScriptedFake::new()
+                .on(
+                    ["symbolic-ref", "--quiet", "--short", "HEAD"],
+                    0,
+                    "develop\n",
+                    ""
+                )
+                .on(
+                    ["show-ref", "--verify", "--quiet", "refs/heads/develop"],
+                    0,
+                    "",
+                    ""
+                )
+        );
 
         // Act
         let head = git.head(Path::new(REPO)).unwrap();
 
         // Assert
         assert_eq!(head, Head::Branch("develop".to_owned()));
+    }
+
+    #[test]
+    fn head_reports_an_unborn_branch_when_its_ref_does_not_exist()
+    {
+        // Arrange
+        let git = Git::with(
+            ScriptedFake::new()
+                .on(
+                    ["symbolic-ref", "--quiet", "--short", "HEAD"],
+                    0,
+                    "main\n",
+                    ""
+                )
+                .on(
+                    ["show-ref", "--verify", "--quiet", "refs/heads/main"],
+                    1,
+                    "",
+                    ""
+                )
+        );
+
+        // Act
+        let head = git.head(Path::new(REPO)).unwrap();
+
+        // Assert
+        assert_eq!(head, Head::Unborn("main".to_owned()));
+    }
+
+    #[test]
+    fn head_reports_show_ref_failures()
+    {
+        // Arrange
+        let git = Git::with(
+            ScriptedFake::new()
+                .on(
+                    ["symbolic-ref", "--quiet", "--short", "HEAD"],
+                    0,
+                    "main\n",
+                    ""
+                )
+                .on(
+                    ["show-ref", "--verify", "--quiet", "refs/heads/main"],
+                    128,
+                    "",
+                    "fatal: not a git repository"
+                )
+        );
+
+        // Act
+        let error = git.head(Path::new(REPO)).err().unwrap();
+
+        // Assert
+        assert!(error.to_string().contains("failed to resolve HEAD"));
+        assert!(error.to_string().contains("not a git repository"));
     }
 
     #[test]
