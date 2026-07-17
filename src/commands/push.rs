@@ -63,6 +63,7 @@ enum RefspecClass
 /// alongside it.
 struct PushPlan
 {
+    repository: Option<String>,
     attempt: Option<Vec<String>>,
     skips: Vec<String>
 }
@@ -71,7 +72,7 @@ impl PushPlan
 {
     fn attempt_all(refspecs: Vec<String>) -> Self
     {
-        Self { attempt: Some(refspecs), skips: Vec::new() }
+        Self { repository: None, attempt: Some(refspecs), skips: Vec::new() }
     }
 
     fn from_bare(classification: BarePush) -> Self
@@ -80,7 +81,7 @@ impl PushPlan
         {
             BarePush::Delegate => Self::attempt_all(Vec::new()),
             BarePush::Skip(reason) =>
-                Self { attempt: None, skips: vec![reason] },
+                Self { repository: None, attempt: None, skips: vec![reason] },
         }
     }
 }
@@ -116,6 +117,7 @@ struct PushEvidence
     upstream_merge: Option<String>,
     push_remote: Option<String>,
     remote_push_default: Option<String>,
+    remote_push_refspecs: Vec<String>,
     push_default: Option<String>
 }
 
@@ -203,7 +205,7 @@ impl Git
         {
             results.push(self.push(
                 repo,
-                args.repository.as_deref(),
+                plan.repository.as_deref().or(args.repository.as_deref()),
                 &refspecs
             ));
         }
@@ -219,9 +221,7 @@ impl Git
         let Some(repository) = &args.repository
         else
         {
-            return Ok(PushPlan::from_bare(
-                self.classify_bare_push(repo_path, None)?
-            ));
+            return self.plan_bare_push(repo_path, None);
         };
 
         if is_url(repository)
@@ -231,9 +231,7 @@ impl Git
 
         if args.refspecs.is_empty()
         {
-            return Ok(PushPlan::from_bare(
-                self.classify_bare_push(repo_path, Some(repository))?
-            ));
+            return self.plan_bare_push(repo_path, Some(repository));
         }
 
         let mut useful = Vec::new();
@@ -248,7 +246,55 @@ impl Git
             }
         }
 
-        Ok(PushPlan { attempt: (!useful.is_empty()).then_some(useful), skips })
+        Ok(PushPlan {
+            repository: None,
+            attempt: (!useful.is_empty()).then_some(useful),
+            skips
+        })
+    }
+
+    fn plan_bare_push(
+        &self,
+        repo_path: &Path,
+        explicit_remote: Option<&str>
+    ) -> Result<PushPlan>
+    {
+        let branch = match self.head(repo_path)?
+        {
+            Head::Branch(branch) => branch,
+            Head::Detached(_) | Head::Unborn(_) =>
+                return Ok(PushPlan::from_bare(BarePush::Delegate)),
+        };
+        let evidence =
+            self.push_evidence(repo_path, branch, explicit_remote)?;
+
+        if evidence.remote_push_refspecs.is_empty()
+        {
+            return Ok(PushPlan::from_bare(
+                self.classify_bare_push(repo_path, &evidence)?
+            ));
+        }
+
+        let mut useful = Vec::new();
+        let mut skips = Vec::new();
+        for refspec in &evidence.remote_push_refspecs
+        {
+            match self.classify_refspec(
+                repo_path,
+                evidence.target_remote(),
+                refspec
+            )?
+            {
+                RefspecClass::Push => useful.push(refspec.clone()),
+                RefspecClass::Skip(reason) => skips.push(reason)
+            }
+        }
+
+        Ok(PushPlan {
+            repository: Some(evidence.target_remote().to_owned()),
+            attempt: (!useful.is_empty()).then_some(useful),
+            skips
+        })
     }
 
     /// Classifies one explicit refspec by ref class: branch refspecs get
@@ -357,20 +403,9 @@ impl Git
     fn classify_bare_push(
         &self,
         repo_path: &Path,
-        explicit_remote: Option<&str>
+        evidence: &PushEvidence
     ) -> Result<BarePush>
     {
-        let branch = match self.head(repo_path)?
-        {
-            Head::Branch(branch) => branch,
-            // Detached and unborn heads delegate; git's repo-suffixed
-            // error is acceptable there.
-            Head::Detached(_) | Head::Unborn(_) =>
-                return Ok(BarePush::Delegate),
-        };
-
-        let evidence =
-            self.push_evidence(repo_path, branch, explicit_remote)?;
         let remote = evidence.target_remote();
 
         let destination = match evidence.destination()
@@ -410,7 +445,7 @@ impl Git
         explicit_remote: Option<&str>
     ) -> Result<PushEvidence>
     {
-        Ok(PushEvidence {
+        let mut evidence = PushEvidence {
             explicit_remote: explicit_remote.map(str::to_owned),
             upstream_remote: self
                 .config_get(repo_path, &format!("branch.{branch}.remote"))?,
@@ -422,9 +457,41 @@ impl Git
             )?,
             remote_push_default: self
                 .config_get(repo_path, "remote.pushDefault")?,
-            push_default: self.config_get(repo_path, "push.default")?,
+            remote_push_refspecs: Vec::new(),
+            push_default: None,
             branch
-        })
+        };
+        evidence.remote_push_refspecs = self.config_get_all(
+            repo_path,
+            &format!("remote.{}.push", evidence.target_remote())
+        )?;
+        if evidence.remote_push_refspecs.is_empty()
+        {
+            evidence.push_default =
+                self.config_get(repo_path, "push.default")?;
+        }
+        Ok(evidence)
+    }
+
+    fn config_get_all(&self, repo_path: &Path, key: &str)
+    -> Result<Vec<String>>
+    {
+        let output = self.output(repo_path, ["config", "--get-all", key])?;
+
+        match output.status.code()
+        {
+            Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(str::to_owned)
+                .collect()),
+            Some(1) => Ok(Vec::new()),
+            _ => bail!(
+                "fatal: failed to read config '{}' in '{}': {}",
+                key,
+                repo_path.display(),
+                stderr(&output)
+            )
+        }
     }
 
     fn config_get(&self, repo_path: &Path, key: &str)
@@ -587,6 +654,7 @@ mod tests
             upstream_merge: None,
             push_remote: None,
             remote_push_default: None,
+            remote_push_refspecs: Vec::new(),
             push_default: None
         }
     }
@@ -741,15 +809,70 @@ mod tests
             .on(["config", "--get", "branch.feature.merge"], 1, "", "")
             .on(["config", "--get", "branch.feature.pushRemote"], 1, "", "")
             .on(["config", "--get", "remote.pushDefault"], 1, "", "")
+            .on(["config", "--get-all", "remote.origin.push"], 1, "", "")
             .on(["config", "--get", "push.default"], 1, "", "")
+    }
+
+    #[test]
+    fn configured_remote_refspecs_are_classified_before_push_default()
+    {
+        let refspec = "refs/heads/feature:refs/heads/review";
+        let fake = ScriptedFake::new()
+            .on(
+                ["symbolic-ref", "--quiet", "--short", "HEAD"],
+                0,
+                "feature\n",
+                ""
+            )
+            .on(
+                ["show-ref", "--verify", "--quiet", "refs/heads/feature"],
+                0,
+                "",
+                ""
+            )
+            .on(["config", "--get", "branch.feature.remote"], 1, "", "")
+            .on(["config", "--get", "branch.feature.merge"], 1, "", "")
+            .on(["config", "--get", "branch.feature.pushRemote"], 1, "", "")
+            .on(["config", "--get", "remote.pushDefault"], 1, "", "")
+            .on(
+                ["config", "--get-all", "remote.fork.push"],
+                0,
+                &format!("{refspec}\n"),
+                ""
+            )
+            .on(
+                ["rev-parse", "--symbolic-full-name", "refs/heads/feature"],
+                0,
+                "refs/heads/feature\n",
+                ""
+            )
+            .on(
+                ["show-ref", "--verify", "--quiet", "refs/remotes/fork/review"],
+                0,
+                "",
+                ""
+            );
+        let git = Git::with(fake);
+
+        let plan = git
+            .plan_bare_push(Path::new("/vmr/backend"), Some("fork"))
+            .unwrap();
+
+        assert_eq!(plan.repository.as_deref(), Some("fork"));
+        assert_eq!(plan.attempt, Some(vec![refspec.to_owned()]));
+        assert!(plan.skips.is_empty());
     }
 
     fn classify(fake: ScriptedFake) -> (BarePush, Vec<Vec<OsString>>)
     {
         let fake = std::sync::Arc::new(fake);
         let git = Git::with(fake.clone());
-        let classification =
-            git.classify_bare_push(Path::new("/vmr/backend"), None).unwrap();
+        let plan = git.plan_bare_push(Path::new("/vmr/backend"), None).unwrap();
+        let classification = match plan.attempt
+        {
+            Some(_) => BarePush::Delegate,
+            None => BarePush::Skip(plan.skips.into_iter().next().unwrap())
+        };
         let calls =
             fake.calls().into_iter().map(|call| call.args).collect::<Vec<_>>();
         (classification, calls)
@@ -887,6 +1010,7 @@ mod tests
             )
             .on(["config", "--get", "branch.feature.pushRemote"], 1, "", "")
             .on(["config", "--get", "remote.pushDefault"], 1, "", "")
+            .on(["config", "--get-all", "remote.origin.push"], 1, "", "")
             .on(["config", "--get", "push.default"], 1, "", "")
             .on(
                 [
@@ -940,6 +1064,7 @@ mod tests
             .on(["config", "--get", "branch.feature.merge"], 1, "", "")
             .on(["config", "--get", "branch.feature.pushRemote"], 1, "", "")
             .on(["config", "--get", "remote.pushDefault"], 1, "", "")
+            .on(["config", "--get-all", "remote.origin.push"], 1, "", "")
             .on(["config", "--get", "push.default"], 0, "matching\n", "");
 
         // Act
