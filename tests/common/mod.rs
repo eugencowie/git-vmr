@@ -75,7 +75,7 @@ pub fn init_vmr(path: &Path)
 pub fn init_repo(path: &Path)
 {
     fs::create_dir(path).expect("failed to create repo dir");
-    git(path, ["init"]);
+    git(path, ["init", "--initial-branch=master"]);
     git(path, ["config", "user.email", "test@example.com"]);
     git(path, ["config", "user.name", "Test User"]);
 }
