@@ -23,9 +23,12 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 
 <!-- one line per closed ticket -->
 
+- [Validate --src-prefix/--dst-prefix for combined diffs](tickets/01-prefix-rewriting-research.md) — prefixes work everywhere except rename/copy lines; use `--no-renames --no-color --no-ext-diff --binary` per repo and the concatenated patch applies with `git apply -p1` from the VMR root (flags since git 1.5.4, CLI overrides all diff.* prefix config).
+
 ## Not yet specified
 
-- Nothing substantial beyond the live tickets — the effort is compact. Revisit after the pager-seam decision in case it surfaces render-layer restructuring.
+- Whether v1 promises an applyable patch at all: research shows applyability requires `--no-renames --no-color`, while the human view wants colour and (ideally) rename detection. The spec ticket must reconcile — e.g. colour+renames on TTY, apply-safe form when piped.
+- Nothing else substantial beyond the live tickets — the effort is compact. Revisit after the pager-seam decision in case it surfaces render-layer restructuring.
 
 ## Out of scope
 
