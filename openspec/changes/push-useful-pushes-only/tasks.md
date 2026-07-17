@@ -1,9 +1,9 @@
 ## 1. Skipped repo outcome
 
-- [ ] 1.1 Add the `Skipped` variant (required reason) to `RepoOutcome` in `src/git`, alongside `Success`/`Failure`
-- [ ] 1.2 Carry skips through result aggregation: group by identical reason, repo-list suffix, stdout, no exit-code effect, quiet-success rule not applied
-- [ ] 1.3 Render skip lines dimmed via the existing rendering choke point
-- [ ] 1.4 Unit-test aggregation/rendering per the aggregate-command-output delta scenarios (grouping, exit code, all-skipped not silent)
+- [x] 1.1 Add the `Skipped` variant (required reason) to `RepoOutcome` in `src/git`, alongside `Success`/`Failure`
+- [x] 1.2 Carry skips through result aggregation: group by identical reason, repo-list suffix, stdout, no exit-code effect, quiet-success rule not applied
+- [x] 1.3 Render skip lines dimmed via the existing rendering choke point
+- [x] 1.4 Unit-test aggregation/rendering per the aggregate-command-output delta scenarios (grouping, exit code, all-skipped not silent)
 
 ## 2. Push classification
 

@@ -1,5 +1,8 @@
 use crate::git::{GitCommandResult, RepoMessage, RepoOutcome};
-use crate::render::{Rendered, SuffixPolicy, fail, repo_list_suffix};
+use crate::render::{
+    Rendered, SKIPPED, SuffixPolicy, fail, paint, repo_list_suffix
+};
+use anstyle::Style;
 use anyhow::Result;
 use std::collections::HashSet;
 
@@ -19,6 +22,7 @@ pub fn outcomes<'a>(
 {
     let total = scope.into_iter().collect::<HashSet<_>>().len();
     let mut successes = Vec::new();
+    let mut skips = Vec::new();
     let mut failures = Vec::new();
     let mut errors = Vec::new();
 
@@ -29,6 +33,7 @@ pub fn outcomes<'a>(
             Ok(RepoOutcome::Success(Some(message))) => successes.push(message),
             Ok(RepoOutcome::Success(None)) =>
             {}
+            Ok(RepoOutcome::Skipped(message)) => skips.push(message),
             Ok(RepoOutcome::Failure(message)) => failures.push(message),
             Err(error) => errors.push(error)
         }
@@ -36,6 +41,13 @@ pub fn outcomes<'a>(
 
     let mut stdout = String::new();
     for message in grouped_messages(successes, total, SuffixPolicy::Truncated)
+        .into_iter()
+        .chain(grouped_styled_messages(
+            skips,
+            total,
+            SuffixPolicy::Truncated,
+            SKIPPED
+        ))
     {
         stdout.push_str(&message);
         stdout.push('\n');
@@ -62,6 +74,32 @@ fn grouped_messages(
     policy: SuffixPolicy
 ) -> Vec<String>
 {
+    grouped_lines(messages, total, policy)
+        .map(|(message, suffix)| format!("{message}{suffix}"))
+        .collect()
+}
+
+/// Like [`grouped_messages`], but paints each group's message with `style`
+/// after grouping — grouping always compares raw messages, never styled text.
+fn grouped_styled_messages(
+    messages: Vec<RepoMessage>,
+    total: usize,
+    policy: SuffixPolicy,
+    style: Style
+) -> Vec<String>
+{
+    grouped_lines(messages, total, policy)
+        .map(|(message, suffix)| format!("{}{suffix}", paint(style, &message)))
+        .collect()
+}
+
+/// Groups identical messages and pairs each with its repo-list suffix.
+fn grouped_lines(
+    messages: Vec<RepoMessage>,
+    total: usize,
+    policy: SuffixPolicy
+) -> impl Iterator<Item = (String, String)>
+{
     let mut groups: Vec<(String, Vec<String>)> = Vec::new();
 
     for repo_message in messages
@@ -81,13 +119,11 @@ fn grouped_messages(
         }
     }
 
-    groups
-        .into_iter()
-        .map(|(message, repos)| {
-            let repos = repos.iter().map(String::as_str).collect::<Vec<_>>();
-            format!("{message}{}", repo_list_suffix(&repos, total, policy))
-        })
-        .collect()
+    groups.into_iter().map(move |(message, repos)| {
+        let repos = repos.iter().map(String::as_str).collect::<Vec<_>>();
+        let suffix = repo_list_suffix(&repos, total, policy);
+        (message, suffix)
+    })
 }
 
 #[cfg(test)]
@@ -228,6 +264,98 @@ mod tests
             rendered.stdout,
             "Already up to date. \x1b[90m(backend)\x1b[0m\n"
         );
+    }
+
+    #[test]
+    fn outcomes_group_identical_skip_reasons_dimmed_on_stdout()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Skipped(repo_message(
+                "frontend",
+                "nothing to push"
+            ))),
+            Ok(RepoOutcome::Skipped(repo_message("docs", "nothing to push"))),
+        ];
+
+        // Act
+        let rendered =
+            outcomes(results, ["backend", "frontend", "docs"]).unwrap();
+
+        // Assert
+        assert_eq!(
+            rendered.stdout,
+            "\x1b[2mnothing to push\x1b[0m \x1b[90m(frontend, docs)\x1b[0m\n"
+        );
+    }
+
+    #[test]
+    fn outcomes_with_skips_do_not_change_the_exit_code()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Success(Some(repo_message("backend", "pushed")))),
+            Ok(RepoOutcome::Skipped(repo_message("docs", "nothing to push"))),
+        ];
+
+        // Act
+        let rendered = outcomes(results, ["backend", "docs"]).unwrap();
+
+        // Assert
+        assert_eq!(
+            rendered.stdout,
+            "pushed \x1b[90m(backend)\x1b[0m\n\x1b[2mnothing to \
+             push\x1b[0m \x1b[90m(docs)\x1b[0m\n"
+        );
+    }
+
+    #[test]
+    fn outcomes_all_skipped_succeed_and_are_not_silent()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Skipped(repo_message(
+                "backend",
+                "nothing to push"
+            ))),
+            Ok(RepoOutcome::Skipped(repo_message(
+                "frontend",
+                "nothing to push"
+            ))),
+        ];
+
+        // Act
+        let rendered = outcomes(results, ["backend", "frontend"]).unwrap();
+
+        // Assert: the suffix is omitted (everyone), but the reason prints.
+        assert_eq!(rendered.stdout, "\x1b[2mnothing to push\x1b[0m\n");
+    }
+
+    #[test]
+    fn outcomes_print_skips_when_failures_fail_the_command()
+    {
+        // Arrange
+        let results = vec![
+            Ok(RepoOutcome::Skipped(repo_message(
+                "backend",
+                "nothing to push"
+            ))),
+            Ok(RepoOutcome::Failure(repo_message(
+                "frontend",
+                "remote rejected"
+            ))),
+        ];
+
+        // Act
+        let err = outcomes(results, ["backend", "frontend"]).unwrap_err();
+
+        // Assert
+        let failed = err.downcast::<crate::render::Failed>().unwrap();
+        assert_eq!(
+            failed.rendered.stdout,
+            "\x1b[2mnothing to push\x1b[0m \x1b[90m(backend)\x1b[0m\n"
+        );
+        assert_eq!(failed.message, "remote rejected \x1b[90m(frontend)\x1b[0m");
     }
 
     #[test]

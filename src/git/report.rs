@@ -294,7 +294,8 @@ mod tests
         {
             RepoOutcome::Success(message) =>
                 message.map(|message| message.message),
-            RepoOutcome::Failure(_) => panic!("expected success")
+            RepoOutcome::Failure(_) | RepoOutcome::Skipped(_) =>
+                panic!("expected success"),
         }
     }
 
@@ -303,7 +304,8 @@ mod tests
         match outcome
         {
             RepoOutcome::Failure(message) => message.message,
-            RepoOutcome::Success(_) => panic!("expected failure")
+            RepoOutcome::Success(_) | RepoOutcome::Skipped(_) =>
+                panic!("expected failure"),
         }
     }
 

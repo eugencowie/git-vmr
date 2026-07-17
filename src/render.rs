@@ -86,6 +86,8 @@ pub(crate) const CHANGED: Style =
     Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
 pub(crate) const REPO_LIST: Style =
     Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightBlack)));
+pub(crate) const SKIPPED: Style =
+    Style::new().effects(anstyle::Effects::DIMMED);
 
 const fn green() -> Style
 {
