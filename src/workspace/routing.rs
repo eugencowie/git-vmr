@@ -200,11 +200,7 @@ impl<'a> Router<'a>
             })?;
 
         // Build path relative to owning repository
-        let mut repo_relative_path = PathBuf::new();
-        for component in components
-        {
-            repo_relative_path.push(component.as_os_str());
-        }
+        let mut repo_relative_path = components.as_path().to_path_buf();
         if repo_relative_path.as_os_str().is_empty()
         {
             repo_relative_path.push(".");
