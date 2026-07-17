@@ -7,9 +7,9 @@
 
 ## 2. Push classification
 
-- [ ] 2.1 Add head/config/remote-tracking evidence gathering to the push slice through the Git runner seam (local-only; scripted-fake coverage)
-- [ ] 2.2 Implement destination resolution for `push.default` (`simple`/`current`/`upstream`) and upstream config; unrecognized configuration classifies as skip-with-reason
-- [ ] 2.3 Implement the branch usefulness predicate: destination exists on target remote → delegate; novel commits (`rev-list --not --remotes=<remote>`) → push; otherwise skip as empty branch creation
+- [x] 2.1 Add head/config/remote-tracking evidence gathering to the push slice through the Git runner seam (local-only; scripted-fake coverage)
+- [x] 2.2 Implement destination resolution for `push.default` (`simple`/`current`/`upstream`) and upstream config; unrecognized configuration classifies as skip-with-reason
+- [x] 2.3 Implement the branch usefulness predicate: destination exists on target remote → delegate; novel commits (`rev-list --not --remotes=<remote>`) → push; otherwise skip as empty branch creation
 - [ ] 2.4 Implement refspec parsing and the classification table: branch → predicate, delete → push, tag → push, wildcard → skip, URL repository argument → delegate whole push
 - [ ] 2.5 Wire per-refspec filtering: pass only the useful subset in user order; no git invocation when the subset is empty; bare push as the one-refspec degenerate case
 - [ ] 2.6 Unit-test each classification row and predicate branch against the scripted fake, including the deleted-on-remote re-creation case and stale-picture push-through

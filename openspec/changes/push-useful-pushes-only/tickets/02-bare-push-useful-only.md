@@ -1,6 +1,6 @@
 # 02 — Bare push attempts only useful pushes
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** The core VMR workflow stops polluting remotes. A user creates a feature branch across the workspace, commits in two of five repos, and runs `git vmr push`: the two repos with novel commits push, the other three are skipped with a reported reason, and the command exits 0. A run in which every repo is skipped exits 0 and is not silent.
 
@@ -10,10 +10,10 @@ Decisions: ADR 0007 and the push-command delta spec in the push-useful-pushes-on
 
 **Blocked by:** 01 — Skipped repo outcome through the aggregate pipeline.
 
-- [ ] Bare `git vmr push` pushes only repos whose push is proven useful, skipping the rest with reasons
-- [ ] Evidence is local remote-tracking refs and config only; no network before deciding
-- [ ] A branch merged and deleted on the remote (upstream config lingering) is skipped, not re-created
-- [ ] A stale local picture results in a push, which Git absorbs
-- [ ] Unrecognized push configuration classifies as skip-with-reason
-- [ ] Skipped repos incur no `git push` invocation; all-skipped runs exit 0 and report
-- [ ] Scripted-fake unit tests cover each predicate branch; integration tests cover the workflow scenarios from the delta spec
+- [x] Bare `git vmr push` pushes only repos whose push is proven useful, skipping the rest with reasons
+- [x] Evidence is local remote-tracking refs and config only; no network before deciding
+- [x] A branch merged and deleted on the remote (upstream config lingering) is skipped, not re-created
+- [x] A stale local picture results in a push, which Git absorbs
+- [x] Unrecognized push configuration classifies as skip-with-reason
+- [x] Skipped repos incur no `git push` invocation; all-skipped runs exit 0 and report
+- [x] Scripted-fake unit tests cover each predicate branch; integration tests cover the workflow scenarios from the delta spec

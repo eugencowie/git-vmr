@@ -158,7 +158,6 @@ pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
     RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
 }
 
-#[allow(dead_code)] // No command emits skips yet; the push filter will.
 pub(crate) fn skip_message(repo_name: &str, reason: String) -> RepoOutcome
 {
     RepoOutcome::Skipped(RepoMessage {
