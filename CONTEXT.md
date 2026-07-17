@@ -72,6 +72,10 @@ _Avoid_: linked worktree, sub-worktree
 The worktree-root lifecycle: materializing creates the directory and its marker; dissolving removes the marker and the directory if empty.
 _Avoid_: create/cleanup (for this lifecycle)
 
+**Root outcomes**:
+The result of a mutating root operation: one repo outcome per child worktree, plus the root's own fate — dissolved, deliberately kept, or failed to dissolve. Rendered as a single unit; a failed root fate reports as the command's error without discarding child successes.
+_Avoid_: root result, operation epilogue
+
 ### Running git
 
 **Git runner**:
