@@ -128,7 +128,9 @@ pub struct RepoMessage
 pub enum RepoOutcome
 {
     Success(Option<RepoMessage>),
-    Failure(RepoMessage)
+    Failure(RepoMessage),
+    /// The operation was deliberately not attempted; the reason is required.
+    Skipped(RepoMessage)
 }
 
 pub type GitCommandResult = Result<RepoOutcome>;
@@ -154,6 +156,14 @@ pub(crate) fn success_message(repo_name: &str, message: String) -> RepoOutcome
 pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
 {
     RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
+}
+
+pub(crate) fn skip_message(repo_name: &str, reason: String) -> RepoOutcome
+{
+    RepoOutcome::Skipped(RepoMessage {
+        repo: repo_name.to_owned(),
+        message: reason
+    })
 }
 
 pub(crate) fn stderr(output: &GitOutput) -> String
