@@ -86,6 +86,10 @@ _Avoid_: git client, executor, git wrapper
 The test adapter for the Git runner — answers each expected invocation with a canned exit code and output, fails the test on an unexpected one, and records what was run.
 _Avoid_: mock git, stub
 
+**Child environment**:
+The per-repo variable set foreach exports to the child's shell — name, sm_path, displaypath, and toplevel, with names taken from git submodule foreach's contract and sha1 deliberately absent. displaypath is relative to the working dir.
+_Avoid_: env vars, shell context, foreach variables
+
 **Repo outcome**:
 The per-repo result of a git operation: success (with an optional message) or failure (with one). The unit that result aggregation consumes.
 _Avoid_: result, status, exit

@@ -2,8 +2,8 @@ use crate::cli::CliContext;
 use crate::render::{Rendered, fail};
 use crate::workspace::{Repo, Workspace};
 use anyhow::Result;
-use std::path::Path;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitStatus, Stdio};
 
 /// One child repo's captured command output, ready for rendering.
 struct ChildOutput<'a>
@@ -26,6 +26,25 @@ enum ChildStatus
     Success,
     Exit(i32),
     Signal
+}
+
+impl From<ExitStatus> for ChildStatus
+{
+    fn from(status: ExitStatus) -> Self
+    {
+        if status.success()
+        {
+            ChildStatus::Success
+        }
+        else if let Some(code) = status.code()
+        {
+            ChildStatus::Exit(code)
+        }
+        else
+        {
+            ChildStatus::Signal
+        }
+    }
 }
 
 impl ChildStatus
@@ -112,6 +131,32 @@ pub fn run(
     Ok(rendered)
 }
 
+/// The child environment's computed variables: where the repo sits inside
+/// the VMR, and the repo's path relative to the working dir.
+struct ChildEnvironment
+{
+    sm_path: PathBuf,
+    displaypath: PathBuf
+}
+
+fn child_environment(
+    repo_path: &Path,
+    vmr_root: &Path,
+    working_dir: &Path
+) -> ChildEnvironment
+{
+    let sm_path =
+        repo_path.strip_prefix(vmr_root).unwrap_or(repo_path).to_path_buf();
+    let mut displaypath = pathdiff::diff_paths(repo_path, working_dir)
+        .unwrap_or_else(|| repo_path.to_path_buf());
+    if displaypath.as_os_str().is_empty()
+    {
+        displaypath.push(".");
+    }
+
+    ChildEnvironment { sm_path, displaypath }
+}
+
 fn run_child(
     repo: &Repo,
     vmr_root: &Path,
@@ -119,13 +164,7 @@ fn run_child(
     command: &str
 ) -> Result<ChildResult>
 {
-    let sm_path = repo.path.strip_prefix(vmr_root).unwrap_or(&repo.path);
-    let mut displaypath = pathdiff::diff_paths(&repo.path, working_dir)
-        .unwrap_or(repo.path.clone());
-    if displaypath.as_os_str().is_empty()
-    {
-        displaypath.push(".");
-    }
+    let environment = child_environment(&repo.path, vmr_root, working_dir);
 
     let output = shell_command(command)
         .current_dir(&repo.path)
@@ -133,29 +172,16 @@ fn run_child(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env("name", &repo.name)
-        .env("sm_path", sm_path)
-        .env("displaypath", displaypath)
+        .env("sm_path", environment.sm_path)
+        .env("displaypath", environment.displaypath)
         .env("toplevel", vmr_root)
         .output()?;
-
-    let status = if output.status.success()
-    {
-        ChildStatus::Success
-    }
-    else if let Some(code) = output.status.code()
-    {
-        ChildStatus::Exit(code)
-    }
-    else
-    {
-        ChildStatus::Signal
-    };
 
     Ok(ChildResult {
         repo: repo.clone(),
         stdout: output.stdout,
         stderr: output.stderr,
-        status
+        status: output.status.into()
     })
 }
 
@@ -197,6 +223,143 @@ fn shell_command(command: &str) -> Command
         let mut child = Command::new("sh");
         child.arg("-c").arg(command);
         child
+    }
+}
+
+#[cfg(test)]
+mod child_environment_tests
+{
+    use super::*;
+
+    fn environment(
+        repo_path: &str,
+        vmr_root: &str,
+        working_dir: &str
+    ) -> ChildEnvironment
+    {
+        child_environment(
+            Path::new(repo_path),
+            Path::new(vmr_root),
+            Path::new(working_dir)
+        )
+    }
+
+    #[test]
+    fn working_dir_at_the_vmr_root_yields_the_repo_name()
+    {
+        // Act
+        let environment = environment("/vmr/backend", "/vmr", "/vmr");
+
+        // Assert
+        assert_eq!(environment.sm_path, Path::new("backend"));
+        assert_eq!(environment.displaypath, Path::new("backend"));
+    }
+
+    #[test]
+    fn working_dir_inside_a_sibling_child_traverses_up()
+    {
+        // Act
+        let environment = environment("/vmr/backend", "/vmr", "/vmr/frontend");
+
+        // Assert
+        assert_eq!(environment.displaypath, Path::new("../backend"));
+    }
+
+    #[test]
+    fn working_dir_equal_to_the_repo_yields_dot()
+    {
+        // Act
+        let environment = environment("/vmr/backend", "/vmr", "/vmr/backend");
+
+        // Assert
+        assert_eq!(environment.displaypath, Path::new("."));
+    }
+
+    #[test]
+    fn working_dir_nested_inside_the_repo_traverses_up()
+    {
+        // Act
+        let environment =
+            environment("/vmr/backend", "/vmr", "/vmr/backend/src");
+
+        // Assert
+        assert_eq!(environment.displaypath, Path::new(".."));
+    }
+
+    #[test]
+    fn repo_outside_the_vmr_root_keeps_its_full_path_as_sm_path()
+    {
+        // Act
+        let environment = environment("/elsewhere/backend", "/vmr", "/vmr");
+
+        // Assert
+        assert_eq!(environment.sm_path, Path::new("/elsewhere/backend"));
+    }
+
+    #[test]
+    fn displaypath_without_a_relative_route_falls_back_to_the_repo_path()
+    {
+        // Act: a relative repo path has no route from an absolute working dir
+        let environment = environment("rel/backend", "/vmr", "/vmr");
+
+        // Assert
+        assert_eq!(environment.displaypath, Path::new("rel/backend"));
+    }
+}
+
+#[cfg(test)]
+mod child_status_tests
+{
+    use super::*;
+
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> ExitStatus
+    {
+        use std::os::unix::process::ExitStatusExt;
+        ExitStatus::from_raw(code << 8)
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: i32) -> ExitStatus
+    {
+        use std::os::windows::process::ExitStatusExt;
+        ExitStatus::from_raw(code as u32)
+    }
+
+    #[test]
+    fn zero_exit_converts_to_success()
+    {
+        // Act
+        let status = ChildStatus::from(exit_status(0));
+
+        // Assert
+        assert!(status.success());
+        assert_eq!(status.describe(), "exit status 0");
+    }
+
+    #[test]
+    fn nonzero_exit_converts_to_exit_with_its_code()
+    {
+        // Act
+        let status = ChildStatus::from(exit_status(3));
+
+        // Assert
+        assert!(!status.success());
+        assert_eq!(status.describe(), "exit status 3");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signal_termination_converts_to_signal()
+    {
+        use std::os::unix::process::ExitStatusExt;
+
+        // Act
+        let status = ChildStatus::from(ExitStatus::from_raw(9));
+
+        // Assert
+        assert!(!status.success());
+        assert_eq!(status.describe(), "terminated by signal");
     }
 }
 
