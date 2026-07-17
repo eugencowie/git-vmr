@@ -365,6 +365,219 @@ fn bare_push_with_every_repository_skipped_exits_zero_and_reports()
 }
 
 #[test]
+fn mixed_refspec_list_pushes_only_the_useful_subset()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    // `master` gains novel commits; `feature` would be an empty branch
+    // creation.
+    git(&backend, ["branch", "feature"]);
+    write_commit(&backend, "backend.txt", "updated\n", "backend update");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "master", "feature"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("skipping 'feature'")
+                .and(predicate::str::contains("empty branch"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(head(&backend_remote, "master"), head(&backend, "master"));
+    assert!(!ref_exists(&backend_remote, "feature"));
+}
+
+#[test]
+fn multiple_useful_refspecs_push_together_in_user_order()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    write_commit(&backend, "backend.txt", "updated\n", "backend update");
+    git(&backend, ["branch", "release"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "master", "release"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping").not());
+
+    assert_eq!(head(&backend_remote, "master"), head(&backend, "master"));
+    assert_eq!(head(&backend_remote, "release"), head(&backend, "release"));
+}
+
+#[test]
+fn push_with_repository_argument_alone_classifies_against_that_remote()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    write_commit(&backend, "backend.txt", "updated\n", "backend update");
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping").not())
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(head(&backend_remote, "master"), head(&backend, "master"));
+}
+
+#[test]
+fn repository_with_no_useful_refspecs_gets_no_invocation()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (docs_remote, docs) =
+        setup_remote_and_clone(tmp.path(), "docs", "docs.txt");
+    git(&docs, ["branch", "feature"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "feature"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping 'feature'"))
+        .stderr(predicate::str::is_empty());
+
+    assert!(!ref_exists(&docs_remote, "feature"));
+}
+
+#[test]
+fn identical_refspec_skip_reasons_group_across_repositories()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (_backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    let (_frontend_remote, frontend) =
+        setup_remote_and_clone(tmp.path(), "frontend", "frontend.txt");
+    git(&backend, ["branch", "feature"]);
+    git(&frontend, ["branch", "feature"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "feature"])
+        .assert()
+        .success()
+        .stdout(predicate::function(|stdout: &str| {
+            stdout.matches("skipping 'feature'").count() == 1
+        }))
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn tag_refspec_is_always_pushed()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    // The tag points at a commit already on the remote.
+    git(&backend, ["tag", "v1.0.0"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "v1.0.0"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping").not());
+
+    assert!(ref_exists(&backend_remote, "v1.0.0"));
+}
+
+#[test]
+fn delete_refspec_is_always_pushed()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    git(&backend, ["push", "origin", "master:gone-branch"]);
+    assert!(ref_exists(&backend_remote, "gone-branch"));
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", ":gone-branch"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping").not());
+
+    assert!(!ref_exists(&backend_remote, "gone-branch"));
+}
+
+#[test]
+fn wildcard_refspec_is_skipped_as_unclassifiable()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    git(&backend, ["branch", "feature"]);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", "origin", "refs/heads/*:refs/heads/*"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("refs/heads/*:refs/heads/*")
+                .and(predicate::str::contains("wildcard"))
+        )
+        .stderr(predicate::str::is_empty());
+
+    assert!(!ref_exists(&backend_remote, "feature"));
+}
+
+#[test]
+fn url_repository_argument_delegates_the_whole_push()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let vmr = tmp.path().join("vmr");
+    fs::create_dir_all(&vmr).expect("failed to create vmr dir");
+    init_vmr(&vmr);
+    let (_backend_remote, backend) =
+        setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
+    // A URL repository argument passes the whole push through unfiltered.
+    let target = tmp.path().join("remotes").join("target.git");
+    init_bare_repo(&target);
+
+    git_vmr()
+        .current_dir(&vmr)
+        .args(["push", &target.display().to_string(), "master"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("skipping").not());
+
+    assert_eq!(head(&target, "master"), head(&backend, "master"));
+}
+
+#[test]
 fn push_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
