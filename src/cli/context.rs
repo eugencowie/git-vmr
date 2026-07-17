@@ -4,6 +4,7 @@ use crate::state::GlobalState;
 use crate::store::FileStore;
 use anyhow::{Context, Result, bail};
 use std::env;
+use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 
 pub struct CliContext
@@ -19,6 +20,10 @@ pub struct CliContext
 
     /// Global runtime state
     pub global_state: FileStore<GlobalState>,
+
+    /// Whether stdout is a terminal — the one TTY fact gating colour and
+    /// paging decisions, so they can never disagree
+    pub stdout_is_tty: bool,
 
     /// Warnings raised while loading context data. Private so the
     /// constructor is the only way to build a context outside this module.
@@ -48,6 +53,7 @@ impl CliContext
             working_dir: Self::resolve_working_dir(working_dir)?,
             global_config,
             global_state,
+            stdout_is_tty: io::stdout().is_terminal(),
             warnings: state_warning.into_iter().collect(),
             git: Git::subprocess()
         })
@@ -67,6 +73,7 @@ impl CliContext
             global_config: FileStore::load(working_dir.join("config.toml"))
                 .expect("missing global config loads as defaults"),
             global_state,
+            stdout_is_tty: false,
             warnings: Vec::new(),
             git
         }
@@ -155,6 +162,7 @@ mod tests
                 state_path.clone(),
                 GlobalState::default()
             ),
+            stdout_is_tty: false,
             warnings: vec![],
             git: Git::subprocess()
         };

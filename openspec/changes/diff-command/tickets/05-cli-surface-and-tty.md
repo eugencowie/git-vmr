@@ -1,7 +1,7 @@
 # CLI surface and the injected TTY fact
 
 Type: implementation
-Status: open
+Status: resolved
 
 ## Task
 
@@ -23,3 +23,15 @@ Add the `diff` subcommand skeleton and the TTY fact, per
 
 Done when the command parses, routes nothing yet, and colour/pager
 gating decisions are unit-tested.
+
+## Comments
+
+Implemented (2026-07-18): `DiffArgs` in `src/commands/diff.rs` with
+`--staged`/`--cached`, `--color[=<when>]` (bare = `always`, default
+`auto`, `require_equals` like git), `--no-pager`, trailing paths; wired
+into `WorkspaceCommand` after `Status`. `CliContext.stdout_is_tty` set
+from `stdout().is_terminal()` in production, `false` in `for_tests`.
+`resolve_color` maps `auto` + TTY fact to a `ResolvedColor`
+(`Always`/`Never`) and `paging_active` gates paging on `TTY &&
+!--no-pager`; parse, colour-resolution, and pager-gating paths
+unit-tested. Diff body is a stub returning empty `Rendered`.
