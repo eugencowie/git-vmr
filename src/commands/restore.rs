@@ -5,7 +5,7 @@ use anyhow::Result;
 
 pub fn run(
     workspace: &Workspace,
-    context: &CliContext,
+    _context: &CliContext,
     args: &RestoreArgs
 ) -> Result<Rendered>
 {
@@ -16,11 +16,9 @@ pub fn run(
     };
 
     // Restore routed paths in each owning child repository
-    workspace.run_routed(
-        &context.working_dir,
-        scope,
-        |git, repo, repo_paths| git.restore(repo, repo_paths, &args.options)
-    )
+    workspace.run_routed(scope, |git, repo, repo_paths| {
+        git.restore(repo, repo_paths, &args.options)
+    })
 }
 
 use crate::git::report::{FailureReport, SuccessReport, command_result};

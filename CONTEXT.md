@@ -11,7 +11,7 @@ A virtual monorepo — a directory on disk that groups independent Git repositor
 _Avoid_: monorepo, root repo
 
 **Workspace**:
-A VMR opened by one command: the child repos discovered at that moment, held fixed for the duration of the command, plus the means to run git across them. The disk can change mid-command; the workspace cannot.
+A VMR opened by one command: the working dir it was opened from and the child repos discovered at that moment, held fixed for the duration of the command, plus the means to run git across them. The disk can change mid-command; the workspace cannot.
 _Avoid_: VMR (when the fixed, opened view is meant), context, session
 
 **Child repo**:
@@ -37,6 +37,10 @@ _Avoid_: cwd, current directory
 **Routing**:
 Deciding which child repo owns a user-supplied path, and what that path is relative to the owning repo.
 _Avoid_: mapping, dispatching, resolving
+
+**Router**:
+The module that owns routing: a borrowed view over a workspace's fixed snapshot (VMR root, child repos, working dir) turning a scope into owning child repos with repo-relative paths. Private to the workspace core — slices reach routing only through the workspace.
+_Avoid_: path resolver, route table
 
 **Aggregate path**:
 A path that expands to more than one child repo — the VMR root itself, as in `add -A`. "Aggregate" is reserved for this routing sense alone.

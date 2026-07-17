@@ -24,11 +24,11 @@ pub struct MvArgs
 
 pub fn run(
     workspace: &Workspace,
-    context: &CliContext,
+    _context: &CliContext,
     args: &MvArgs
 ) -> Result<Rendered>
 {
-    let moved = mv(workspace, &context.working_dir, args)?;
+    let moved = mv(workspace, args)?;
     render::outcomes(
         moved.outcomes,
         moved.scope_repos.iter().map(String::as_str)
@@ -54,20 +54,16 @@ struct MoveOutcomes
 /// When a cross-repo rename lands but staging fails, the entry reports a
 /// failure and the half-done state stays: the file remains moved on
 /// disk, with the deletion and addition left unstaged.
-fn mv(
-    workspace: &Workspace,
-    working_dir: &Path,
-    args: &MvArgs
-) -> Result<MoveOutcomes>
+fn mv(workspace: &Workspace, args: &MvArgs) -> Result<MoveOutcomes>
 {
     // Route all operands before moving anything
     let git = workspace.git();
     let sources = args
         .sources
         .iter()
-        .map(|source| workspace.route_single(working_dir, source))
+        .map(|source| workspace.route_single(source))
         .collect::<Result<Vec<_>>>()?;
-    let destination = workspace.route_single(working_dir, &args.destination)?;
+    let destination = workspace.route_single(&args.destination)?;
     let scope_repos = sources
         .iter()
         .map(|(repo, _)| repo.name.clone())
@@ -493,7 +489,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes = mv(&workspace, tmp.path(), &MvArgs {
+        let outcomes = mv(&workspace, &MvArgs {
             sources: vec![PathBuf::from("backend/src/old.rs")],
             destination: PathBuf::from("backend/src/new.rs")
         })
@@ -531,7 +527,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes = mv(&workspace, tmp.path(), &MvArgs {
+        let outcomes = mv(&workspace, &MvArgs {
             sources: vec![
                 PathBuf::from("backend/a.txt"),
                 PathBuf::from("backend/b.txt"),
@@ -571,7 +567,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes = mv(&workspace, tmp.path(), &MvArgs {
+        let outcomes = mv(&workspace, &MvArgs {
             sources: vec![PathBuf::from("backend/config.toml")],
             destination: PathBuf::from("frontend/settings.toml")
         })
@@ -611,7 +607,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = mv(&workspace, tmp.path(), &MvArgs {
+        let result = mv(&workspace, &MvArgs {
             sources: vec![
                 PathBuf::from("backend/notes.md"),
                 PathBuf::from("frontend/notes.md"),
@@ -638,7 +634,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let result = mv(&workspace, tmp.path(), &MvArgs {
+        let result = mv(&workspace, &MvArgs {
             sources: vec![
                 PathBuf::from("backend/a.txt"),
                 PathBuf::from("backend/b.txt"),
@@ -672,7 +668,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes = mv(&workspace, tmp.path(), &MvArgs {
+        let outcomes = mv(&workspace, &MvArgs {
             sources: vec![
                 PathBuf::from("backend/a.txt"),
                 PathBuf::from("backend/b.txt"),
@@ -718,7 +714,7 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes = mv(&workspace, tmp.path(), &MvArgs {
+        let outcomes = mv(&workspace, &MvArgs {
             sources: vec![PathBuf::from("backend/config.toml")],
             destination: PathBuf::from("frontend/settings.toml")
         })

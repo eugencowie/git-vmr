@@ -1,42 +1,25 @@
+mod routing;
+
 use crate::git::{Git, GitCommandResult};
 use crate::render::{self, Rendered};
+pub use crate::vmr::Repo;
 use crate::vmr::Vmr;
-pub use crate::vmr::{Repo, resolve_target};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use rayon::prelude::*;
-use std::collections::BTreeMap;
+use routing::Router;
+pub use routing::{AggregatePolicy, Scope};
 use std::path::{Path, PathBuf};
 
-/// The declared per-command rule for what happens when a user-supplied
-/// path resolves to the aggregate path: allowed to expand across the
-/// workspace, or denied with a command-supplied message.
-pub enum AggregatePolicy
-{
-    Allow,
-    Deny(String)
-}
-
-/// What a path-taking command operates over: explicit paths with a
-/// declared aggregate policy, or the entire VMR chosen deliberately via
-/// the aggregate path.
-pub enum Scope
-{
-    Paths
-    {
-        paths: Vec<PathBuf>,
-        aggregate: AggregatePolicy
-    },
-    EntireVmr
-}
-
-/// A VMR opened by one command: the child repos discovered at that moment,
-/// held fixed for the duration of the command, plus the means to run git
-/// across them. The disk can change mid-command; the workspace cannot.
+/// A VMR opened by one command: the working dir it was opened from and
+/// the child repos discovered at that moment, held fixed for the duration
+/// of the command, plus the means to run git across them. The disk can
+/// change mid-command; the workspace cannot.
 pub struct Workspace<'a>
 {
     git: &'a Git,
     vmr: Vmr,
-    repos: Vec<Repo>
+    repos: Vec<Repo>,
+    working_dir: PathBuf
 }
 
 impl<'a> Workspace<'a>
@@ -46,7 +29,7 @@ impl<'a> Workspace<'a>
     {
         let vmr = Vmr::find(working_dir)?;
         let repos = vmr.repos()?;
-        Ok(Self { git, vmr, repos })
+        Ok(Self { git, vmr, repos, working_dir: working_dir.to_path_buf() })
     }
 
     /// The VMR root directory.
@@ -88,17 +71,11 @@ impl<'a> Workspace<'a>
 
     /// Routes the scope to its owning child repos, runs a git operation in
     /// each in parallel, then renders the aggregated outcomes.
-    pub fn run_routed<F>(
-        &self,
-        working_dir: &Path,
-        scope: Scope,
-        op: F
-    ) -> Result<Rendered>
-    where
-        F: Fn(&Git, &Repo, &[PathBuf]) -> GitCommandResult + Sync
+    pub fn run_routed<F>(&self, scope: Scope, op: F) -> Result<Rendered>
+    where F: Fn(&Git, &Repo, &[PathBuf]) -> GitCommandResult + Sync
     {
         let routed =
-            self.route(working_dir, scope)?.into_iter().collect::<Vec<_>>();
+            self.router().route(scope)?.into_iter().collect::<Vec<_>>();
 
         render::outcomes(
             routed
@@ -122,60 +99,22 @@ impl<'a> Workspace<'a>
     /// Routes a single operand to its owning child repo. Single-operand
     /// routing always denies the aggregate path: one operand cannot expand
     /// to many child repos.
-    pub fn route_single(
-        &self,
-        working_dir: &Path,
-        path: &Path
-    ) -> Result<(Repo, PathBuf)>
+    pub fn route_single(&self, path: &Path) -> Result<(Repo, PathBuf)>
     {
-        self.vmr.route_single_path(&self.repos, working_dir, path)
+        self.router().route_single(path)
     }
 
-    fn route(
-        &self,
-        working_dir: &Path,
-        scope: Scope
-    ) -> Result<BTreeMap<Repo, Vec<PathBuf>>>
+    /// Resolves a user-supplied path against the working dir the workspace
+    /// was opened from and normalizes it lexically — the only form in
+    /// which user paths reach the filesystem or routing.
+    pub fn target(&self, path: &Path) -> PathBuf
     {
-        let (paths, aggregate) = match scope
-        {
-            Scope::Paths { paths, aggregate } => (paths, aggregate),
-            // The aggregate path expands to every snapshotted child repo
-            Scope::EntireVmr =>
-            {
-                return self.vmr.route_paths(
-                    &self.repos,
-                    working_dir,
-                    std::slice::from_ref(&self.vmr.path)
-                );
-            }
-        };
+        self.router().target(path)
+    }
 
-        // Route path by path so the first problem in path order wins,
-        // enforcing the aggregate policy as each path is reached
-        let mut grouped: BTreeMap<Repo, Vec<PathBuf>> = BTreeMap::new();
-
-        for path in paths
-        {
-            if let AggregatePolicy::Deny(message) = &aggregate
-                && resolve_target(working_dir, &path) == self.vmr.path
-            {
-                bail!("{message}");
-            }
-
-            let routed = self.vmr.route_paths(
-                &self.repos,
-                working_dir,
-                std::slice::from_ref(&path)
-            )?;
-
-            for (repo, repo_paths) in routed
-            {
-                grouped.entry(repo).or_default().extend(repo_paths);
-            }
-        }
-
-        Ok(grouped)
+    fn router(&self) -> Router<'_>
+    {
+        Router::new(&self.vmr.path, &self.repos, &self.working_dir)
     }
 }
 
@@ -324,7 +263,7 @@ mod tests
 
         // Act
         workspace
-            .run_routed(tmp.path(), Scope::EntireVmr, |git, repo, paths| {
+            .run_routed(Scope::EntireVmr, |git, repo, paths| {
                 outcome(
                     repo,
                     git.path_output(&repo.path, ["add", "--all", "--"], paths)?
@@ -365,7 +304,7 @@ mod tests
 
         // Act
         workspace
-            .run_routed(tmp.path(), scope, |git, repo, paths| {
+            .run_routed(scope, |git, repo, paths| {
                 outcome(
                     repo,
                     git.path_output(&repo.path, ["add", "--"], paths)?
@@ -396,157 +335,5 @@ mod tests
 
         // Assert
         assert_eq!(names, vec!["backend", "frontend"]);
-    }
-
-    #[test]
-    fn route_single_rejects_the_aggregate_path()
-    {
-        // Arrange
-        let tmp = vmr_fixture();
-        let git = Git::subprocess();
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-
-        // Act
-        let err =
-            workspace.route_single(tmp.path(), Path::new(".")).unwrap_err();
-
-        // Assert
-        assert!(format!("{err:#}").contains("VMR root aggregate"));
-    }
-
-    #[test]
-    fn allow_policy_expands_the_aggregate_path_to_every_child_repo()
-    {
-        // Arrange
-        let tmp = vmr_fixture();
-        let fake =
-            Arc::new(ScriptedFake::new().on(["add", "--", "."], 0, "", ""));
-        let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-        let scope = Scope::Paths {
-            paths: vec![PathBuf::from(".")],
-            aggregate: AggregatePolicy::Allow
-        };
-
-        // Act
-        workspace
-            .run_routed(tmp.path(), scope, |git, repo, paths| {
-                outcome(
-                    repo,
-                    git.path_output(&repo.path, ["add", "--"], paths)?
-                )
-            })
-            .unwrap();
-
-        // Assert
-        let mut paths = fake
-            .calls()
-            .into_iter()
-            .map(|invocation| invocation.path)
-            .collect::<Vec<_>>();
-        paths.sort();
-        assert_eq!(paths, vec![
-            tmp.path().join("backend"),
-            tmp.path().join("frontend")
-        ]);
-    }
-
-    #[test]
-    fn deny_policy_rejects_the_aggregate_path_before_any_git_operation()
-    {
-        // Arrange: no scripted expectations, so any git invocation fails
-        let tmp = vmr_fixture();
-        let git = Git::with(ScriptedFake::new());
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-
-        // The aggregate path is denied however the user spells it
-        for (working_dir, path) in [
-            (tmp.path().to_path_buf(), "."),
-            (tmp.path().join("backend"), "..")
-        ]
-        {
-            // Arrange
-            let scope = Scope::Paths {
-                paths: vec![PathBuf::from(path)],
-                aggregate: AggregatePolicy::Deny("denied".to_owned())
-            };
-
-            // Act
-            let err = workspace
-                .run_routed(&working_dir, scope, |git, repo, paths| {
-                    outcome(
-                        repo,
-                        git.path_output(&repo.path, ["add", "--"], paths)?
-                    )
-                })
-                .unwrap_err();
-
-            // Assert
-            assert_eq!(err.to_string(), "denied");
-        }
-    }
-
-    #[test]
-    fn deny_policy_ignores_paths_owned_by_a_child_repo()
-    {
-        // Arrange
-        let tmp = vmr_fixture();
-        let fake = Arc::new(ScriptedFake::new().on(
-            ["add", "--", "src/main.rs"],
-            0,
-            "",
-            ""
-        ));
-        let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-        let scope = Scope::Paths {
-            paths: vec![PathBuf::from("backend/src/main.rs")],
-            aggregate: AggregatePolicy::Deny("denied".to_owned())
-        };
-
-        // Act
-        workspace
-            .run_routed(tmp.path(), scope, |git, repo, paths| {
-                outcome(
-                    repo,
-                    git.path_output(&repo.path, ["add", "--"], paths)?
-                )
-            })
-            .unwrap();
-
-        // Assert
-        assert_eq!(
-            fake.calls()
-                .into_iter()
-                .map(|invocation| invocation.path)
-                .collect::<Vec<_>>(),
-            vec![tmp.path().join("backend")]
-        );
-    }
-
-    #[test]
-    fn routing_problems_surface_in_path_order()
-    {
-        // Arrange: the unroutable path precedes the denied aggregate path
-        let tmp = vmr_fixture();
-        let git = Git::with(ScriptedFake::new());
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-        let scope = Scope::Paths {
-            paths: vec![PathBuf::from("nonexistent"), PathBuf::from(".")],
-            aggregate: AggregatePolicy::Deny("denied".to_owned())
-        };
-
-        // Act
-        let err = workspace
-            .run_routed(tmp.path(), scope, |git, repo, paths| {
-                outcome(
-                    repo,
-                    git.path_output(&repo.path, ["add", "--"], paths)?
-                )
-            })
-            .unwrap_err();
-
-        // Assert
-        assert!(format!("{err:#}").contains("failed to route 'nonexistent'"));
     }
 }
