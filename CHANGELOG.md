@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.11.0
+
+### 🚀 Features
+
+- Make `push` only push branches with novel commits ([#102](https://github.com/eugencowie/git-vmr/pull/102))
+
+### 🐛 Bug Fixes
+
+- Make head resolution observe unborn branches ([#97](https://github.com/eugencowie/git-vmr/pull/97))
+
+### 🚜 Refactor
+
+- Unify git calls into a single git runner ([#73](https://github.com/eugencowie/git-vmr/pull/73))
+- Add workspace module ([#74](https://github.com/eugencowie/git-vmr/pull/74))
+- Unify path routing ([#75](https://github.com/eugencowie/git-vmr/pull/75))
+- Add rendering module for command output ([#76](https://github.com/eugencowie/git-vmr/pull/76))
+- Concentrate TOML persistence ([#77](https://github.com/eugencowie/git-vmr/pull/77))
+- Derive event metadata from CLI definitions ([#78](https://github.com/eugencowie/git-vmr/pull/78))
+- Make CLI context construction hermetic ([#80](https://github.com/eugencowie/git-vmr/pull/80))
+- Extract command outcome reporting into module ([#81](https://github.com/eugencowie/git-vmr/pull/81))
+- Unify the repo-list suffix rendering ([#82](https://github.com/eugencowie/git-vmr/pull/82))
+- Eliminate the analytics builder ([#83](https://github.com/eugencowie/git-vmr/pull/83))
+- Deepen the report policy ([#86](https://github.com/eugencowie/git-vmr/pull/86))
+- Deepen the worktree lifecycle ([#85](https://github.com/eugencowie/git-vmr/pull/85))
+- Deepen the update and analytics verticals ([#87](https://github.com/eugencowie/git-vmr/pull/87))
+- Consolidate git head resolution ([#88](https://github.com/eugencowie/git-vmr/pull/88))
+- Deepen the move domain ([#89](https://github.com/eugencowie/git-vmr/pull/89))
+- Give analytics recording a sink seam ([#92](https://github.com/eugencowie/git-vmr/pull/92))
+- Unify the command interface ([#93](https://github.com/eugencowie/git-vmr/pull/93))
+- Restructure commands as vertical slices over shared cores ([#94](https://github.com/eugencowie/git-vmr/pull/94))
+- Concentrate the aggregate policy at the routing seam ([#95](https://github.com/eugencowie/git-vmr/pull/95))
+- Let result aggregation own the scope denominator ([#96](https://github.com/eugencowie/git-vmr/pull/96))
+- Let root outcomes render their own dissolve fate ([#98](https://github.com/eugencowie/git-vmr/pull/98))
+- Split foreach's child environment from the spawn ([#99](https://github.com/eugencowie/git-vmr/pull/99))
+- Extract the run pipeline behind its own seam ([#100](https://github.com/eugencowie/git-vmr/pull/100))
+- Extract a router view behind the workspace ([#101](https://github.com/eugencowie/git-vmr/pull/101))
+
+### 🧪 Testing
+
+- Add unit tests for mv/worktree ([#79](https://github.com/eugencowie/git-vmr/pull/79))
+- Extract shared test fixtures ([#84](https://github.com/eugencowie/git-vmr/pull/84))
+- Stabilise tag deletion tests ([#91](https://github.com/eugencowie/git-vmr/pull/91))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update agent instructions ([#72](https://github.com/eugencowie/git-vmr/pull/72))
+- Use standard location for tickets and decisions ([#90](https://github.com/eugencowie/git-vmr/pull/90))
+- Update tickets location in repo ([#103](https://github.com/eugencowie/git-vmr/pull/103))
+
 ## 0.10.1
 
 ### 🐛 Bug Fixes
