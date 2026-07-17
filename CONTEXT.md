@@ -116,6 +116,12 @@ _Avoid_: formatting, displaying, output (for the act of rendering)
 The gray parenthesised list of child repo names — "(backend, frontend)" — appended to a line that does not apply to every child repo in scope, and omitted when it does: no suffix means everyone. Truncated to three names plus a count ("(a, b, c, +2)") except on failures, which name every repo.
 _Avoid_: repo annotation, repo tag
 
+### Invocation
+
+**Run pipeline**:
+The fixed sequence every invocation passes through after parsing: build context, report load warnings, execute and report the command, record analytics, check for updates, save state. Notices never fail the command; the exit code mirrors the command result.
+_Avoid_: command lifecycle, post-command tail
+
 ### Analytics
 
 **Analytics session**:
