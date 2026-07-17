@@ -1,4 +1,5 @@
 use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
+use crate::render::{Rendered, fail, outcomes};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
@@ -15,15 +16,38 @@ pub struct WorktreeRootEntry
     pub head: Head
 }
 
-/// The result of a mutating root operation: the per-repo outcomes, plus the
-/// fate of the root itself after them. Dissolving is per-root, not per-repo,
-/// so it travels beside the repo outcomes rather than among them.
+/// The root outcomes of a mutating root operation: the per-repo outcomes,
+/// plus the fate of the root itself after them. Dissolving is per-root, not
+/// per-repo, so it travels beside the repo outcomes rather than among them.
 pub struct RootOutcomes
 {
-    pub outcomes: Vec<GitCommandResult>,
+    outcomes: Vec<GitCommandResult>,
     /// `Err` only when dissolving the root was attempted and failed; a root
-    /// deliberately kept (because a child operation failed) is `Ok`.
-    pub dissolved: Result<()>
+    /// deliberately kept (because a child operation failed) or never subject
+    /// to dissolving (an add) is `Ok`.
+    dissolved: Result<()>,
+    /// The child repos the operation ran over — the scope the outcomes are
+    /// rendered against.
+    scope: Vec<String>
+}
+
+impl RootOutcomes
+{
+    /// Renders the root outcomes as a single unit: child outcomes against
+    /// the operation's scope, with the root's fate folded into pass/fail.
+    /// A failed root fate becomes the command's error without discarding
+    /// the child successes.
+    pub fn into_rendered(self) -> Result<Rendered>
+    {
+        let rendered =
+            outcomes(self.outcomes, self.scope.iter().map(String::as_str))?;
+
+        match self.dissolved
+        {
+            Ok(()) => Ok(rendered),
+            Err(error) => Err(fail(rendered, format!("{error:#}")))
+        }
+    }
 }
 
 /// The worktree roots of one workspace. Owns the layout convention — each
@@ -42,6 +66,12 @@ impl<'a> WorktreeRoots<'a>
         WorktreeRoots { workspace }
     }
 
+    /// The scope of a root operation: one child worktree per child repo.
+    fn scope(&self) -> Vec<String>
+    {
+        self.workspace.repos().iter().map(|repo| repo.name.clone()).collect()
+    }
+
     /// Materializes the root at `target`, then adds one child worktree per
     /// child repo at `<target>/<repo name>`. With no explicit branch or
     /// commit-ish, the branch is inferred from the target's basename: each
@@ -52,7 +82,7 @@ impl<'a> WorktreeRoots<'a>
         target: &Path,
         branch: Option<&str>,
         commit_ish: Option<&str>
-    ) -> Result<Vec<GitCommandResult>>
+    ) -> Result<RootOutcomes>
     {
         let mode = match (branch, commit_ish)
         {
@@ -74,7 +104,11 @@ impl<'a> WorktreeRoots<'a>
 
         Vmr::create_worktree_root(target)?;
 
-        self.workspace.map(|git, repo| Ok(add_child(git, repo, target, &mode)))
+        let outcomes = self
+            .workspace
+            .map(|git, repo| Ok(add_child(git, repo, target, &mode)))?;
+
+        Ok(RootOutcomes { outcomes, dissolved: Ok(()), scope: self.scope() })
     }
 
     /// Removes the child worktree at `<target>/<repo name>` from every child
@@ -144,7 +178,7 @@ impl<'a> WorktreeRoots<'a>
             Ok(())
         };
 
-        Ok(RootOutcomes { outcomes, dissolved })
+        Ok(RootOutcomes { outcomes, dissolved, scope: self.scope() })
     }
 
     /// Moves a worktree root: materializes the destination root, moves every
@@ -183,7 +217,7 @@ impl<'a> WorktreeRoots<'a>
             Ok(())
         };
 
-        Ok(RootOutcomes { outcomes, dissolved })
+        Ok(RootOutcomes { outcomes, dissolved, scope: self.scope() })
     }
 
     /// Gathers every child worktree across the workspace and groups it under
@@ -610,15 +644,16 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes =
+        let added =
             WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert: the root is materialized, both children succeed, and no
         // repo creates the branch (no -b anywhere)
         assert!(root.join(".gitvmr").exists());
-        assert_eq!(outcomes.len(), 2);
+        assert_eq!(added.outcomes.len(), 2);
         assert!(
-            outcomes
+            added
+                .outcomes
                 .iter()
                 .all(|outcome| matches!(outcome, Ok(RepoOutcome::Success(_))))
         );
@@ -665,13 +700,14 @@ mod tests
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
 
         // Act
-        let outcomes =
+        let added =
             WorktreeRoots::new(&workspace).add(&root, None, None).unwrap();
 
         // Assert
-        assert_eq!(outcomes.len(), 2);
+        assert_eq!(added.outcomes.len(), 2);
         assert!(
-            outcomes
+            added
+                .outcomes
                 .iter()
                 .all(|outcome| matches!(outcome, Ok(RepoOutcome::Success(_))))
         );
@@ -956,6 +992,97 @@ mod tests
                 .outcomes
                 .iter()
                 .all(|outcome| matches!(outcome, Ok(RepoOutcome::Success(_))))
+        );
+    }
+
+    use crate::git::RepoMessage;
+    use crate::render::Failed;
+    use anyhow::anyhow;
+
+    fn success(repo: &str, message: &str) -> GitCommandResult
+    {
+        Ok(RepoOutcome::Success(Some(RepoMessage {
+            repo: repo.to_owned(),
+            message: message.to_owned()
+        })))
+    }
+
+    fn scope() -> Vec<String>
+    {
+        vec!["backend".to_owned(), "frontend".to_owned()]
+    }
+
+    #[test]
+    fn into_rendered_reports_child_successes_when_the_root_dissolves()
+    {
+        // Arrange: every child succeeded and the root dissolved
+        let root_outcomes = RootOutcomes {
+            outcomes: vec![
+                success("backend", "removed"),
+                success("frontend", "removed"),
+            ],
+            dissolved: Ok(()),
+            scope: scope()
+        };
+
+        // Act
+        let rendered = root_outcomes.into_rendered().unwrap();
+
+        // Assert: the message covers every repo in scope, so no suffix
+        assert_eq!(rendered.stdout, "removed\n");
+    }
+
+    #[test]
+    fn into_rendered_keeps_child_successes_beside_a_failed_root_fate()
+    {
+        // Arrange: every child succeeded but dissolving the root failed
+        let root_outcomes = RootOutcomes {
+            outcomes: vec![
+                success("backend", "removed"),
+                success("frontend", "removed"),
+            ],
+            dissolved: Err(anyhow!("marker directory is not empty")),
+            scope: scope()
+        };
+
+        // Act
+        let err = root_outcomes.into_rendered().unwrap_err();
+
+        // Assert: the failed fate is the command's error, and the child
+        // successes ride beside it
+        let failed = err.downcast::<Failed>().unwrap();
+        assert_eq!(failed.rendered.stdout, "removed\n");
+        assert_eq!(failed.message, "marker directory is not empty");
+    }
+
+    #[test]
+    fn into_rendered_reports_child_failures_when_the_root_is_kept()
+    {
+        // Arrange: one child failed, so the root was deliberately kept
+        let root_outcomes = RootOutcomes {
+            outcomes: vec![
+                success("backend", "removed"),
+                Ok(RepoOutcome::Failure(RepoMessage {
+                    repo: "frontend".to_owned(),
+                    message: "locked working tree".to_owned()
+                })),
+            ],
+            dissolved: Ok(()),
+            scope: scope()
+        };
+
+        // Act
+        let err = root_outcomes.into_rendered().unwrap_err();
+
+        // Assert: the child failure is the error; the kept root adds none
+        let failed = err.downcast::<Failed>().unwrap();
+        assert_eq!(
+            failed.rendered.stdout,
+            "removed \x1b[90m(backend)\x1b[0m\n"
+        );
+        assert_eq!(
+            failed.message,
+            "locked working tree \x1b[90m(frontend)\x1b[0m"
         );
     }
 
