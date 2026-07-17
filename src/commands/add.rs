@@ -5,12 +5,10 @@ use anyhow::Result;
 
 pub fn run(
     workspace: &Workspace,
-    context: &CliContext,
+    _context: &CliContext,
     args: &AddArgs
 ) -> Result<Rendered>
 {
-    let working_dir = &context.working_dir;
-
     // `add -A` with no paths stages the entire VMR
     let scope = if args.paths.is_empty() && args.options.all
     {
@@ -25,7 +23,7 @@ pub fn run(
     };
 
     // Stage routed paths in each owning child repository
-    workspace.run_routed(working_dir, scope, |git, repo, repo_paths| {
+    workspace.run_routed(scope, |git, repo, repo_paths| {
         git.add(repo, repo_paths, &args.options)
     })
 }

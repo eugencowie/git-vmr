@@ -5,7 +5,7 @@ use anyhow::Result;
 
 pub fn run(
     workspace: &Workspace,
-    context: &CliContext,
+    _context: &CliContext,
     args: &RmArgs
 ) -> Result<Rendered>
 {
@@ -23,7 +23,6 @@ pub fn run(
 
     // Remove routed paths in each owning child repository
     workspace.run_routed(
-        &context.working_dir,
         Scope::Paths { paths: args.paths.to_vec(), aggregate },
         |git, repo, repo_paths| git.rm(repo, repo_paths, &args.options)
     )
