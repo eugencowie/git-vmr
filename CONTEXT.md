@@ -95,8 +95,8 @@ The per-repo variable set foreach exports to the child's shell — name, sm_path
 _Avoid_: env vars, shell context, foreach variables
 
 **Repo outcome**:
-The per-repo result of a git operation: success (with an optional message) or failure (with one). The unit that result aggregation consumes.
-_Avoid_: result, status, exit
+The per-repo result of a git operation: success (with an optional message), failure (with one), or skipped (with a required reason — the operation was deliberately not attempted). The unit that result aggregation consumes.
+_Avoid_: result, status, exit, filtered out or ignored (for skipped)
 
 **Report policy**:
 The declarative per-operation rule for how a repo outcome's message is produced: which output streams are read in which order, whether an empty result means quiet success or a canned fallback, and any transform applied to the message before it reports.
@@ -109,6 +109,20 @@ _Avoid_: output grouping, deduplication
 **Head**:
 Where a child repo currently points: a branch, an unborn branch (no commits yet), or a detached commit. Only the worktree record cannot observe unbornness; it reports a plain branch instead.
 _Avoid_: current branch, HEAD state, initial (for unborn)
+
+### Pushing
+
+**Useful push**:
+A push proven, from local remote-tracking refs alone, to do something: transmit novel commits, or update or delete a ref that already exists on the target remote. The push command attempts only useful pushes; anything unproven is skipped with a reason.
+_Avoid_: necessary push, non-empty push
+
+**Novel commits**:
+Commits reachable from a local ref but not from any of the target remote's remote-tracking refs. The evidence that makes a push useful.
+_Avoid_: new commits, unpushed commits
+
+**Empty branch**:
+A branch created on the remote whose tip carries no novel commits — the pollution artifact the useful-push filter exists to prevent.
+_Avoid_: stale branch, no-op branch
 
 ### Output
 
