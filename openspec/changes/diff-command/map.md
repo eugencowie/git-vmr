@@ -30,7 +30,7 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 
 ## Not yet specified
 
-- Nothing — the map is complete. The destination artifact is [spec.md](spec.md); building it is a separate effort working implementation tickets 05–09.
+- Nothing beyond the live tickets. The map reopened on 2026-07-18: the spec's pager/colour/TTY decisions were settled on POSIX assumptions with Windows (a shipped release target) never considered — [Windows facts for the pager and TTY decisions](tickets/10-windows-research.md) and [Decide Windows behaviour for paging, colour, and TTY](tickets/11-windows-behavior.md) close that gap, amending [spec.md](spec.md). Building remains a separate effort working implementation tickets 05–09.
 
 ## Out of scope
 
