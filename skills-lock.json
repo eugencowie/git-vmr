@@ -68,34 +68,34 @@
       "computedHash": "66e8a50c83c3c724fcfe0769701b665c56cec220cc4f49cc1aee8bdfc07de94a"
     },
     "openspec-apply-change": {
-      "source": "eugencowie/openspec-skills",
+      "source": "Fission-AI/OpenSpec",
       "sourceType": "github",
       "skillPath": "skills/openspec-apply-change/SKILL.md",
-      "computedHash": "e9d5541856817f24e56ac6458c024d4a1b254cabe4d7e4381844569092e7ce2b"
+      "computedHash": "aa1f8494ce09c3f11033539db73d64a53089c4012c3cb761784eaaba81016a95"
     },
     "openspec-archive-change": {
-      "source": "eugencowie/openspec-skills",
+      "source": "Fission-AI/OpenSpec",
       "sourceType": "github",
       "skillPath": "skills/openspec-archive-change/SKILL.md",
-      "computedHash": "561d84a7d73d355c0261ae75a8ab31b04e434aa52a8910bb55f126dd7789315e"
+      "computedHash": "87cb94eef6162a8704665942a68902697fa40b9d85b9187a354ec05d8e0c297f"
     },
     "openspec-explore": {
-      "source": "eugencowie/openspec-skills",
+      "source": "Fission-AI/OpenSpec",
       "sourceType": "github",
       "skillPath": "skills/openspec-explore/SKILL.md",
-      "computedHash": "14a48cf9bab2062b373d16a60f9aeb6dd5619f8cd2821180491d7bdde0d29fe2"
+      "computedHash": "67429b7b2992e6cc637ac68b9493de04e3d25409a5bdcba6edc4ab7381ab4fcd"
     },
     "openspec-propose": {
-      "source": "eugencowie/openspec-skills",
+      "source": "Fission-AI/OpenSpec",
       "sourceType": "github",
       "skillPath": "skills/openspec-propose/SKILL.md",
-      "computedHash": "c7b5d88975cd1882b069c0308f6c4606bff4953a690314bf31d57e59c5f26e84"
+      "computedHash": "8c14594eab9985a02a82a617f1301cb37e17cbe90a004b19a624bd11c243a2ee"
     },
     "openspec-sync-specs": {
-      "source": "eugencowie/openspec-skills",
+      "source": "Fission-AI/OpenSpec",
       "sourceType": "github",
       "skillPath": "skills/openspec-sync-specs/SKILL.md",
-      "computedHash": "4b3e58cf4be3d75f02205b334ec06da311402e0edf8f039dd0a744b5176e7e30"
+      "computedHash": "eef56f0107aaac4a57a478eec8bda7f75576a93234730b163a98a937922e0008"
     },
     "prototype": {
       "source": "mattpocock/skills",
@@ -108,6 +108,12 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/research/SKILL.md",
       "computedHash": "bd3e2c6826671d82c86ed0da3dac3370ebcf63b0fe847f91bb444e1fb7dac21b"
+    },
+    "resolving-merge-conflicts": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/resolving-merge-conflicts/SKILL.md",
+      "computedHash": "28aad6f8b1b7025abc8892fa8890f68fe1533499b28a565f416b159131d22fad"
     },
     "setup-matt-pocock-skills": {
       "source": "mattpocock/skills",
