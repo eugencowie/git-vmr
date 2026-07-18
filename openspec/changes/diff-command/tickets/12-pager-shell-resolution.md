@@ -1,6 +1,7 @@
 # Pager shell resolution and the argv seam
 
 Type: implementation
+Status: resolved
 Blocked by: 08, 11
 
 ## Task
@@ -26,3 +27,13 @@ per [spec.md](../spec.md) "The pager seam":
   unspawnable argv[0] proving silent direct print with the exit code
   unchanged. Existing `sh -c` recording-script tests carry over on the
   argv shape.
+
+## Answer
+
+Implemented in commit 83b8e8d: `Rendered.pager` is now an argv; the
+diff command resolves the shell via `git var GIT_SHELL_PATH` through
+the runner seam with a literal `sh` fallback; emit prepends
+`dirname(argv[0])` to the pager child's PATH and falls back to silent
+direct print on spawn failure, all covered by the scripted-fake and
+recording-script tests the ticket listed. (Status backfilled — the
+resolve step was missed when the commit landed.)

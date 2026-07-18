@@ -1,6 +1,7 @@
 # Windows CI test job
 
 Type: implementation
+Status: resolved
 Blocked by: 12, 13
 
 ## Task
@@ -18,3 +19,11 @@ visible from cmd/PowerShell). It proves the honest-breakage class —
 path separators, spawn semantics, `IsTerminal` assumptions, the VT
 probe compiling and running — not the degradation paths, which stay
 covered by the platform-neutral unit tests from ticket 12.
+
+## Answer
+
+Added a `test-windows` job to `.github/workflows/ci.yml`: `cargo test`
+plus `cargo clippy --all-targets` on `windows-latest` (clippy so the
+`cfg(windows)` code gets a lint pass somewhere — the Linux job never
+compiles it). The runner caveat from this ticket is recorded as a
+comment on the job.
