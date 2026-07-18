@@ -107,7 +107,10 @@ impl Git
 
         let diff = if output.status.success()
         {
-            String::from_utf8_lossy(&output.stdout).into_owned()
+            rewrite_rename_headers(
+                &String::from_utf8_lossy(&output.stdout),
+                &repo.name
+            )
         }
         else
         {
@@ -123,6 +126,82 @@ impl Git
 
         (diff, result)
     }
+}
+
+/// Git never prefixes `rename from`/`rename to`/`copy from`/`copy to`
+/// lines (`--src-prefix`/`--dst-prefix` do not apply to them), so this
+/// pure transform prepends `<repo>/` — no `a/`/`b/` — to the path on
+/// those lines. Without it `git apply -p1` from the VMR root rejects
+/// rename patches.
+///
+/// Only lines inside a file block's extended headers are rewritten: from
+/// a `diff --git` line to the first `@@`, or to the next `diff --git` /
+/// end of input when the block has no hunks (pure 100% renames). When the
+/// path token is C-quoted the prefix goes inside the quotes, immediately
+/// after the opening `"`; the prefix needs no escaping, so the quoted
+/// bytes are otherwise kept verbatim. SGR colour codes wrap header lines
+/// outside the text and are skipped, not touched.
+fn rewrite_rename_headers(diff: &str, repo: &str) -> String
+{
+    const KEYWORDS: [&str; 4] =
+        ["rename from ", "rename to ", "copy from ", "copy to "];
+
+    let mut out = String::with_capacity(diff.len());
+    let mut in_headers = false;
+
+    for line in diff.split_inclusive('\n')
+    {
+        let text = &line[after_leading_sgr(line)..];
+
+        if text.starts_with("diff --git ")
+        {
+            in_headers = true;
+        }
+        else if text.starts_with("@@")
+        {
+            in_headers = false;
+        }
+        else if in_headers
+            && let Some(keyword) =
+                KEYWORDS.iter().find(|keyword| text.starts_with(**keyword))
+        {
+            // Split at the start of the path token; a quoted token gets
+            // the prefix just inside the opening quote, a bare one at
+            // the start
+            let mut path_start = (line.len() - text.len()) + keyword.len();
+            if line[path_start..].starts_with('"')
+            {
+                path_start += 1;
+            }
+            out.push_str(&line[..path_start]);
+            out.push_str(repo);
+            out.push('/');
+            out.push_str(&line[path_start..]);
+            continue;
+        }
+
+        out.push_str(line);
+    }
+
+    out
+}
+
+/// Byte index just past any leading SGR escape sequences
+/// (`ESC [ ... m`), so coloured header lines match the same prefixes as
+/// plain ones.
+fn after_leading_sgr(line: &str) -> usize
+{
+    let bytes = line.as_bytes();
+    let mut index = 0;
+    while bytes.get(index) == Some(&0x1b) && bytes.get(index + 1) == Some(&b'[')
+    {
+        match bytes[index + 2..].iter().position(|byte| *byte == b'm')
+        {
+            Some(end) => index += 2 + end + 1,
+            None => break
+        }
+    }
+    index
 }
 
 /// Show changes between the working trees and index
@@ -301,6 +380,167 @@ mod tests
         assert!(!paging_active(true, true));
         assert!(!paging_active(false, false));
         assert!(!paging_active(true, false));
+    }
+}
+
+#[cfg(test)]
+mod rewrite_tests
+{
+    use super::rewrite_rename_headers;
+
+    #[test]
+    fn rename_with_hunks_rewrites_headers_only()
+    {
+        let input = "diff --git a/backend/old.rs b/backend/new.rs\n\
+                     similarity index 90%\n\
+                     rename from old.rs\n\
+                     rename to new.rs\n\
+                     index 1111111..2222222 100644\n\
+                     --- a/backend/old.rs\n\
+                     +++ b/backend/new.rs\n\
+                     @@ -1 +1 @@\n\
+                     -old\n\
+                     +new\n";
+        let expected = "diff --git a/backend/old.rs b/backend/new.rs\n\
+                        similarity index 90%\n\
+                        rename from backend/old.rs\n\
+                        rename to backend/new.rs\n\
+                        index 1111111..2222222 100644\n\
+                        --- a/backend/old.rs\n\
+                        +++ b/backend/new.rs\n\
+                        @@ -1 +1 @@\n\
+                        -old\n\
+                        +new\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+    }
+
+    #[test]
+    fn pure_rename_without_hunks_is_rewritten()
+    {
+        let input = "diff --git a/backend/old.rs b/backend/new.rs\n\
+                     similarity index 100%\n\
+                     rename from old.rs\n\
+                     rename to new.rs\n";
+        let expected = "diff --git a/backend/old.rs b/backend/new.rs\n\
+                        similarity index 100%\n\
+                        rename from backend/old.rs\n\
+                        rename to backend/new.rs\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+    }
+
+    #[test]
+    fn copy_lines_are_rewritten()
+    {
+        let input = "diff --git a/backend/src.txt b/backend/dest.txt\n\
+                     similarity index 100%\n\
+                     copy from src.txt\n\
+                     copy to dest.txt\n";
+        let expected = "diff --git a/backend/src.txt b/backend/dest.txt\n\
+                        similarity index 100%\n\
+                        copy from backend/src.txt\n\
+                        copy to backend/dest.txt\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+    }
+
+    #[test]
+    fn rename_from_inside_a_hunk_body_is_untouched()
+    {
+        let input = "diff --git a/backend/notes.txt b/backend/notes.txt\n\
+                     index 1111111..2222222 100644\n\
+                     --- a/backend/notes.txt\n\
+                     +++ b/backend/notes.txt\n\
+                     @@ -1 +1,2 @@\n\
+                     rename from old.rs\n\
+                     +rename to new.rs\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), input);
+    }
+
+    #[test]
+    fn coloured_rename_lines_are_rewritten_inside_the_sgr_wrapping()
+    {
+        let input = "\x1b[1mdiff --git a/backend/old.rs \
+                     b/backend/new.rs\x1b[m\n\
+                     \x1b[1msimilarity index 100%\x1b[m\n\
+                     \x1b[1mrename from old.rs\x1b[m\n\
+                     \x1b[1mrename to new.rs\x1b[m\n";
+        let expected = "\x1b[1mdiff --git a/backend/old.rs \
+                        b/backend/new.rs\x1b[m\n\
+                        \x1b[1msimilarity index 100%\x1b[m\n\
+                        \x1b[1mrename from backend/old.rs\x1b[m\n\
+                        \x1b[1mrename to backend/new.rs\x1b[m\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+    }
+
+    #[test]
+    fn multi_file_mixed_patch_rewrites_each_rename_block()
+    {
+        let input = "diff --git a/backend/kept.rs b/backend/kept.rs\n\
+                     index 1111111..2222222 100644\n\
+                     --- a/backend/kept.rs\n\
+                     +++ b/backend/kept.rs\n\
+                     @@ -1 +1 @@\n\
+                     -foo\n\
+                     +bar\n\
+                     diff --git a/backend/old.rs b/backend/new.rs\n\
+                     similarity index 100%\n\
+                     rename from old.rs\n\
+                     rename to new.rs\n\
+                     diff --git a/backend/other.rs b/backend/other.rs\n\
+                     index 3333333..4444444 100644\n\
+                     --- a/backend/other.rs\n\
+                     +++ b/backend/other.rs\n\
+                     @@ -1 +1 @@\n\
+                     -baz\n\
+                     +qux\n";
+        let expected = "diff --git a/backend/kept.rs b/backend/kept.rs\n\
+                        index 1111111..2222222 100644\n\
+                        --- a/backend/kept.rs\n\
+                        +++ b/backend/kept.rs\n\
+                        @@ -1 +1 @@\n\
+                        -foo\n\
+                        +bar\n\
+                        diff --git a/backend/old.rs b/backend/new.rs\n\
+                        similarity index 100%\n\
+                        rename from backend/old.rs\n\
+                        rename to backend/new.rs\n\
+                        diff --git a/backend/other.rs b/backend/other.rs\n\
+                        index 3333333..4444444 100644\n\
+                        --- a/backend/other.rs\n\
+                        +++ b/backend/other.rs\n\
+                        @@ -1 +1 @@\n\
+                        -baz\n\
+                        +qux\n";
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+    }
+
+    // Bytes lifted verbatim from research/quoted-paths.md (git 2.53,
+    // `--src-prefix=a/backend/ --dst-prefix=b/backend/`): the prefix goes
+    // inside the quotes, immediately after the opening `"`, with no
+    // re-escaping of the existing quoted bytes
+    #[test]
+    fn quoted_path_rename_gets_the_prefix_inside_the_quotes()
+    {
+        let input = concat!(
+            r#"diff --git "a/backend/quote\"file.txt" "#,
+            r#""b/backend/newquote\"file.txt""#,
+            "\n",
+            "similarity index 100%\n",
+            r#"rename from "quote\"file.txt""#,
+            "\n",
+            r#"rename to "newquote\"file.txt""#,
+            "\n"
+        );
+        let expected = concat!(
+            r#"diff --git "a/backend/quote\"file.txt" "#,
+            r#""b/backend/newquote\"file.txt""#,
+            "\n",
+            "similarity index 100%\n",
+            r#"rename from "backend/quote\"file.txt""#,
+            "\n",
+            r#"rename to "backend/newquote\"file.txt""#,
+            "\n"
+        );
+        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
     }
 }
 

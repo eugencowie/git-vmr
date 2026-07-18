@@ -1,7 +1,7 @@
 # Rename/copy header rewrite transform
 
 Type: implementation
-Status: open
+Status: resolved
 Blocked by: 06
 
 ## Task
@@ -25,3 +25,18 @@ Implement the pure, diff-local transform from [spec.md](../spec.md)
 
 This transform is what makes the applyability contract hold for renames —
 `git apply -p1` from the VMR root rejects unrewritten rename patches.
+
+## Comments
+
+Implemented (2026-07-18): `rewrite_rename_headers` in
+`src/commands/diff.rs` — a pure, line-oriented transform applied in
+`Git::diff` before the child's output reaches concatenation. It tracks
+the extended-header region with one bool (`diff --git` opens it, `@@`
+closes it, so hunkless 100% renames stay open to the next block or end
+of input) and prepends `<repo>/` on the four rename/copy lines: inside
+the opening `"` for C-quoted tokens (no re-escaping, per the research),
+at the token start otherwise. A small `after_leading_sgr` helper skips
+leading SGR codes so coloured lines match the same prefixes. All seven
+fixtures from the testing requirements are inline `assert_eq!` tests,
+with the quoted-path bytes lifted verbatim from
+[research/quoted-paths.md](../research/quoted-paths.md).
