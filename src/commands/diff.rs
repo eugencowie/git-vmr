@@ -298,26 +298,40 @@ fn paging_active(no_pager: bool, stdout_is_tty: bool) -> bool
     stdout_is_tty && !no_pager
 }
 
-/// The pager command to hand to emit: one `git var GIT_PAGER` from the
-/// VMR root, so git's full `GIT_PAGER` → `core.pager` → `PAGER` → `less`
-/// chain applies and a child repo's local `core.pager` cannot hijack the
-/// combined view. `cat`, an empty resolution, or a failed lookup all mean
-/// no paging.
-fn resolve_pager(workspace: &Workspace) -> Option<String>
+/// The pager argv to hand to emit: `[<shell>, "-c", <pager command>]`.
+/// The pager command is one `git var GIT_PAGER` from the VMR root, so
+/// git's full `GIT_PAGER` → `core.pager` → `PAGER` → `less` chain applies
+/// and a child repo's local `core.pager` cannot hijack the combined view.
+/// `cat`, an empty resolution, or a failed lookup all mean no paging. The
+/// shell is resolved first-party too — `git var GIT_SHELL_PATH`,
+/// uniformly on all platforms; when that fails (git predates 2.45) the
+/// literal `sh` preserves today's behaviour.
+fn resolve_pager(workspace: &Workspace) -> Option<Vec<String>>
+{
+    let pager = git_var(workspace, "GIT_PAGER")?;
+    if pager == "cat"
+    {
+        return None;
+    }
+
+    let shell =
+        git_var(workspace, "GIT_SHELL_PATH").unwrap_or_else(|| "sh".to_owned());
+    Some(vec![shell, "-c".to_owned(), pager])
+}
+
+/// One `git var` lookup from the VMR root; a failed lookup or an empty
+/// value is `None`.
+fn git_var(workspace: &Workspace, name: &str) -> Option<String>
 {
     let output =
-        workspace.git().output(workspace.root(), ["var", "GIT_PAGER"]).ok()?;
+        workspace.git().output(workspace.root(), ["var", name]).ok()?;
     if !output.status.success()
     {
         return None;
     }
 
-    let pager = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    match pager.as_str()
-    {
-        "" | "cat" => None,
-        _ => Some(pager)
-    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!value.is_empty()).then_some(value)
 }
 
 #[cfg(test)]
@@ -850,13 +864,45 @@ mod pager_tests
     }
 
     #[test]
-    fn tty_resolves_the_pager_through_git_var()
+    fn tty_resolves_the_pager_and_shell_through_git_var()
     {
-        let fake = empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "");
+        let fake = empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "").on(
+            ["var", "GIT_SHELL_PATH"],
+            0,
+            "/usr/bin/sh\n",
+            ""
+        );
 
         let rendered = run_with_tty(fake, false);
 
-        assert_eq!(rendered.pager.as_deref(), Some("less"));
+        assert_eq!(
+            rendered.pager,
+            Some(vec![
+                "/usr/bin/sh".to_owned(),
+                "-c".to_owned(),
+                "less".to_owned()
+            ])
+        );
+    }
+
+    #[test]
+    fn failed_shell_resolution_falls_back_to_literal_sh()
+    {
+        // git < 2.45 has no GIT_SHELL_PATH; the lookup fails and the
+        // literal `sh` preserves today's behaviour
+        let fake = empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "").on(
+            ["var", "GIT_SHELL_PATH"],
+            1,
+            "",
+            "fatal: unknown\n"
+        );
+
+        let rendered = run_with_tty(fake, false);
+
+        assert_eq!(
+            rendered.pager,
+            Some(vec!["sh".to_owned(), "-c".to_owned(), "less".to_owned()])
+        );
     }
 
     #[test]
@@ -928,21 +974,24 @@ mod pager_tests
     fn failure_output_still_carries_the_pager()
     {
         let fake = Arc::new(
-            empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "").on(
-                [
-                    "diff",
-                    "--src-prefix=a/backend/",
-                    "--dst-prefix=b/backend/",
-                    "--color=always",
-                    "--no-ext-diff",
-                    "--binary",
-                    "--",
-                    "src/main.rs"
-                ],
-                1,
-                "",
-                "fatal: bad\n"
-            )
+            empty_diffs()
+                .on(["var", "GIT_PAGER"], 0, "less\n", "")
+                .on(["var", "GIT_SHELL_PATH"], 0, "/usr/bin/sh\n", "")
+                .on(
+                    [
+                        "diff",
+                        "--src-prefix=a/backend/",
+                        "--dst-prefix=b/backend/",
+                        "--color=always",
+                        "--no-ext-diff",
+                        "--binary",
+                        "--",
+                        "src/main.rs"
+                    ],
+                    1,
+                    "",
+                    "fatal: bad\n"
+                )
         );
         let tmp = vmr_fixture();
         let git = Git::with(Arc::clone(&fake));
@@ -959,6 +1008,13 @@ mod pager_tests
         let err = run(&workspace, &context, &args).unwrap_err();
 
         let failed = err.downcast::<Failed>().unwrap();
-        assert_eq!(failed.rendered.pager.as_deref(), Some("less"));
+        assert_eq!(
+            failed.rendered.pager,
+            Some(vec![
+                "/usr/bin/sh".to_owned(),
+                "-c".to_owned(),
+                "less".to_owned()
+            ])
+        );
     }
 }

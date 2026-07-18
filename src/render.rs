@@ -15,9 +15,8 @@ pub struct Rendered
 {
     pub stdout: String,
     pub stderr: String,
-    /// The shell command to page `stdout` through; `None` means print
-    /// directly.
-    pub pager: Option<String>
+    /// The argv to page `stdout` through; `None` means print directly.
+    pub pager: Option<Vec<String>>
 }
 
 impl From<String> for Rendered
@@ -86,18 +85,35 @@ fn print(rendered: &Rendered)
     anstream::eprint!("{}", rendered.stderr);
 }
 
-/// Pipes text through `sh -c <pager>`, git-style: `LESS`/`LV` get git's
-/// defaults when unset, and a pager that dies loses the text — no
+/// Pipes text through the pager argv, git-style: `argv[0]` is spawned
+/// with the remaining args verbatim (emit knows nothing of shells or
+/// `-c`), `dirname(argv[0])` is prepended to the child's `PATH`
+/// (mirrors git's private-PATH augmentation so Git for Windows' `less`
+/// resolves beside its `sh`; harmless on Unix), and `LESS`/`LV` get
+/// git's defaults when unset. A pager that dies loses the text — no
 /// re-print on nonzero pager exit. Returns only once the pager exits, so
-/// stderr always lands after the paged view closes. Falls back to direct
-/// printing only when `sh` itself cannot spawn.
-fn page(pager: &str, text: &str)
+/// stderr always lands after the paged view closes. When `argv[0]` itself
+/// cannot spawn the text is printed directly, silently — the designed
+/// degradation, identical to `--no-pager` output.
+fn page(argv: &[String], text: &str)
 {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    let mut command = Command::new("sh");
-    command.arg("-c").arg(pager).stdin(Stdio::piped());
+    let mut command = Command::new(&argv[0]);
+    command.args(&argv[1..]).stdin(Stdio::piped());
+    if let Some(dir) = std::path::Path::new(&argv[0])
+        .parent()
+        .filter(|dir| !dir.as_os_str().is_empty())
+    {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let paths =
+            std::iter::once(dir.to_owned()).chain(std::env::split_paths(&path));
+        if let Ok(joined) = std::env::join_paths(paths)
+        {
+            command.env("PATH", joined);
+        }
+    }
     if std::env::var_os("LESS").is_none()
     {
         command.env("LESS", "FRX");
@@ -188,13 +204,18 @@ mod pager_tests
     use super::*;
     use std::fs;
 
-    fn paged(stdout: &str, pager: String) -> Rendered
+    fn paged(stdout: &str, argv: Vec<String>) -> Rendered
     {
         Rendered {
             stdout: stdout.to_owned(),
             stderr: String::new(),
-            pager: Some(pager)
+            pager: Some(argv)
         }
+    }
+
+    fn sh(script: String) -> Vec<String>
+    {
+        vec!["sh".to_owned(), "-c".to_owned(), script]
     }
 
     #[test]
@@ -204,7 +225,7 @@ mod pager_tests
         let file = tmp.path().join("recorded");
         let stdout = "diff --git a/x b/x\n\x1b[32m+new\x1b[0m\n";
 
-        let rendered = paged(stdout, format!("cat > {}", file.display()));
+        let rendered = paged(stdout, sh(format!("cat > {}", file.display())));
         emit(Ok(rendered)).unwrap();
 
         assert_eq!(fs::read(&file).unwrap(), stdout.as_bytes());
@@ -221,7 +242,7 @@ mod pager_tests
 
         let rendered = paged(
             "body\n",
-            format!("cat > {f}; echo EXITED >> {f}", f = file.display())
+            sh(format!("cat > {f}; echo EXITED >> {f}", f = file.display()))
         );
         emit(Ok(rendered)).unwrap();
 
@@ -229,11 +250,60 @@ mod pager_tests
     }
 
     #[test]
+    #[cfg(unix)]
+    fn dirname_of_argv0_is_prepended_to_the_pager_path()
+    {
+        // A recording script invoked by absolute path echoes the PATH it
+        // sees; its own directory leading that PATH proves the prepend
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+        let script = tmp.path().join("fakepager");
+        fs::write(
+            &script,
+            format!("#!/bin/sh\necho \"$PATH\" > {}\n", file.display())
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
+            .unwrap();
+
+        let rendered = paged("", vec![script.to_str().unwrap().to_owned()]);
+        emit(Ok(rendered)).unwrap();
+
+        let seen = fs::read_to_string(&file).unwrap();
+        let expected = format!(
+            "{}:{}",
+            tmp.path().display(),
+            std::env::var("PATH").unwrap()
+        );
+        assert_eq!(seen.trim_end(), expected);
+    }
+
+    #[test]
+    fn unspawnable_argv0_prints_directly_without_failing()
+    {
+        // Silent designed degradation: emit succeeds and the failure
+        // message still propagates unchanged, so the exit code is what it
+        // would have been without a pager
+        let argv = vec!["/nonexistent/definitely-missing-pager".to_owned()];
+
+        emit(Ok(paged("diff body\n", argv.clone()))).unwrap();
+
+        let error = emit(Err(fail(
+            paged("diff body\n", argv),
+            "one failed".to_owned()
+        )))
+        .unwrap_err();
+        assert_eq!(error.to_string(), "one failed");
+    }
+
+    #[test]
     fn a_pager_that_dies_loses_the_diff_without_failing_the_command()
     {
         // The pager exits without reading; the broken pipe and nonzero
         // exit are swallowed and nothing is re-printed
-        let rendered = paged(&"x".repeat(1 << 20), "exit 7".to_owned());
+        let rendered = paged(&"x".repeat(1 << 20), sh("exit 7".to_owned()));
 
         emit(Ok(rendered)).unwrap();
     }
@@ -250,7 +320,7 @@ mod pager_tests
         );
 
         let rendered =
-            paged("", format!(r#"echo "$LESS $LV" > {}"#, file.display()));
+            paged("", sh(format!(r#"echo "$LESS $LV" > {}"#, file.display())));
         emit(Ok(rendered)).unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), expected);
@@ -263,7 +333,7 @@ mod pager_tests
         let file = tmp.path().join("recorded");
 
         let mut rendered =
-            paged("surviving diff\n", format!("cat > {}", file.display()));
+            paged("surviving diff\n", sh(format!("cat > {}", file.display())));
         rendered.stderr = String::new();
         let error = emit(Err(fail(rendered, "one repo failed".to_owned())))
             .unwrap_err();
