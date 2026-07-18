@@ -1,7 +1,7 @@
 # Integration tests and the apply round-trip
 
 Type: implementation
-Status: open
+Status: resolved
 Blocked by: 06, 07, 08
 
 ## Task
@@ -21,3 +21,18 @@ non-TTY — exactly the piped-consumer view), per [spec.md](../spec.md)
   bugs.
 - Include binary, mode-only, and quoted-path (non-ASCII) changes in the
   round-trip tree if practical.
+
+## Comments
+
+Implemented (2026-07-18): `tests/diff.rs` covers the basic flows —
+worktree diff across repos, `--staged` (index-only), an owned path routed
+to one repo, the aggregate `.` path, an unowned-path error, one-failing-
+repo aggregation (surviving diff on stdout, `diff failed` on stderr,
+non-zero exit), and piped/`--no-pager` output asserted free of SGR escapes
+with `GIT_PAGER` poisoned to prove no pager is consulted. The round-trip
+stages a text edit, a pure cross-directory rename, a quoted-path
+(non-ASCII) rename, a binary change, and a mode-only chmod across two
+repos, snapshots a pristine copy first, captures `git vmr diff --staged`
+through the real binary, applies it with `git apply -p1` from the pristine
+VMR root, and asserts the trees match (file sets, bytes, executable bit;
+`.git` excluded).
