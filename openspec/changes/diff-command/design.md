@@ -42,15 +42,22 @@ scripted fake in tests); user paths reach child repos via routing.
    [research/quoted-paths.md](research/quoted-paths.md).)
 
 3. **Paging is a property of emit, not the command**: `Rendered` gains
-   `pager: Option<String>` (default `None` — every command keeps the
-   identical shape, per the interface-symmetry preference). Diff decides
-   *whether/with what* (TTY-gated, `--no-pager`, one `git var GIT_PAGER`
-   from the VMR root through the runner seam); emit does the spawning
-   (`sh -c`, `LESS=FRX`/`LV=-c` when unset), stays git- and TTY-free.
-   Buffer, don't stream. Stderr prints after the pager exits; no re-print
-   if the pager dies; direct-print fallback only if `sh` cannot spawn.
-   Alternative rejected: a pager trait mirroring the Git runner — the
-   pager command string itself is a sufficient seam. (Ticket 02.)
+   `pager: Option<Vec<String>>` — an argv, default `None` — every
+   command keeps the identical shape, per the interface-symmetry
+   preference. Diff decides *whether/with what* (TTY-gated,
+   `--no-pager`, one `git var GIT_PAGER` from the VMR root through the
+   runner seam) and composes the argv: shell via
+   `git var GIT_SHELL_PATH` (uniform on all platforms, no `cfg` fork),
+   literal `"sh"` when git predates 2.45, then `-c` plus the pager
+   command. Emit spawns the argv verbatim — blind to shells and `-c` —
+   prepending `dirname(argv[0])` to the child's PATH (git's own
+   private-PATH trick, so Git for Windows' `less` resolves beside its
+   `sh`; harmless on Unix) and exporting `LESS=FRX`/`LV=-c` when unset;
+   it stays git- and TTY-free. Buffer, don't stream. Stderr prints
+   after the pager exits; no re-print if the pager dies; silent, tested
+   direct-print fallback when argv[0] cannot spawn. Alternative
+   rejected: a pager trait mirroring the Git runner — the argv itself
+   is a sufficient seam. (Tickets 02, 11.)
 
 4. **Applyability is a contract, not an accident** (ticket 04): the
    integration suite round-trips `git apply -p1` onto a pristine VMR;
@@ -64,13 +71,34 @@ scripted fake in tests); user paths reach child repos via routing.
    `fake.calls()` for child args. Emit pager tests use real `sh -c`
    recording scripts. Seven inline fixtures for the rewrite. (Ticket 03.)
 
+6. **Windows is designed degradation, not accident** (ticket 11,
+   [research/windows-pager.md](research/windows-pager.md)): shell
+   discovery via `GIT_SHELL_PATH` plus the PATH prepend makes paging
+   work from cmd/PowerShell under the recommended Git for Windows
+   install; every rung of the failure chain (`GIT_SHELL_PATH` →
+   literal `sh` → direct print) degrades toward today's or peer-tool
+   (`delta`/`bat`) behaviour. A startup VT probe
+   (`ENABLE_VIRTUAL_TERMINAL_PROCESSING`) gates `--color=auto` only —
+   paging still gates on the TTY fact alone; explicit `--color=always`
+   always passes through. TTY detection needs nothing: current
+   `std::io::IsTerminal` recognizes MSYS/Cygwin PTYs, so Git
+   Bash/mintty works; the pipe-name-convention caveat is an accepted
+   safe edge. Enforcement: platform-neutral unit tests (the uniform,
+   fork-free resolution exists precisely so Linux tests exercise the
+   logic Windows runs) plus a `windows-latest` CI job (ticket 14).
+
 ## Risks / Trade-offs
 
 - [Rewrite parses raw diff text] → region bounds are minimal and
   verified against real git output, including the hunkless-100%-rename
   and quoted-path cases; the apply round-trip is a whole-pipeline oracle.
 - [Pager death loses the diff] → deliberate, git-faithful; documented.
-- [`sh` spawn failure fallback is untested] → portable arrangement is
-  impossible; kept as defensive code, explicitly not a contract.
+- [Spawn-failure fallback] → graduated to designed, silent, tested
+  behaviour (ticket 11 supersedes ticket 03 d3): an unspawnable argv[0]
+  unit test proves direct print with the exit code unchanged.
+- [Windows CI runner has a friendly PATH] → the `windows-latest` job
+  proves honest breakage (separators, spawn semantics, `IsTerminal`,
+  the VT probe), not the degradation paths — those stay covered by the
+  platform-neutral unit tests.
 - [Buffering large diffs in memory] → worktree-sized diffs are small;
   streaming remains possible behind the same seam if it ever matters.

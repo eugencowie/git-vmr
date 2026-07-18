@@ -22,10 +22,17 @@ proposal turns that charted spec into an implementable change.
   `git apply -p1` accepts from the VMR root (text, binary, mode-only,
   symlink, and rename changes).
 - Git-like paging at the emit choke point: `Rendered` gains
-  `pager: Option<String>`; diff fills it (TTY-gated, resolved via
-  `git var GIT_PAGER`); emit spawns `sh -c`, pages the buffered diff, and
-  prints stderr after the pager exits. Other commands are unaffected
-  (`None` default).
+  `pager: Option<Vec<String>>` (an argv); diff fills it (TTY-gated,
+  pager via `git var GIT_PAGER`, shell via `git var GIT_SHELL_PATH`
+  with a literal-`sh` fallback); emit spawns the argv verbatim with
+  `dirname(argv[0])` prepended to the child's PATH, pages the buffered
+  diff, and prints stderr after the pager exits. Other commands are
+  unaffected (`None` default).
+- Designed Windows behaviour (ticket 11): first-party shell discovery
+  makes paging work from native consoles; spawn failure degrades to
+  silent direct print (tested); a startup VT probe gates `--color=auto`
+  on native consoles; Git Bash/mintty TTY detection rides
+  `std::io::IsTerminal`.
 - Failures follow existing repo-outcome semantics: surviving diffs print,
   failures aggregate on stderr, non-zero exit.
 
@@ -54,11 +61,14 @@ Out of scope: commit ranges (`A..B`) and output-shape flags (`--stat`,
   concatenation, colour/pager decisions.
 - `src/render.rs`: `Rendered.pager` field and pager spawning in `emit`.
 - `src/git.rs`: nothing structural — invocations go through the existing
-  Git runner seam (`diff …`, `var GIT_PAGER`).
+  Git runner seam (`diff …`, `var GIT_PAGER`, `var GIT_SHELL_PATH`).
 - `tests/diff.rs` (new): integration suite including the
   `git apply -p1` round-trip that enforces the applyability contract.
-- No new dependencies; minimum git version unaffected
-  (`--src-prefix`/`--dst-prefix` since git 1.5.4).
+- `.github/workflows/ci.yml`: a `windows-latest` test job (ticket 14).
+- No new dependencies beyond an optional VT-enable helper behind
+  `cfg(windows)`; minimum git version unaffected
+  (`--src-prefix`/`--dst-prefix` since git 1.5.4; `GIT_SHELL_PATH`
+  needs git ≥ 2.45 but degrades gracefully below it).
 
 Detailed decisions live in the wayfinder artifacts: [spec.md](spec.md)
-and tickets 01–09 under [tickets/](tickets/).
+and tickets 01–14 under [tickets/](tickets/).

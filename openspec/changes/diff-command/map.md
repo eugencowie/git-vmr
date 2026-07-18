@@ -28,10 +28,11 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 - [Testing strategy for diff, colour, and paging](tickets/03-testing-strategy.md) — decision 5 confirmed; TTY-true paths are unit-only (injected bool, no PTY harness); emit's pager tests spawn real `sh -c` recording scripts with git-faithful no-re-print semantics; combined stdout asserted with exact `assert_eq!` (deliberate break from the `contains` convention) plus `fake.calls()` for prefix/colour/pathspec args; integration adds a `git apply -p1` round-trip; seven inline fixtures for the rename rewrite, including quoted paths per new research ([research/quoted-paths.md](research/quoted-paths.md) — rename from/to lines are C-quoted, prefix lands inside the quotes, transform gains one prepend-after-quote branch).
 - [Write the spec and implementation tickets](tickets/04-write-spec.md) — destination reached: [spec.md](spec.md) plus build tickets 05–09; applyability when piped is promised as a contract (`git apply -p1` from the VMR root), enforced by the integration round-trip.
 - [Windows facts for the pager and TTY decisions](tickets/10-windows-research.md) — Git for Windows privately exposes its bundled tools only to Git; native callers can locate Git's shell with `GIT_SHELL_PATH`, current Rust detects MSYS PTYs, and ANSI capability remains distinct from TTY detection ([research](research/windows-pager.md)).
+- [Decide Windows behaviour for paging, colour, and TTY](tickets/11-windows-behavior.md) — shell resolved via `git var GIT_SHELL_PATH` uniformly (fallback literal `sh`, then silent tested direct print); `Rendered.pager` becomes an argv; emit prepends `dirname(argv[0])` to the pager's PATH; a Windows VT probe gates auto-colour only; TTY needs documentation only; [spec.md](spec.md) amended and build tickets 12–14 cut.
 
 ## Not yet specified
 
-- Nothing beyond the live ticket. The map remains open for the Windows behaviour decision, which will amend [spec.md](spec.md); building remains a separate effort working implementation tickets 05–09.
+- Nothing — the way is clear. All decisions are made; what remains is building tickets 12–14, a separate effort.
 
 ## Out of scope
 

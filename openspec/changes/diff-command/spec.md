@@ -82,41 +82,80 @@ promise applies.
 
 ## Colour and paging
 
-One injected **TTY fact** (a bool carried on the CLI context) gates both,
-so they can never disagree (ticket 02 d5):
+One injected **TTY fact** (a bool carried on the CLI context, backed by
+`std::io::IsTerminal`) gates both, so they can never disagree (ticket 02
+d5):
 
-- **Colour**: `--color=auto` resolves to `always` when stdout is a TTY,
-  `never` otherwise; explicit `always`/`never` pass through. The resolved
-  value is what children receive — the combined output is never
-  re-coloured.
+- **Colour**: `--color=auto` resolves to `always` when stdout is a TTY
+  (and, on Windows, VT output is available — see Windows below), `never`
+  otherwise; explicit `always`/`never` pass through. The resolved value
+  is what children receive — the combined output is never re-coloured.
 - **Paging**: active when stdout is a TTY and `--no-pager` is absent.
   Resolution is delegated to git: one `git var GIT_PAGER` invocation
   through the Git runner seam, run from the VMR root (resolves the full
   `GIT_PAGER` → `core.pager` → `PAGER` → `less` chain; a child repo's
   local `core.pager` cannot hijack the combined view). `cat` or an empty
-  resolution means no paging.
+  resolution means no paging. The shell that runs the pager is resolved
+  first-party too — `git var GIT_SHELL_PATH`, uniformly on all platforms
+  (no platform fork); if that fails (git predates 2.45) the literal
+  `sh` is used, preserving today's behaviour (ticket 11).
 
 ### The pager seam
 
 Paging is a property of the **emit choke point**, not the diff command
 (ticket 02 d1–d3):
 
-- `Rendered` gains `pager: Option<String>` — the shell command to page
-  stdout through; `None` (the default, and every other command's value)
-  means print directly. Interface symmetry is preserved: every command
-  returns the identical shape.
+- `Rendered` gains `pager: Option<Vec<String>>` — the argv to page stdout
+  through; `None` (the default, and every other command's value) means
+  print directly. Interface symmetry is preserved: every command returns
+  the identical shape.
+- The diff command composes the argv — `[<GIT_SHELL_PATH>, "-c",
+  <pager command>]`, falling back to `["sh", "-c", …]` per the chain
+  above — so all shell knowledge lives beside the resolution that
+  produced it. Emit spawns argv[0] with the remaining args verbatim,
+  blind to shells and `-c` (ticket 11).
 - Commands stay pure and return the finished, buffered combined diff; emit
   pages it once (no streaming — that is a future performance change behind
   the same seam, not a spec change).
-- Emit's order: spawn the pager via `sh -c`, exporting `LESS=FRX` and
-  `LV=-c` when unset → write `stdout` into its stdin → `wait()` → print
-  `stderr` → propagate the command result for the exit code. The pager
-  sees only the diff; failures land on stderr **after** the pager exits.
+- Emit's order: spawn the pager argv, prepending `dirname(argv[0])` to
+  the child's `PATH` (mirrors git's own private-PATH augmentation so
+  Git for Windows' `less` resolves beside its `sh`; harmless on Unix)
+  and exporting `LESS=FRX` and `LV=-c` when unset → write `stdout` into
+  its stdin → `wait()` → print `stderr` → propagate the command result
+  for the exit code. The pager sees only the diff; failures land on
+  stderr **after** the pager exits.
 - Git-faithful semantics: a pager that dies loses the diff — no re-print
-  on nonzero pager exit. If `sh` itself cannot spawn, emit falls back to
-  printing directly (untested defensive code, not a contract — ticket 03
-  d3).
+  on nonzero pager exit. If argv[0] itself cannot spawn, emit prints the
+  diff directly, **silently** — designed, tested behaviour (ticket 11,
+  superseding ticket 03 d3): it is the steady state for pre-2.45 git on
+  a native Windows console, and the degraded output is exactly what
+  `--no-pager` produces on purpose.
 - Emit stays git-free, TTY-free, and format-blind.
+
+### Windows
+
+Decided in ticket 11 against the facts in
+[research/windows-pager.md](research/windows-pager.md); designed
+degradations, not accidents:
+
+- **Shell discovery**: `git var GIT_SHELL_PATH` resolves Git for
+  Windows' own `sh` from any native shell; combined with the
+  `dirname(argv[0])` PATH prepend, paging works from cmd/PowerShell
+  under the recommended install. Pre-2.45 git rides the literal-`sh`
+  rung: Git Bash still pages (inherited PATH); native consoles hit the
+  silent direct-print fallback.
+- **TTY**: `std::io::IsTerminal` recognizes MSYS/Cygwin PTY pipe names,
+  so Git Bash/mintty gets colour and paging. Detection rides the kernel
+  pipe-name convention; an exotic terminal bridge may read false — an
+  accepted edge whose failure mode is the safe script behaviour
+  (uncoloured, unpaged). No escape-hatch flags.
+- **Colour**: startup attempts to enable VT processing
+  (`ENABLE_VIRTUAL_TERMINAL_PROCESSING`) on native consoles; on failure
+  (legacy conhost) `--color=auto` resolves to `never` instead of
+  emitting unrendered escapes. VT capability gates **auto-colour
+  only** — paging still gates on the TTY fact alone, and explicit
+  `--color=always` always passes through. On Unix and MSYS PTYs the
+  probe is trivially true.
 
 ## Failures
 
@@ -133,9 +172,12 @@ From ticket 03 (all decisions confirmed):
    `false`; tests flip it to cover the decision logic. No PTY harness.
 2. No pager trait: resolution is scripted-fake territory (`var GIT_PAGER`);
    the pager string itself is the seam.
-3. Emit's pager tests spawn real `sh -c` recording scripts (e.g.
-   `cat > <tempfile>`) asserting verbatim stdin delivery and
-   stderr-after-exit ordering.
+3. Emit's pager tests spawn real recording-script argvs (e.g.
+   `["sh", "-c", "cat > <tempfile>"]`) asserting verbatim stdin
+   delivery and stderr-after-exit ordering. Ticket 11 adds: a script
+   echoing `$PATH` proves the `dirname(argv[0])` prepend, and an
+   unspawnable argv[0] proves the silent direct-print fallback with the
+   exit code unchanged.
 4. Combined-output unit tests use **exact `assert_eq!`** on the full
    `Rendered.stdout` (a deliberate break from the `contains` convention),
    two-sided with `fake.calls()` proving each child's args (prefixes,
@@ -161,3 +203,10 @@ Build order — each sized for one session:
 3. [07-rename-rewrite](tickets/07-rename-rewrite.md)
 4. [08-pager](tickets/08-pager.md)
 5. [09-integration-apply-round-trip](tickets/09-integration-apply-round-trip.md)
+
+Windows amendments (ticket 11) — tickets 05–09 were already built, so
+these land as follow-on build tickets:
+
+6. [12-pager-shell-resolution](tickets/12-pager-shell-resolution.md)
+7. [13-windows-vt-colour](tickets/13-windows-vt-colour.md)
+8. [14-windows-ci](tickets/14-windows-ci.md)
