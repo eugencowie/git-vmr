@@ -25,6 +25,12 @@ pub struct CliContext
     /// paging decisions, so they can never disagree
     pub stdout_is_tty: bool,
 
+    /// Whether stdout can render ANSI escapes — the VT capability fact
+    /// gating auto-colour only, never paging. Constantly true off
+    /// Windows; on Windows, probing enables VT processing as a side
+    /// effect and legacy conhost reports false.
+    pub stdout_supports_color: bool,
+
     /// Warnings raised while loading context data. Private so the
     /// constructor is the only way to build a context outside this module.
     warnings: Vec<String>,
@@ -54,6 +60,7 @@ impl CliContext
             global_config,
             global_state,
             stdout_is_tty: io::stdout().is_terminal(),
+            stdout_supports_color: stdout_supports_color(),
             warnings: state_warning.into_iter().collect(),
             git: Git::subprocess()
         })
@@ -74,6 +81,7 @@ impl CliContext
                 .expect("missing global config loads as defaults"),
             global_state,
             stdout_is_tty: false,
+            stdout_supports_color: true,
             warnings: Vec::new(),
             git
         }
@@ -124,6 +132,39 @@ impl CliContext
     }
 }
 
+/// On Windows, attempt to enable `ENABLE_VIRTUAL_TERMINAL_PROCESSING`
+/// on the console output handle; refusal means a legacy conhost that
+/// would print unrendered escapes. A non-console stdout — pipes and
+/// MSYS PTYs, where `GetConsoleMode` itself fails — reports true and
+/// leaves the TTY fact in charge. Elsewhere the probe is trivially true.
+#[cfg(windows)]
+fn stdout_supports_color() -> bool
+{
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::{
+        CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode,
+        SetConsoleMode
+    };
+
+    let handle = io::stdout().as_raw_handle();
+    let mut mode: CONSOLE_MODE = 0;
+    if unsafe { GetConsoleMode(handle, &mut mode) } == 0
+    {
+        return true;
+    }
+    unsafe {
+        SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+    }
+}
+
+/// Off Windows every terminal renders ANSI escapes; the probe is a
+/// constant and the TTY fact alone decides auto-colour.
+#[cfg(not(windows))]
+fn stdout_supports_color() -> bool
+{
+    true
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -163,6 +204,7 @@ mod tests
                 GlobalState::default()
             ),
             stdout_is_tty: false,
+            stdout_supports_color: true,
             warnings: vec![],
             git: Git::subprocess()
         };

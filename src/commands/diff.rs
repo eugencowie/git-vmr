@@ -11,7 +11,11 @@ pub fn run(
 {
     // Resolve `auto` against the injected TTY fact here so the diff body
     // only ever sees `always`/`never`
-    let color = resolve_color(args.color, context.stdout_is_tty);
+    let color = resolve_color(
+        args.color,
+        context.stdout_is_tty,
+        context.stdout_supports_color
+    );
     let pager = if paging_active(args.no_pager, context.stdout_is_tty)
     {
         resolve_pager(workspace)
@@ -260,14 +264,21 @@ impl std::fmt::Display for ColorWhen
 }
 
 /// The colour value children receive: `auto` resolves against the TTY
-/// fact, explicit choices pass through.
-fn resolve_color(color: ColorWhen, stdout_is_tty: bool) -> ResolvedColor
+/// fact and the VT capability (a legacy conhost would print unrendered
+/// escapes), explicit choices pass through. VT gates auto-colour only —
+/// paging still gates on the TTY fact alone.
+fn resolve_color(
+    color: ColorWhen,
+    stdout_is_tty: bool,
+    stdout_supports_color: bool
+) -> ResolvedColor
 {
     match color
     {
         ColorWhen::Always => ResolvedColor::Always,
         ColorWhen::Never => ResolvedColor::Never,
-        ColorWhen::Auto if stdout_is_tty => ResolvedColor::Always,
+        ColorWhen::Auto if stdout_is_tty && stdout_supports_color =>
+            ResolvedColor::Always,
         ColorWhen::Auto => ResolvedColor::Never
     }
 }
@@ -396,25 +407,44 @@ mod tests
     }
 
     #[test]
-    fn auto_resolves_to_always_on_a_tty()
+    fn auto_resolves_to_always_on_a_vt_capable_tty()
     {
-        assert_eq!(resolve_color(ColorWhen::Auto, true), ResolvedColor::Always);
+        assert_eq!(
+            resolve_color(ColorWhen::Auto, true, true),
+            ResolvedColor::Always
+        );
     }
 
     #[test]
     fn auto_resolves_to_never_off_a_tty()
     {
-        assert_eq!(resolve_color(ColorWhen::Auto, false), ResolvedColor::Never);
+        assert_eq!(
+            resolve_color(ColorWhen::Auto, false, true),
+            ResolvedColor::Never
+        );
     }
 
     #[test]
-    fn explicit_choices_pass_through_regardless_of_tty()
+    fn auto_resolves_to_never_on_a_tty_without_vt_output()
+    {
+        // Legacy conhost: a real console that cannot render escapes
+        assert_eq!(
+            resolve_color(ColorWhen::Auto, true, false),
+            ResolvedColor::Never
+        );
+    }
+
+    #[test]
+    fn explicit_choices_pass_through_regardless_of_tty_and_vt()
     {
         assert_eq!(
-            resolve_color(ColorWhen::Always, false),
+            resolve_color(ColorWhen::Always, false, false),
             ResolvedColor::Always
         );
-        assert_eq!(resolve_color(ColorWhen::Never, true), ResolvedColor::Never);
+        assert_eq!(
+            resolve_color(ColorWhen::Never, true, true),
+            ResolvedColor::Never
+        );
     }
 
     #[test]
