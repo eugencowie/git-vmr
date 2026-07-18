@@ -20,6 +20,8 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 
 <!-- one line per closed ticket -->
 
+- [Research: git's editor and message-cleanup semantics](tickets/01-git-editor-semantics-research.md) — Git separates editor resolution, shell-aware execution, dynamic buffer presentation, and cleanup; unset/`dumb` `TERM` with no explicit editor is the special no-value case, not non-TTY stdin.
+
 ## Not yet specified
 
 - Nothing further sighted — the space is small and the open questions are all ticketed.

@@ -11,4 +11,5 @@ Blocked by: 01
 - Where that seam lives relative to `Git`/the runner seam (the pager precedent runs at the emit choke point; the editor must run *before* any commit).
 - Where the message file lives (VMR root `.git` dir? temp?), and its lifetime.
 - How the cleaned message is delivered to each child repo (`-m` vs `-F <file>`), including multi-line messages.
-- Our command's abort and failure behaviour: editor nonzero exit, empty message after cleanup, no usable terminal / `git var GIT_EDITOR` failure — informed by the research ticket's facts about git's own behaviour.
+- The compatibility boundary for editor strings and message cleanup: arbitrary shell-interpreted editor values versus a narrower launch contract; which VMR-root Git configuration is honoured (`commit.cleanup`, `core.commentChar`/`core.commentString`); and whether modern multi-character/deprecated `auto` semantics set the version baseline.
+- Our command's abort and failure behaviour: editor nonzero exit, empty message after cleanup, and `git var GIT_EDITOR` failure — preserving or intentionally improving on Git's distinction between non-TTY stdin and unset/`dumb` `TERM`, informed by [Git editor and commit-message semantics](../research/git-editor-semantics.md).

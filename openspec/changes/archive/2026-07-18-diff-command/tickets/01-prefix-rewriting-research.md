@@ -18,7 +18,7 @@ Capture findings as a Markdown file on a throwaway `research/diff-prefix` branch
 
 ## Answer
 
-Full findings: `openspec/changes/diff-command/research/diff-prefix.md` on branch `research/diff-prefix`. Verified empirically with git 2.53.0 plus git-diff(1) and git release notes.
+Full findings: `openspec/changes/archive/2026-07-18-diff-command/research/diff-prefix.md` on branch `research/diff-prefix`. Verified empirically with git 2.53.0 plus git-diff(1) and git release notes.
 
 - The prefixes cover `diff --git`, `---`/`+++`, and `Binary files ... differ` lines for every entry type (text, binary, mode-only, symlink). **Exception:** `rename from`/`rename to` and `copy from`/`copy to` lines are unprefixed by design (documented patch format), so a combined patch containing renames/copies fails `git apply -p1` from the VMR root (`error: <old-path>: No such file or directory`).
 - Workaround (verified): generate per-repo diffs with `--no-renames --binary`; the concatenated multi-repo patch then applies cleanly with `git apply -p1 --index` from the VMR root, including binary, mode, and symlink changes. Cost: renames render as delete+add.
