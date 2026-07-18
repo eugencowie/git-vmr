@@ -17,10 +17,10 @@
 
 ## 4. Pager at the emit choke point ([ticket 08](tickets/08-pager.md))
 
-- [ ] 4.1 Add `pager: Option<String>` to `Rendered` (default None; existing commands unchanged)
-- [ ] 4.2 Diff fills it: TTY and no `--no-pager` → resolve via `git var GIT_PAGER` from the VMR root through the runner seam (`cat`/empty → None)
-- [ ] 4.3 Emit pages: spawn `sh -c` with `LESS=FRX`/`LV=-c` when unset, write stdout to pager stdin, wait, then print stderr; no re-print on pager death; direct-print fallback if `sh` cannot spawn
-- [ ] 4.4 Tests: scripted fake answers `var GIT_PAGER`; emit tests use real `sh -c` recording scripts asserting verbatim stdin and stderr-after-exit ordering
+- [x] 4.1 Add `pager: Option<String>` to `Rendered` (default None; existing commands unchanged)
+- [x] 4.2 Diff fills it: TTY and no `--no-pager` → resolve via `git var GIT_PAGER` from the VMR root through the runner seam (`cat`/empty → None)
+- [x] 4.3 Emit pages: spawn `sh -c` with `LESS=FRX`/`LV=-c` when unset, write stdout to pager stdin, wait, then print stderr; no re-print on pager death; direct-print fallback if `sh` cannot spawn
+- [x] 4.4 Tests: scripted fake answers `var GIT_PAGER`; emit tests use real `sh -c` recording scripts asserting verbatim stdin and stderr-after-exit ordering
 
 ## 5. Integration and the applyability contract ([ticket 09](tickets/09-integration-apply-round-trip.md))
 

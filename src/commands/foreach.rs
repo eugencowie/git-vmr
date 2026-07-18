@@ -206,7 +206,7 @@ fn render(children: &[ChildOutput], quiet: bool) -> Rendered
         stderr.push_str(&String::from_utf8_lossy(child.stderr));
     }
 
-    Rendered { stdout, stderr }
+    Rendered { stdout, stderr, pager: None }
 }
 
 fn shell_command(command: &str) -> Command

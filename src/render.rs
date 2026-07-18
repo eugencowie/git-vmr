@@ -14,14 +14,17 @@ use std::fmt;
 pub struct Rendered
 {
     pub stdout: String,
-    pub stderr: String
+    pub stderr: String,
+    /// The shell command to page `stdout` through; `None` means print
+    /// directly.
+    pub pager: Option<String>
 }
 
 impl From<String> for Rendered
 {
     fn from(stdout: String) -> Self
     {
-        Self { stdout, stderr: String::new() }
+        Self { stdout, ..Self::default() }
     }
 }
 
@@ -75,8 +78,47 @@ pub fn emit(result: Result<Rendered>) -> Result<()>
 
 fn print(rendered: &Rendered)
 {
-    anstream::print!("{}", rendered.stdout);
+    match &rendered.pager
+    {
+        Some(pager) => page(pager, &rendered.stdout),
+        None => anstream::print!("{}", rendered.stdout)
+    }
     anstream::eprint!("{}", rendered.stderr);
+}
+
+/// Pipes text through `sh -c <pager>`, git-style: `LESS`/`LV` get git's
+/// defaults when unset, and a pager that dies loses the text — no
+/// re-print on nonzero pager exit. Returns only once the pager exits, so
+/// stderr always lands after the paged view closes. Falls back to direct
+/// printing only when `sh` itself cannot spawn.
+fn page(pager: &str, text: &str)
+{
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let mut command = Command::new("sh");
+    command.arg("-c").arg(pager).stdin(Stdio::piped());
+    if std::env::var_os("LESS").is_none()
+    {
+        command.env("LESS", "FRX");
+    }
+    if std::env::var_os("LV").is_none()
+    {
+        command.env("LV", "-c");
+    }
+
+    let Ok(mut child) = command.spawn()
+    else
+    {
+        anstream::print!("{text}");
+        return;
+    };
+
+    if let Some(mut stdin) = child.stdin.take()
+    {
+        let _ = stdin.write_all(text.as_bytes());
+    }
+    let _ = child.wait();
 }
 
 // The palette: git-compatible colors shared by every renderer.
@@ -138,6 +180,97 @@ pub(crate) fn repo_list_suffix(
     };
 
     format!(" {}", paint(REPO_LIST, &format!("({names})")))
+}
+
+#[cfg(test)]
+mod pager_tests
+{
+    use super::*;
+    use std::fs;
+
+    fn paged(stdout: &str, pager: String) -> Rendered
+    {
+        Rendered {
+            stdout: stdout.to_owned(),
+            stderr: String::new(),
+            pager: Some(pager)
+        }
+    }
+
+    #[test]
+    fn pager_receives_stdout_verbatim()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+        let stdout = "diff --git a/x b/x\n\x1b[32m+new\x1b[0m\n";
+
+        let rendered = paged(stdout, format!("cat > {}", file.display()));
+        emit(Ok(rendered)).unwrap();
+
+        assert_eq!(fs::read(&file).unwrap(), stdout.as_bytes());
+    }
+
+    #[test]
+    fn emit_waits_for_the_pager_to_exit()
+    {
+        // The marker is appended after `cat` finishes, so seeing it as
+        // soon as emit returns proves emit waited for the pager — and
+        // stderr, printed after that wait, lands after the pager exits
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+
+        let rendered = paged(
+            "body\n",
+            format!("cat > {f}; echo EXITED >> {f}", f = file.display())
+        );
+        emit(Ok(rendered)).unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), "body\nEXITED\n");
+    }
+
+    #[test]
+    fn a_pager_that_dies_loses_the_diff_without_failing_the_command()
+    {
+        // The pager exits without reading; the broken pipe and nonzero
+        // exit are swallowed and nothing is re-printed
+        let rendered = paged(&"x".repeat(1 << 20), "exit 7".to_owned());
+
+        emit(Ok(rendered)).unwrap();
+    }
+
+    #[test]
+    fn less_and_lv_get_git_defaults_when_unset()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+        let expected = format!(
+            "{} {}\n",
+            std::env::var("LESS").unwrap_or_else(|_| "FRX".to_owned()),
+            std::env::var("LV").unwrap_or_else(|_| "-c".to_owned())
+        );
+
+        let rendered =
+            paged("", format!(r#"echo "$LESS $LV" > {}"#, file.display()));
+        emit(Ok(rendered)).unwrap();
+
+        assert_eq!(fs::read_to_string(&file).unwrap(), expected);
+    }
+
+    #[test]
+    fn failure_output_is_paged_before_the_message_propagates()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+
+        let mut rendered =
+            paged("surviving diff\n", format!("cat > {}", file.display()));
+        rendered.stderr = String::new();
+        let error = emit(Err(fail(rendered, "one repo failed".to_owned())))
+            .unwrap_err();
+
+        assert_eq!(error.to_string(), "one repo failed");
+        assert_eq!(fs::read_to_string(&file).unwrap(), "surviving diff\n");
+    }
 }
 
 #[cfg(test)]

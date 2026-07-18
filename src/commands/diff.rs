@@ -12,7 +12,14 @@ pub fn run(
     // Resolve `auto` against the injected TTY fact here so the diff body
     // only ever sees `always`/`never`
     let color = resolve_color(args.color, context.stdout_is_tty);
-    let _paging = paging_active(args.no_pager, context.stdout_is_tty);
+    let pager = if paging_active(args.no_pager, context.stdout_is_tty)
+    {
+        resolve_pager(workspace)
+    }
+    else
+    {
+        None
+    };
 
     // No paths means the whole VMR; the aggregate path spells the same
     // thing explicitly, matching other path-taking commands
@@ -50,12 +57,13 @@ pub fn run(
     // diffs still flush when some repos fail
     match render::outcomes(results, names.iter().map(String::as_str))
     {
-        Ok(rendered) => Ok(Rendered { stdout: combined, ..rendered }),
+        Ok(rendered) => Ok(Rendered { stdout: combined, pager, ..rendered }),
         Err(error) => Err(match error.downcast::<Failed>()
         {
             Ok(mut failed) =>
             {
                 failed.rendered.stdout = combined;
+                failed.rendered.pager = pager;
                 render::fail(failed.rendered, failed.message)
             }
             Err(other) => other
@@ -288,6 +296,28 @@ impl std::fmt::Display for ResolvedColor
 fn paging_active(no_pager: bool, stdout_is_tty: bool) -> bool
 {
     stdout_is_tty && !no_pager
+}
+
+/// The pager command to hand to emit: one `git var GIT_PAGER` from the
+/// VMR root, so git's full `GIT_PAGER` → `core.pager` → `PAGER` → `less`
+/// chain applies and a child repo's local `core.pager` cannot hijack the
+/// combined view. `cat`, an empty resolution, or a failed lookup all mean
+/// no paging.
+fn resolve_pager(workspace: &Workspace) -> Option<String>
+{
+    let output =
+        workspace.git().output(workspace.root(), ["var", "GIT_PAGER"]).ok()?;
+    if !output.status.success()
+    {
+        return None;
+    }
+
+    let pager = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    match pager.as_str()
+    {
+        "" | "cat" => None,
+        _ => Some(pager)
+    }
 }
 
 #[cfg(test)]
@@ -660,12 +690,10 @@ mod combined_tests
                 .collect::<Vec<_>>()
         };
         let fake = Arc::new(
-            ScriptedFake::new().on(with_color("backend"), 0, "", "").on(
-                with_color("frontend"),
-                0,
-                "",
-                ""
-            )
+            ScriptedFake::new()
+                .on(with_color("backend"), 0, "", "")
+                .on(with_color("frontend"), 0, "", "")
+                .on(["var", "GIT_PAGER"], 0, "cat\n", "")
         );
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::find(&git, tmp.path()).unwrap();
@@ -677,10 +705,12 @@ mod combined_tests
         // Act
         run(&workspace, &context, &args).unwrap();
 
-        // Assert
+        // Assert: the pager lookup runs at the VMR root, the children get
+        // the resolved flags
         let calls = sorted_calls(&fake);
-        assert_eq!(calls[0].args, with_color("backend"));
-        assert_eq!(calls[1].args, with_color("frontend"));
+        assert_eq!(calls[0].path, tmp.path());
+        assert_eq!(calls[1].args, with_color("backend"));
+        assert_eq!(calls[2].args, with_color("frontend"));
     }
 
     #[test]
@@ -770,5 +800,165 @@ mod combined_tests
 
         // Assert
         assert!(format!("{err:#}").contains("child Git repository"));
+    }
+}
+
+#[cfg(test)]
+mod pager_tests
+{
+    use super::*;
+    use crate::git::ScriptedFake;
+    use crate::test_support::{cli_context, vmr_fixture};
+    use std::sync::Arc;
+
+    fn empty_diffs() -> ScriptedFake
+    {
+        let child = |repo: &str| {
+            [
+                "diff".to_owned(),
+                format!("--src-prefix=a/{repo}/"),
+                format!("--dst-prefix=b/{repo}/"),
+                "--color=always".to_owned(),
+                "--no-ext-diff".to_owned(),
+                "--binary".to_owned(),
+                "--".to_owned(),
+                ".".to_owned()
+            ]
+        };
+        ScriptedFake::new().on(child("backend"), 0, "", "").on(
+            child("frontend"),
+            0,
+            "",
+            ""
+        )
+    }
+
+    fn run_with_tty(fake: ScriptedFake, no_pager: bool) -> Rendered
+    {
+        let tmp = vmr_fixture();
+        let git = Git::with(fake);
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let mut context = cli_context(tmp.path());
+        context.stdout_is_tty = true;
+        let args = DiffArgs {
+            staged: false,
+            color: ColorWhen::Auto,
+            no_pager,
+            paths: Vec::new()
+        };
+        run(&workspace, &context, &args).unwrap()
+    }
+
+    #[test]
+    fn tty_resolves_the_pager_through_git_var()
+    {
+        let fake = empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "");
+
+        let rendered = run_with_tty(fake, false);
+
+        assert_eq!(rendered.pager.as_deref(), Some("less"));
+    }
+
+    #[test]
+    fn cat_and_empty_resolutions_mean_no_paging()
+    {
+        for resolution in ["cat\n", ""]
+        {
+            let fake =
+                empty_diffs().on(["var", "GIT_PAGER"], 0, resolution, "");
+
+            assert_eq!(run_with_tty(fake, false).pager, None);
+        }
+    }
+
+    #[test]
+    fn failed_resolution_means_no_paging()
+    {
+        let fake = empty_diffs().on(["var", "GIT_PAGER"], 1, "", "boom\n");
+
+        assert_eq!(run_with_tty(fake, false).pager, None);
+    }
+
+    #[test]
+    fn no_pager_flag_skips_resolution_entirely()
+    {
+        // The scripted fake panics on an unscripted `var GIT_PAGER`, so
+        // completing without one proves the lookup never ran
+        assert_eq!(run_with_tty(empty_diffs(), true).pager, None);
+    }
+
+    #[test]
+    fn piped_stdout_skips_resolution_entirely()
+    {
+        let tmp = vmr_fixture();
+        let child = |repo: &str| {
+            [
+                "diff".to_owned(),
+                format!("--src-prefix=a/{repo}/"),
+                format!("--dst-prefix=b/{repo}/"),
+                "--color=never".to_owned(),
+                "--no-ext-diff".to_owned(),
+                "--binary".to_owned(),
+                "--".to_owned(),
+                ".".to_owned()
+            ]
+        };
+        let git =
+            Git::with(ScriptedFake::new().on(child("backend"), 0, "", "").on(
+                child("frontend"),
+                0,
+                "",
+                ""
+            ));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let args = DiffArgs {
+            staged: false,
+            color: ColorWhen::Auto,
+            no_pager: false,
+            paths: Vec::new()
+        };
+
+        let rendered =
+            run(&workspace, &cli_context(tmp.path()), &args).unwrap();
+
+        assert_eq!(rendered.pager, None);
+    }
+
+    #[test]
+    fn failure_output_still_carries_the_pager()
+    {
+        let fake = Arc::new(
+            empty_diffs().on(["var", "GIT_PAGER"], 0, "less\n", "").on(
+                [
+                    "diff",
+                    "--src-prefix=a/backend/",
+                    "--dst-prefix=b/backend/",
+                    "--color=always",
+                    "--no-ext-diff",
+                    "--binary",
+                    "--",
+                    "src/main.rs"
+                ],
+                1,
+                "",
+                "fatal: bad\n"
+            )
+        );
+        let tmp = vmr_fixture();
+        let git = Git::with(Arc::clone(&fake));
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let mut context = cli_context(tmp.path());
+        context.stdout_is_tty = true;
+        let args = DiffArgs {
+            staged: false,
+            color: ColorWhen::Auto,
+            no_pager: false,
+            paths: vec![PathBuf::from("backend/src/main.rs")]
+        };
+
+        let err = run(&workspace, &context, &args).unwrap_err();
+
+        let failed = err.downcast::<Failed>().unwrap();
+        assert_eq!(failed.rendered.pager.as_deref(), Some("less"));
     }
 }

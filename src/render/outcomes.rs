@@ -53,7 +53,7 @@ pub fn outcomes<'a>(
         stdout.push('\n');
     }
 
-    let rendered = Rendered { stdout, stderr: String::new() };
+    let rendered = Rendered { stdout, ..Rendered::default() };
 
     let mut rendered_errors =
         grouped_messages(failures, total, SuffixPolicy::Full);
