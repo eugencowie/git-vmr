@@ -209,6 +209,17 @@ fn diff_output_round_trips_through_git_apply()
     init_repo(&backend);
     init_repo(&frontend);
     write_commit(&backend, "src/kept.rs", "line one\nline two\n", "initial");
+    write_commit(
+        &backend,
+        ".gitattributes",
+        "src/kept.rs diff=roundtrip\n",
+        "configure textconv attribute"
+    );
+    git(&backend, [
+        "config",
+        "diff.roundtrip.textconv",
+        "sed s/line/textconv/g"
+    ]);
     write_commit(&backend, "src/old.rs", "moved verbatim\n", "add old");
     write_commit(&backend, "naïve.txt", "quoted path\n", "add quoted");
     write_commit(&backend, "script.sh", "#!/bin/sh\n", "add script");

@@ -107,6 +107,7 @@ impl Git
         args.push(OsString::from(format!("--dst-prefix=b/{}/", repo.name)));
         args.push(OsString::from(format!("--color={color}")));
         args.push(OsString::from("--no-ext-diff"));
+        args.push(OsString::from("--no-textconv"));
         args.push(OsString::from("--binary"));
         args.push(OsString::from("--"));
         args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
@@ -666,6 +667,7 @@ mod combined_tests
         args.push(OsString::from(format!("--dst-prefix=b/{repo}/")));
         args.push(OsString::from("--color=never"));
         args.push(OsString::from("--no-ext-diff"));
+        args.push(OsString::from("--no-textconv"));
         args.push(OsString::from("--binary"));
         args.push(OsString::from("--"));
         args.extend(paths.iter().map(OsString::from));
@@ -864,6 +866,7 @@ mod pager_tests
                 format!("--dst-prefix=b/{repo}/"),
                 "--color=always".to_owned(),
                 "--no-ext-diff".to_owned(),
+                "--no-textconv".to_owned(),
                 "--binary".to_owned(),
                 "--".to_owned(),
                 ".".to_owned()
@@ -974,6 +977,7 @@ mod pager_tests
                 format!("--dst-prefix=b/{repo}/"),
                 "--color=never".to_owned(),
                 "--no-ext-diff".to_owned(),
+                "--no-textconv".to_owned(),
                 "--binary".to_owned(),
                 "--".to_owned(),
                 ".".to_owned()
@@ -1014,6 +1018,7 @@ mod pager_tests
                         "--dst-prefix=b/backend/",
                         "--color=always",
                         "--no-ext-diff",
+                        "--no-textconv",
                         "--binary",
                         "--",
                         "src/main.rs"
