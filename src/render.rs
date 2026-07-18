@@ -224,9 +224,10 @@ mod pager_tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("recorded");
+        let f = file.display().to_string().replace('\\', "/");
         let stdout = "diff --git a/x b/x\n\x1b[32m+new\x1b[0m\n";
 
-        let rendered = paged(stdout, sh(format!("cat > {}", file.display())));
+        let rendered = paged(stdout, sh(format!("cat > '{f}'")));
         emit(Ok(rendered)).unwrap();
 
         assert_eq!(fs::read(&file).unwrap(), stdout.as_bytes());
@@ -252,11 +253,10 @@ mod pager_tests
         // stderr, printed after that wait, lands after the pager exits
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("recorded");
+        let f = file.display().to_string().replace('\\', "/");
 
-        let rendered = paged(
-            "body\n",
-            sh(format!("cat > {f}; echo EXITED >> {f}", f = file.display()))
-        );
+        let rendered =
+            paged("body\n", sh(format!("cat > '{f}'; echo EXITED >> '{f}'")));
         emit(Ok(rendered)).unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), "body\nEXITED\n");
@@ -327,6 +327,7 @@ mod pager_tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("recorded");
+        let f = file.display().to_string().replace('\\', "/");
         let expected = format!(
             "{} {}\n",
             std::env::var("LESS").unwrap_or_else(|_| "FRX".to_owned()),
@@ -335,10 +336,7 @@ mod pager_tests
 
         let rendered = paged(
             "body\n",
-            sh(format!(
-                r#"cat >/dev/null; echo "$LESS $LV" > {}"#,
-                file.display()
-            ))
+            sh(format!(r#"cat >/dev/null; echo "$LESS $LV" > '{f}'"#))
         );
         emit(Ok(rendered)).unwrap();
 
@@ -350,9 +348,10 @@ mod pager_tests
     {
         let tmp = tempfile::tempdir().unwrap();
         let file = tmp.path().join("recorded");
+        let f = file.display().to_string().replace('\\', "/");
 
         let mut rendered =
-            paged("surviving diff\n", sh(format!("cat > {}", file.display())));
+            paged("surviving diff\n", sh(format!("cat > '{f}'")));
         rendered.stderr = String::new();
         let error = emit(Err(fail(rendered, "one repo failed".to_owned())))
             .unwrap_err();
