@@ -120,10 +120,19 @@ impl Git
 
         let diff = if output.status.success()
         {
-            rewrite_rename_headers(
-                &String::from_utf8_lossy(&output.stdout),
-                &repo.name
-            )
+            let stdout = match std::str::from_utf8(&output.stdout)
+            {
+                Ok(stdout) => stdout,
+                Err(error) =>
+                    return (
+                        String::new(),
+                        Err(anyhow::anyhow!(
+                            "git diff produced non-UTF-8 output for '{}': {error}",
+                            repo.path.display()
+                        ))
+                    ),
+            };
+            rewrite_rename_headers(stdout, &repo.name)
         }
         else
         {
@@ -803,6 +812,34 @@ mod combined_tests
 
         // Assert
         assert_eq!(rendered.stdout, FRONTEND_DIFF);
+    }
+
+    #[test]
+    fn non_utf8_diff_output_is_rejected_without_lossy_substitution()
+    {
+        let tmp = vmr_fixture();
+        let backend = child_args("backend", &[], &["src/main.rs"]);
+        let fake = ScriptedFake::new().on_bytes(
+            &backend,
+            0,
+            b"diff --git a/backend/file b/backend/file\n+\xff\n",
+            b""
+        );
+        let git = Git::with(fake);
+        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+
+        let error = run(
+            &workspace,
+            &cli_context(tmp.path()),
+            &diff_args(&["backend/src/main.rs"])
+        )
+        .unwrap_err();
+
+        let failed = error.downcast::<Failed>().unwrap();
+        assert!(failed.rendered.stdout.is_empty());
+        assert!(failed.message.contains("non-UTF-8 output"));
+        assert!(failed.message.contains("backend"));
+        assert!(!failed.message.contains('\u{fffd}'));
     }
 
     #[test]
