@@ -96,6 +96,30 @@ impl<'a> Workspace<'a>
         self.repos.par_iter().map(|repo| op(self.git, repo)).collect()
     }
 
+    /// Routes the scope to its owning child repos and gathers a value from
+    /// each in parallel, in repo order, without reporting — for commands
+    /// that assemble their own output from per-repo results.
+    pub fn map_routed<T, F>(
+        &self,
+        scope: Scope,
+        op: F
+    ) -> Result<Vec<(Repo, T)>>
+    where
+        F: Fn(&Git, &Repo, &[PathBuf]) -> T + Sync,
+        T: Send
+    {
+        let routed =
+            self.router().route(scope)?.into_iter().collect::<Vec<_>>();
+
+        Ok(routed
+            .into_par_iter()
+            .map(|(repo, repo_paths)| {
+                let value = op(self.git, &repo, &repo_paths);
+                (repo, value)
+            })
+            .collect())
+    }
+
     /// Routes a single operand to its owning child repo. Single-operand
     /// routing always denies the aggregate path: one operand cannot expand
     /// to many child repos.

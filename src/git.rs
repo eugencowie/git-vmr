@@ -6,7 +6,7 @@ mod runner;
 use anyhow::{Result, bail};
 pub use head::Head;
 #[cfg(test)]
-pub(crate) use runner::scripted::ScriptedFake;
+pub(crate) use runner::scripted::{Invocation, ScriptedFake};
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
