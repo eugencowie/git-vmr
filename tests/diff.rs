@@ -193,7 +193,7 @@ fn diff_with_no_pager_prints_directly()
 // The applyability contract from the spec: when stdout is piped, the
 // combined output is a patch `git apply -p1` accepts from the VMR root.
 // Real edits — a text change, a pure cross-directory rename, a quoted-path
-// (non-ASCII) rename, a binary change, and a mode-only change — go through
+// rename, a binary change, and a mode-only change — go through
 // the real binary, the captured stdout applies onto a pristine copy of the
 // VMR, and the trees must match. One assertion, no golden file.
 #[test]
@@ -204,7 +204,9 @@ fn diff_output_round_trips_through_git_apply()
     fs::create_dir(&vmr).expect("failed to create vmr dir");
     init_vmr(&vmr);
 
-    let backend = vmr.join("backend");
+    // The quote forces Git C-quoting in prefixed paths; the quoted-path rename
+    // also makes the prefix rewrite insert the repository into quoted headers.
+    let backend = vmr.join("back\"end");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
     init_repo(&frontend);
@@ -221,7 +223,7 @@ fn diff_output_round_trips_through_git_apply()
         "sed s/line/textconv/g"
     ]);
     write_commit(&backend, "src/old.rs", "moved verbatim\n", "add old");
-    write_commit(&backend, "naïve.txt", "quoted path\n", "add quoted");
+    write_commit(&backend, "quote\"file.txt", "quoted path\n", "add quoted");
     write_commit(&backend, "script.sh", "#!/bin/sh\n", "add script");
     fs::write(backend.join("logo.bin"), [0u8, 159, 146, 150, 10])
         .expect("failed to write binary file");
@@ -237,7 +239,7 @@ fn diff_output_round_trips_through_git_apply()
         .expect("failed to write file");
     fs::create_dir(backend.join("lib")).expect("failed to create dir");
     git(&backend, ["mv", "src/old.rs", "lib/new.rs"]);
-    git(&backend, ["mv", "naïve.txt", "übernaïve.txt"]);
+    git(&backend, ["mv", "quote\"file.txt", "newquote\"file.txt"]);
     fs::write(backend.join("logo.bin"), [255u8, 216, 255, 224, 0])
         .expect("failed to write binary file");
     make_executable(&backend.join("script.sh"));

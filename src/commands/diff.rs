@@ -160,9 +160,9 @@ impl Git
 /// a `diff --git` line to the first `@@`, or to the next `diff --git` /
 /// end of input when the block has no hunks (pure 100% renames). When the
 /// path token is C-quoted the prefix goes inside the quotes, immediately
-/// after the opening `"`; the prefix needs no escaping, so the quoted
-/// bytes are otherwise kept verbatim. SGR colour codes wrap header lines
-/// outside the text and are skipped, not touched.
+/// after the opening `"`, and is escaped using Git's C-style convention;
+/// the quoted path bytes are otherwise kept verbatim. SGR colour codes wrap
+/// header lines outside the text and are skipped, not touched.
 fn rewrite_rename_headers(diff: &str, repo: &str) -> String
 {
     const KEYWORDS: [&str; 4] =
@@ -191,12 +191,20 @@ fn rewrite_rename_headers(diff: &str, repo: &str) -> String
             // the prefix just inside the opening quote, a bare one at
             // the start
             let mut path_start = (line.len() - text.len()) + keyword.len();
-            if line[path_start..].starts_with('"')
+            let quoted = line[path_start..].starts_with('"');
+            if quoted
             {
                 path_start += 1;
             }
             out.push_str(&line[..path_start]);
-            out.push_str(repo);
+            if quoted
+            {
+                push_git_quoted_path_fragment(&mut out, repo);
+            }
+            else
+            {
+                out.push_str(repo);
+            }
             out.push('/');
             out.push_str(&line[path_start..]);
             continue;
@@ -206,6 +214,34 @@ fn rewrite_rename_headers(diff: &str, repo: &str) -> String
     }
 
     out
+}
+
+/// Appends a path fragment inside an existing Git C-quoted path token.
+fn push_git_quoted_path_fragment(out: &mut String, fragment: &str)
+{
+    for byte in fragment.bytes()
+    {
+        match byte
+        {
+            b'\x07' => out.push_str("\\a"),
+            b'\x08' => out.push_str("\\b"),
+            b'\t' => out.push_str("\\t"),
+            b'\n' => out.push_str("\\n"),
+            b'\x0b' => out.push_str("\\v"),
+            b'\x0c' => out.push_str("\\f"),
+            b'\r' => out.push_str("\\r"),
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b' '..=b'~' => out.push(char::from(byte)),
+            _ =>
+            {
+                out.push('\\');
+                out.push(char::from(b'0' + (byte >> 6)));
+                out.push(char::from(b'0' + ((byte >> 3) & 7)));
+                out.push(char::from(b'0' + (byte & 7)));
+            }
+        }
+    }
 }
 
 /// Byte index just past any leading SGR escape sequences
