@@ -79,8 +79,9 @@ fn print(rendered: &Rendered)
 {
     match &rendered.pager
     {
-        Some(pager) => page(pager, &rendered.stdout),
-        None => anstream::print!("{}", rendered.stdout)
+        Some(pager) if !rendered.stdout.is_empty() =>
+            page(pager, &rendered.stdout),
+        Some(_) | None => anstream::print!("{}", rendered.stdout)
     }
     anstream::eprint!("{}", rendered.stderr);
 }
@@ -232,6 +233,18 @@ mod pager_tests
     }
 
     #[test]
+    fn empty_stdout_does_not_launch_the_pager()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("recorded");
+
+        let rendered = paged("", sh(format!("touch {}", file.display())));
+        emit(Ok(rendered)).unwrap();
+
+        assert!(!file.exists());
+    }
+
+    #[test]
     fn emit_waits_for_the_pager_to_exit()
     {
         // The marker is appended after `cat` finishes, so seeing it as
@@ -268,7 +281,8 @@ mod pager_tests
         fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
             .unwrap();
 
-        let rendered = paged("", vec![script.to_str().unwrap().to_owned()]);
+        let rendered =
+            paged("diff body\n", vec![script.to_str().unwrap().to_owned()]);
         emit(Ok(rendered)).unwrap();
 
         let seen = fs::read_to_string(&file).unwrap();
@@ -319,8 +333,13 @@ mod pager_tests
             std::env::var("LV").unwrap_or_else(|_| "-c".to_owned())
         );
 
-        let rendered =
-            paged("", sh(format!(r#"echo "$LESS $LV" > {}"#, file.display())));
+        let rendered = paged(
+            "body\n",
+            sh(format!(
+                r#"cat >/dev/null; echo "$LESS $LV" > {}"#,
+                file.display()
+            ))
+        );
         emit(Ok(rendered)).unwrap();
 
         assert_eq!(fs::read_to_string(&file).unwrap(), expected);
