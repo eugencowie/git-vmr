@@ -45,6 +45,32 @@ fn count_occurrences(haystack: &str, needle: &str) -> usize
     haystack.match_indices(needle).count()
 }
 
+#[cfg(not(windows))]
+fn listed_path(path: &Path) -> String
+{
+    path.display().to_string()
+}
+
+#[cfg(windows)]
+fn listed_path(path: &Path) -> String
+{
+    let path = path
+        .canonicalize()
+        .expect("worktree list fixture path should exist")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+
+    if let Some(path) = path.strip_prefix("//?/UNC/")
+    {
+        format!("//{path}")
+    }
+    else
+    {
+        path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+    }
+}
+
 fn add_worktrees(vmr: &Path)
 {
     git_vmr()
@@ -66,7 +92,7 @@ fn worktree_list_lists_main_aggregate_for_multiple_child_repositories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(format!("{} [master]", vmr.display()))
+            predicate::str::contains(format!("{} [master]", listed_path(vmr)))
                 .and(predicate::str::contains("backend").not())
                 .and(predicate::str::contains("frontend").not())
         )
@@ -110,7 +136,7 @@ fn worktree_list_lists_linked_aggregate_and_skips_non_git_children()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains(format!("{} [wt]", wt.display()))
+            predicate::str::contains(format!("{} [wt]", listed_path(&wt)))
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -132,6 +158,7 @@ fn worktree_list_reports_shared_branch_with_different_child_heads_once()
     );
     let backend_head = head_short(&wt.join("backend"));
     let frontend_head = head_short(&wt.join("frontend"));
+    let listed_wt = listed_path(&wt);
     assert_ne!(backend_head, frontend_head);
 
     git_vmr()
@@ -140,7 +167,7 @@ fn worktree_list_reports_shared_branch_with_different_child_heads_once()
         .assert()
         .success()
         .stdout(predicate::function(move |stdout: &str| {
-            count_occurrences(stdout, &format!("{} [wt]", wt.display())) == 1
+            count_occurrences(stdout, &format!("{listed_wt} [wt]")) == 1
                 && !stdout.contains(&backend_head)
                 && !stdout.contains(&frontend_head)
         }))
@@ -196,8 +223,8 @@ fn worktree_list_reports_mixed_detached_partial_and_sorted_output()
         .assert()
         .success()
         .stdout(predicate::function(move |stdout: &str| {
-            let alpha_wt = format!("{}", fixture.sibling("alpha-wt").display());
-            let zeta_wt = format!("{}", fixture.sibling("zeta-wt").display());
+            let alpha_wt = listed_path(&fixture.sibling("alpha-wt"));
+            let zeta_wt = listed_path(&fixture.sibling("zeta-wt"));
 
             count_occurrences(stdout, &alpha_wt) == 1
                 && count_occurrences(stdout, &zeta_wt) == 1
@@ -220,7 +247,7 @@ fn worktree_list_uses_child_working_dir_and_global_c()
         .args(["worktree", "list"])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("{}", vmr.display())))
+        .stdout(predicate::str::contains(listed_path(vmr)))
         .stderr(predicate::str::is_empty());
 
     git_vmr()
@@ -233,7 +260,7 @@ fn worktree_list_uses_child_working_dir_and_global_c()
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("{}", vmr.display())))
+        .stdout(predicate::str::contains(listed_path(vmr)))
         .stderr(predicate::str::is_empty());
 }
 
