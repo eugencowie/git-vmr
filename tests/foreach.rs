@@ -5,6 +5,42 @@ use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
 
+#[cfg(unix)]
+const CHILD_NEWLINE: &str = "\n";
+#[cfg(windows)]
+const CHILD_NEWLINE: &str = "\r\n";
+
+#[cfg(unix)]
+fn shell_command<'a>(unix: &'a str, _windows: &'a str) -> &'a str
+{
+    unix
+}
+
+#[cfg(windows)]
+fn shell_command<'a>(_unix: &'a str, windows: &'a str) -> &'a str
+{
+    windows
+}
+
+fn child_lines(lines: &[&str]) -> String
+{
+    format!("{}{}", lines.join(CHILD_NEWLINE), CHILD_NEWLINE)
+}
+
+#[cfg(unix)]
+fn expected_current_dir(path: &Path) -> std::path::PathBuf
+{
+    path.canonicalize().unwrap()
+}
+
+#[cfg(windows)]
+fn expected_current_dir(path: &Path) -> std::path::PathBuf
+{
+    // `CliContext` gets the process working directory from GetCurrentDirectory,
+    // which preserves the non-verbatim spelling passed to `current_dir`.
+    path.to_path_buf()
+}
+
 fn create_vmr() -> tempfile::TempDir
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -31,10 +67,14 @@ fn foreach_runs_command_across_child_repos_and_skips_non_git_children()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "--quiet", "printf '%s\\n' \"$name\""])
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command("printf '%s\\n' \"$name\"", "echo %name%")
+        ])
         .assert()
         .success()
-        .stdout("backend\nfrontend\n")
+        .stdout(child_lines(&["backend", "frontend"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -82,11 +122,14 @@ fn foreach_renders_parallel_results_in_repository_order()
         .args([
             "foreach",
             "--quiet",
-            "if [ \"$name\" = zeta ]; then sleep 0.2; fi; echo \"$name\""
+            shell_command(
+                "if [ \"$name\" = zeta ]; then sleep 0.2; fi; echo \"$name\"",
+                "if %name%==zeta ping -n 2 127.0.0.1 >NUL & echo %name%"
+            )
         ])
         .assert()
         .success()
-        .stdout("alpha\nzeta\n")
+        .stdout(child_lines(&["alpha", "zeta"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -98,11 +141,14 @@ fn foreach_replays_stdout_stderr_and_default_headers()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "echo out; echo err >&2"])
+        .args([
+            "foreach",
+            shell_command("echo out; echo err >&2", "echo out & echo err 1>&2")
+        ])
         .assert()
         .success()
-        .stdout("Entering 'backend'\nout\n")
-        .stderr("err\n");
+        .stdout(format!("Entering 'backend'\nout{CHILD_NEWLINE}"))
+        .stderr(format!("err{CHILD_NEWLINE}"));
 }
 
 #[test]
@@ -116,7 +162,7 @@ fn foreach_quiet_suppresses_headers_only()
         .args(["foreach", "--quiet", "echo ok"])
         .assert()
         .success()
-        .stdout("ok\n")
+        .stdout(child_lines(&["ok"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -128,7 +174,7 @@ fn foreach_reports_single_child_failure()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "--quiet", "false"])
+        .args(["foreach", "--quiet", shell_command("false", "exit /b 1")])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
@@ -149,7 +195,7 @@ fn foreach_reports_multiple_failures_in_repository_order()
 
     let output = git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "--quiet", "false"])
+        .args(["foreach", "--quiet", shell_command("false", "exit /b 1")])
         .output()
         .expect("failed to run git-vmr");
 
@@ -174,7 +220,14 @@ fn foreach_does_not_report_successful_repositories_as_failures()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "--quiet", "test \"$name\" = frontend"])
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command(
+                "test \"$name\" = frontend",
+                "if %name%==frontend (exit /b 0) else (exit /b 1)"
+            )
+        ])
         .assert()
         .failure()
         .stderr(
@@ -194,13 +247,17 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
         .args([
             "foreach",
             "--quiet",
-            "printf '%s|%s|%s|%s|%s\\n' \"$name\" \"$sm_path\" \"$displaypath\" \"$toplevel\" \"${sha1-unset}\""
+            shell_command(
+                "printf '%s;%s;%s;%s;%s\\n' \"$name\" \"$sm_path\" \"$displaypath\" \"$toplevel\" \"${sha1-unset}\"",
+                "if defined sha1 (exit /b 1) else echo %name%;%sm_path%;%displaypath%;%toplevel%;unset"
+            )
         ])
         .assert()
         .success()
         .stdout(format!(
-            "backend|backend|backend|{}|unset\n",
-            tmp.path().canonicalize().unwrap().display()
+            "backend;backend;backend;{};unset{}",
+            expected_current_dir(tmp.path()).display(),
+            CHILD_NEWLINE
         ))
         .stderr(predicate::str::is_empty());
 }
@@ -214,10 +271,27 @@ fn foreach_displaypath_respects_effective_working_directory()
 
     git_vmr()
         .current_dir(tmp.path().join("frontend"))
-        .args(["foreach", "--quiet", "echo \"$name:$displaypath\""])
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command(
+                "echo \"$name:$displaypath\"",
+                "echo %name%:%displaypath%"
+            )
+        ])
         .assert()
         .success()
-        .stdout("backend:../backend\nfrontend:.\n")
+        .stdout(child_lines(&[
+            if cfg!(windows)
+            {
+                r"backend:..\backend"
+            }
+            else
+            {
+                "backend:../backend"
+            },
+            "frontend:."
+        ]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -248,9 +322,13 @@ fn foreach_discovers_vmr_from_nested_working_directory_and_global_c()
     git_vmr()
         .arg("-C")
         .arg(tmp.path().join("frontend/src"))
-        .args(["foreach", "--quiet", "printf '%s\\n' \"$name\""])
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command("printf '%s\\n' \"$name\"", "echo %name%")
+        ])
         .assert()
         .success()
-        .stdout("backend\nfrontend\n")
+        .stdout(child_lines(&["backend", "frontend"]))
         .stderr(predicate::str::is_empty());
 }
