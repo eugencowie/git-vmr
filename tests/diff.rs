@@ -204,12 +204,14 @@ fn diff_output_round_trips_through_git_apply()
     fs::create_dir(&vmr).expect("failed to create vmr dir");
     init_vmr(&vmr);
 
-    // The quote forces Git C-quoting in prefixed paths; the quoted-path rename
-    // also makes the prefix rewrite insert the repository into quoted headers.
-    let backend = vmr.join("back\"end");
+    // The non-ASCII character forces Git C-quoting in prefixed paths while
+    // remaining a valid Windows filename; the quoted-path rename also makes
+    // the prefix rewrite insert the repository into quoted headers.
+    let backend = vmr.join("backénd");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
     init_repo(&frontend);
+    git(&backend, ["config", "core.quotePath", "true"]);
     write_commit(&backend, "src/kept.rs", "line one\nline two\n", "initial");
     write_commit(
         &backend,
@@ -223,7 +225,7 @@ fn diff_output_round_trips_through_git_apply()
         "sed s/line/textconv/g"
     ]);
     write_commit(&backend, "src/old.rs", "moved verbatim\n", "add old");
-    write_commit(&backend, "quote\"file.txt", "quoted path\n", "add quoted");
+    write_commit(&backend, "quoteéfile.txt", "quoted path\n", "add quoted");
     write_commit(&backend, "script.sh", "#!/bin/sh\n", "add script");
     fs::write(backend.join("logo.bin"), [0u8, 159, 146, 150, 10])
         .expect("failed to write binary file");
@@ -239,7 +241,7 @@ fn diff_output_round_trips_through_git_apply()
         .expect("failed to write file");
     fs::create_dir(backend.join("lib")).expect("failed to create dir");
     git(&backend, ["mv", "src/old.rs", "lib/new.rs"]);
-    git(&backend, ["mv", "quote\"file.txt", "newquote\"file.txt"]);
+    git(&backend, ["mv", "quoteéfile.txt", "newquoteéfile.txt"]);
     fs::write(backend.join("logo.bin"), [255u8, 216, 255, 224, 0])
         .expect("failed to write binary file");
     make_executable(&backend.join("script.sh"));
