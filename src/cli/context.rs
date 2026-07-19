@@ -142,8 +142,8 @@ fn stdout_supports_color() -> bool
 {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::Console::{
-        CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode,
-        SetConsoleMode
+        CONSOLE_MODE, ENABLE_PROCESSED_OUTPUT,
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, SetConsoleMode
     };
 
     let handle = io::stdout().as_raw_handle();
@@ -153,7 +153,10 @@ fn stdout_supports_color() -> bool
         return true;
     }
     unsafe {
-        SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0
+        SetConsoleMode(
+            handle,
+            mode | ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        ) != 0
     }
 }
 
