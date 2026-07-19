@@ -118,6 +118,7 @@ pub fn init_repo(path: &Path)
 {
     fs::create_dir(path).expect("failed to create repo dir");
     git(path, ["init", "--initial-branch=master"]);
+    git(path, ["config", "core.autocrlf", "false"]);
     git(path, ["config", "user.email", "test@example.com"]);
     git(path, ["config", "user.name", "Test User"]);
 }
@@ -126,6 +127,8 @@ pub fn clone_repo(source: &Path, destination: &Path)
 {
     let parent = destination.parent().expect("clone destination has parent");
     git(parent, [
+        "-c",
+        "core.autocrlf=false",
         "clone",
         source.to_str().expect("source path should be UTF-8"),
         destination
@@ -133,6 +136,7 @@ pub fn clone_repo(source: &Path, destination: &Path)
             .and_then(|name| name.to_str())
             .expect("destination name should be UTF-8")
     ]);
+    git(destination, ["config", "core.autocrlf", "false"]);
     git(destination, ["config", "user.email", "test@example.com"]);
     git(destination, ["config", "user.name", "Test User"]);
 }

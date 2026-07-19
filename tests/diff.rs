@@ -261,6 +261,8 @@ fn diff_output_round_trips_through_git_apply()
     let patch = tmp.path().join("combined.patch");
     fs::write(&patch, &output).expect("failed to write patch");
     git(&pristine, [
+        "-c",
+        "core.autocrlf=false",
         "apply",
         "-p1",
         patch.to_str().expect("patch path should be UTF-8")
