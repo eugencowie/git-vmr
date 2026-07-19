@@ -11,6 +11,31 @@ use tempfile::TempDir;
 static NEXT_TEST_ENV_ID: AtomicUsize = AtomicUsize::new(0);
 const TEST_GIT_DATE: &str = "2000-01-01T00:00:00Z";
 
+/// Git's repository-local environment variables, as reported by git itself.
+/// Git exports these when it spawns subprocesses (e.g. `git rebase --exec`);
+/// if inherited, they redirect every git operation from the test fixture
+/// repositories to the developer's real repository.
+fn git_env_overrides() -> &'static [String]
+{
+    static VARS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+    VARS.get_or_init(|| {
+        let output = std::process::Command::new("git")
+            .args(["rev-parse", "--local-env-vars"])
+            .output()
+            .expect("failed to run git rev-parse --local-env-vars");
+        assert!(
+            output.status.success(),
+            "git rev-parse --local-env-vars failed"
+        );
+        String::from_utf8(output.stdout)
+            .expect("git env var names should be UTF-8")
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    })
+}
+
 pub fn git_vmr() -> Command
 {
     let test_env = isolated_test_env();
@@ -31,6 +56,10 @@ pub fn git_vmr() -> Command
     command
         .env("GITVMR_CONFIG_DIR", config_dir)
         .env("GITVMR_STATE_DIR", state_dir);
+    for var in git_env_overrides()
+    {
+        command.env_remove(var);
+    }
     command
 }
 
@@ -39,14 +68,27 @@ pub fn git<const N: usize>(dir: &Path, args: [&str; N])
     run_git(dir, args);
 }
 
+/// A `git` command with the fixture-safe environment: fixed dates and no
+/// inherited `GIT_*` overrides. All test git invocations must start here.
+pub fn git_command() -> std::process::Command
+{
+    let mut command = std::process::Command::new("git");
+    command
+        .env("GIT_AUTHOR_DATE", TEST_GIT_DATE)
+        .env("GIT_COMMITTER_DATE", TEST_GIT_DATE);
+    for var in git_env_overrides()
+    {
+        command.env_remove(var);
+    }
+    command
+}
+
 fn run_git<const N: usize>(dir: &Path, args: [&str; N])
 -> std::process::Output
 {
-    let output = std::process::Command::new("git")
+    let output = git_command()
         .args(args)
         .current_dir(dir)
-        .env("GIT_AUTHOR_DATE", TEST_GIT_DATE)
-        .env("GIT_COMMITTER_DATE", TEST_GIT_DATE)
         .output()
         .expect("failed to run git");
     assert!(
@@ -76,6 +118,7 @@ pub fn init_repo(path: &Path)
 {
     fs::create_dir(path).expect("failed to create repo dir");
     git(path, ["init", "--initial-branch=master"]);
+    git(path, ["config", "core.autocrlf", "false"]);
     git(path, ["config", "user.email", "test@example.com"]);
     git(path, ["config", "user.name", "Test User"]);
 }
@@ -84,6 +127,8 @@ pub fn clone_repo(source: &Path, destination: &Path)
 {
     let parent = destination.parent().expect("clone destination has parent");
     git(parent, [
+        "-c",
+        "core.autocrlf=false",
         "clone",
         source.to_str().expect("source path should be UTF-8"),
         destination
@@ -91,6 +136,7 @@ pub fn clone_repo(source: &Path, destination: &Path)
             .and_then(|name| name.to_str())
             .expect("destination name should be UTF-8")
     ]);
+    git(destination, ["config", "core.autocrlf", "false"]);
     git(destination, ["config", "user.email", "test@example.com"]);
     git(destination, ["config", "user.name", "Test User"]);
 }

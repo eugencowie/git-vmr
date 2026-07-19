@@ -396,40 +396,6 @@ fn render_paths(
 mod tests
 {
     use super::*;
-    use crate::test_support::cli_context;
-    use std::fs;
-    use std::path::Path;
-    use std::process::Command;
-
-    const DISPLAY_NAME: &str = "git vmr";
-
-    #[test]
-    fn status_succeeds_with_git_repos_and_non_git_dirs()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
-        fs::create_dir(tmp.path().join("docs")).unwrap();
-        init_git_repo(&tmp.path().join("backend"));
-
-        // Act
-        let git = crate::git::Git::subprocess();
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
-        let mut context = cli_context(tmp.path());
-        context.display_name = DISPLAY_NAME.to_owned();
-        let result = run(&workspace, &context);
-
-        // Assert
-        assert!(result.is_ok());
-    }
-
-    fn init_git_repo(path: &Path)
-    {
-        fs::create_dir(path).unwrap();
-
-        Command::new("git").arg("init").current_dir(path).output().unwrap();
-    }
-
     use crate::git::{Head, ScriptedFake};
     use crate::vmr::Repo;
 

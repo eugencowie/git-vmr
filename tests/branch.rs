@@ -1,13 +1,13 @@
 mod common;
 
-use common::{commit_file, git, git_vmr, init_repo, init_vmr};
+use common::{commit_file, git, git_command, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
 
 fn branch_exists(path: &Path, branch: &str) -> bool
 {
-    std::process::Command::new("git")
+    git_command()
         .args(["rev-parse", "--verify", branch])
         .current_dir(path)
         .output()
@@ -172,7 +172,7 @@ fn branch_reports_detached_head_repositories()
     let frontend = tmp.path().join("frontend");
     init_repo(&frontend);
     commit_file(&frontend, "README.md");
-    let output = std::process::Command::new("git")
+    let output = git_command()
         .args(["rev-parse", "--short=8", "HEAD"])
         .current_dir(&frontend)
         .output()

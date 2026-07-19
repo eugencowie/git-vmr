@@ -2,6 +2,7 @@ mod add;
 mod branch;
 mod clone;
 mod commit;
+mod diff;
 mod fetch;
 mod foreach;
 mod init;
@@ -27,6 +28,7 @@ pub use branch::BranchArgs;
 use clap::Subcommand;
 pub use clone::CloneArgs;
 pub use commit::CommitArgs;
+pub use diff::DiffArgs;
 pub use fetch::FetchArgs;
 pub use foreach::ForeachArgs;
 use init::InitArgs;
@@ -67,6 +69,8 @@ pub enum WorkspaceCommand
 
     /// Show the working tree status
     Status,
+
+    Diff(DiffArgs),
 
     Branch(BranchArgs),
     Commit(CommitArgs),
@@ -129,6 +133,8 @@ impl WorkspaceCommand
             WorkspaceCommand::Rm(args) => rm::run(workspace, context, args),
 
             WorkspaceCommand::Status => status::run(workspace, context),
+
+            WorkspaceCommand::Diff(args) => diff::run(workspace, context, args),
 
             WorkspaceCommand::Branch(args) =>
                 branch::run(workspace, context, args),

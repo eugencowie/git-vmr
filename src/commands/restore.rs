@@ -73,8 +73,7 @@ impl Git
         }
 
         args.push(OsString::from("--"));
-        args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
-        let output = self.output(&repo.path, args)?;
+        let output = self.path_output(&repo.path, args, paths)?;
 
         command_result(
             repo,

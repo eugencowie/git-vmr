@@ -5,9 +5,6 @@
 # Enable unstable features
 unstable_features = true
 
-# Newline style
-newline_style = "Unix"
-
 # Maximum line width
 max_width = 80
 use_small_heuristics = "Max"

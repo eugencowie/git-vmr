@@ -6,7 +6,7 @@ mod runner;
 use anyhow::{Result, bail};
 pub use head::Head;
 #[cfg(test)]
-pub(crate) use runner::scripted::ScriptedFake;
+pub(crate) use runner::scripted::{Invocation, ScriptedFake};
 pub use runner::{GitRunner, SubprocessRunner};
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
@@ -102,11 +102,7 @@ impl Git
         let args = args
             .into_iter()
             .map(|arg| arg.as_ref().to_owned())
-            .chain(
-                paths
-                    .into_iter()
-                    .map(|path| path.as_ref().as_os_str().to_owned())
-            )
+            .chain(paths.into_iter().map(|path| git_path_arg(path.as_ref())))
             .collect::<Vec<_>>();
         self.output(repo_path, args)
     }
@@ -137,7 +133,75 @@ pub type GitCommandResult = Result<RepoOutcome>;
 
 pub(crate) fn git_style_path(path: &Path) -> String
 {
-    path.display().to_string().replace('\\', "/")
+    let path = path.display().to_string().replace('\\', "/");
+    if let Some(path) = path.strip_prefix("//?/UNC/")
+    {
+        format!("//{path}")
+    }
+    else
+    {
+        path.strip_prefix("//?/").unwrap_or(&path).to_owned()
+    }
+}
+
+/// A filesystem path passed to Git as a pathspec or repository-relative
+/// operand. Git for Windows accepts forward slashes and reports paths in that
+/// form; preserve Unix backslashes, where they are valid filename bytes.
+pub(crate) fn git_path_arg(path: &Path) -> OsString
+{
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+        let wide = windows_git_path(path.as_os_str().encode_wide().collect());
+        OsString::from_wide(&wide)
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.as_os_str().to_owned()
+    }
+}
+
+/// Removes Windows' verbatim prefix, which Git for Windows does not accept,
+/// and uses the forward-slash spelling Git emits. Kept platform-neutral so
+/// the transformation remains directly testable off Windows.
+#[cfg(any(windows, test))]
+fn windows_git_path(wide: Vec<u16>) -> Vec<u16>
+{
+    const VERBATIM: &[u16] =
+        &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    const VERBATIM_UNC: &[u16] = &[
+        b'\\' as u16,
+        b'\\' as u16,
+        b'?' as u16,
+        b'\\' as u16,
+        b'U' as u16,
+        b'N' as u16,
+        b'C' as u16,
+        b'\\' as u16
+    ];
+
+    let (prefix, path) = if let Some(path) = wide.strip_prefix(VERBATIM_UNC)
+    {
+        (&[b'/' as u16, b'/' as u16][..], path)
+    }
+    else if let Some(path) = wide.strip_prefix(VERBATIM)
+    {
+        (&[][..], path)
+    }
+    else
+    {
+        (&[][..], wide.as_slice())
+    };
+
+    prefix
+        .iter()
+        .copied()
+        .chain(path.iter().copied().map(|unit| {
+            if unit == u16::from(b'\\') { u16::from(b'/') } else { unit }
+        }))
+        .collect()
 }
 
 pub(crate) fn quiet_success() -> RepoOutcome
@@ -189,6 +253,33 @@ mod tests
             git_style_path(Path::new(r"C:\Projects\vmr")),
             "C:/Projects/vmr"
         );
+    }
+
+    #[test]
+    fn git_style_path_removes_windows_verbatim_prefix()
+    {
+        assert_eq!(
+            git_style_path(Path::new(r"\\?\C:\Projects\vmr")),
+            "C:/Projects/vmr"
+        );
+    }
+
+    #[test]
+    fn git_path_arg_removes_windows_verbatim_prefix()
+    {
+        let wide = r"\\?\C:\Projects\vmr".encode_utf16().collect();
+        let normalized = String::from_utf16(&windows_git_path(wide)).unwrap();
+
+        assert_eq!(normalized, "C:/Projects/vmr");
+    }
+
+    #[test]
+    fn git_path_arg_preserves_windows_unc_root()
+    {
+        let wide = r"\\?\UNC\server\share\vmr".encode_utf16().collect();
+        let normalized = String::from_utf16(&windows_git_path(wide)).unwrap();
+
+        assert_eq!(normalized, "//server/share/vmr");
     }
 
     #[test]

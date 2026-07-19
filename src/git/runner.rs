@@ -130,11 +130,23 @@ pub(crate) mod scripted
             stderr: &str
         ) -> Self
         {
+            self.on_bytes(args, status, stdout.as_bytes(), stderr.as_bytes())
+        }
+
+        /// Scripts a captured invocation with arbitrary output bytes.
+        pub fn on_bytes<S: AsRef<OsStr>>(
+            self,
+            args: impl IntoIterator<Item = S>,
+            status: i32,
+            stdout: &[u8],
+            stderr: &[u8]
+        ) -> Self
+        {
             self.captured.lock().unwrap().push(Rule {
                 args: to_args(args),
                 status,
-                stdout: stdout.as_bytes().to_vec(),
-                stderr: stderr.as_bytes().to_vec()
+                stdout: stdout.to_vec(),
+                stderr: stderr.to_vec()
             });
             self
         }

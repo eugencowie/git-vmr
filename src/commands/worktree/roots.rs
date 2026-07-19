@@ -1,4 +1,4 @@
-use crate::git::{Git, GitCommandResult, Head, RepoOutcome};
+use crate::git::{Git, GitCommandResult, Head, RepoOutcome, git_path_arg};
 use crate::render::{Rendered, fail, outcomes};
 use crate::vmr::Vmr;
 use crate::workspace::{Repo, Workspace};
@@ -286,11 +286,11 @@ fn child_worktree_branch(
 ) -> Result<Option<String>>
 {
     let entries = git.worktree_list(repo)?;
-    let child_target = child_target.clean();
+    let child_target = comparable_path(child_target);
 
     Ok(entries
         .into_iter()
-        .find(|entry| entry.path.clean() == child_target)
+        .find(|entry| comparable_path(&entry.path) == child_target)
         .and_then(|entry| match entry.head
         {
             Head::Branch(branch) => Some(branch),
@@ -342,10 +342,12 @@ fn owning_root(
     worktree_path: &Path
 ) -> Option<PathBuf>
 {
+    let vmr_root = comparable_path(vmr_root);
+    let worktree_path = comparable_path(worktree_path);
     let main_child = vmr_root.join(repo_name);
     if worktree_path == main_child
     {
-        return Some(vmr_root.to_owned());
+        return Some(vmr_root);
     }
 
     if worktree_path.file_name()? != repo_name
@@ -355,6 +357,23 @@ fn owning_root(
 
     let root = worktree_path.parent()?.to_owned();
     if Vmr::is_root(&root) { Some(root) } else { None }
+}
+
+/// Git for Windows reports canonical long paths while callers can reach the
+/// same worktree through a short (`RUNNER~1`) or verbatim path. Compare the
+/// filesystem identity spelling there; lexical cleaning is sufficient on
+/// other platforms and preserves their existing behavior.
+fn comparable_path(path: &Path) -> PathBuf
+{
+    #[cfg(windows)]
+    {
+        path.canonicalize().unwrap_or_else(|_| path.clean())
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.clean()
+    }
 }
 
 use crate::git::report::{
@@ -388,7 +407,7 @@ impl Git
             args.push(OsString::from(branch));
         }
 
-        args.push(target.as_os_str().to_owned());
+        args.push(git_path_arg(target));
 
         if let Some(commit_ish) = commit_ish
         {
@@ -423,7 +442,7 @@ impl Git
             args.push(OsString::from("-f"));
         }
 
-        args.push(target.as_os_str().to_owned());
+        args.push(git_path_arg(target));
 
         let output = self.output(&repo.path, args)?;
 
@@ -453,8 +472,8 @@ impl Git
             args.push(OsString::from("-f"));
         }
 
-        args.push(source.as_os_str().to_owned());
-        args.push(destination.as_os_str().to_owned());
+        args.push(git_path_arg(source));
+        args.push(git_path_arg(destination));
 
         let output = self.output(&repo.path, args)?;
 
@@ -608,6 +627,16 @@ mod tests
         (tmp, root, listing)
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn comparable_path_matches_runner_and_canonical_windows_spellings()
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let canonical = tmp.path().canonicalize().unwrap();
+
+        assert_eq!(comparable_path(tmp.path()), comparable_path(&canonical));
+    }
+
     #[test]
     fn add_checks_out_the_inferred_branch_where_it_already_exists()
     {
@@ -621,7 +650,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("add"),
-                        root.join("backend").into(),
+                        git_path_arg(&root.join("backend")),
                         OsString::from("feature")
                     ],
                     0,
@@ -632,7 +661,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("add"),
-                        root.join("frontend").into(),
+                        git_path_arg(&root.join("frontend")),
                         OsString::from("feature")
                     ],
                     0,
@@ -677,7 +706,7 @@ mod tests
                         OsString::from("add"),
                         OsString::from("-b"),
                         OsString::from("feature"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -689,7 +718,7 @@ mod tests
                         OsString::from("add"),
                         OsString::from("-b"),
                         OsString::from("feature"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     0,
                     "",
@@ -735,7 +764,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -745,7 +774,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     1,
                     "",
@@ -802,7 +831,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -812,7 +841,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     0,
                     "",
@@ -860,7 +889,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -870,7 +899,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     0,
                     "",
@@ -906,7 +935,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -916,7 +945,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     0,
                     "",
@@ -959,7 +988,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("backend").into()
+                        git_path_arg(&root.join("backend"))
                     ],
                     0,
                     "",
@@ -969,7 +998,7 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("remove"),
-                        root.join("frontend").into()
+                        git_path_arg(&root.join("frontend"))
                     ],
                     0,
                     "",
@@ -1098,8 +1127,8 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("move"),
-                        source.join("backend").into(),
-                        destination.join("backend").into()
+                        git_path_arg(&source.join("backend")),
+                        git_path_arg(&destination.join("backend"))
                     ],
                     0,
                     "Moved worktree",
@@ -1109,8 +1138,8 @@ mod tests
                     [
                         OsString::from("worktree"),
                         OsString::from("move"),
-                        source.join("frontend").into(),
-                        destination.join("frontend").into()
+                        git_path_arg(&source.join("frontend")),
+                        git_path_arg(&destination.join("frontend"))
                     ],
                     1,
                     "",
