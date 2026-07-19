@@ -45,7 +45,7 @@ Because git leaves `rename from`/`rename to`/`copy from`/`copy to` lines unprefi
 - **THEN** the repo prefix SHALL appear inside the quotes, after the opening `"`
 
 ### Requirement: Applyable patch when piped
-When stdout is not a TTY, the combined output SHALL be a valid patch that `git apply -p1` accepts from the VMR root, covering text, binary, mode-only, symlink, and rename changes. This is a contract; breaking it is a breaking change.
+When stdout is not a TTY and colour resolves to `never`, the combined output SHALL be a valid patch that `git apply -p1` accepts from the VMR root, covering text, binary, mode-only, symlink, and rename changes. This is a contract; breaking it is a breaking change.
 
 #### Scenario: Apply round-trip
 - **WHEN** `git vmr diff` output (captured via a pipe) covering edits and a rename is applied with `git apply -p1` onto a pristine copy of the VMR
@@ -61,6 +61,7 @@ The command SHALL support `--color[=<when>]` with `auto` (default), `always`, an
 #### Scenario: Explicit always passes through
 - **WHEN** `git vmr diff --color=always` runs with stdout piped
 - **THEN** each child invocation SHALL include `--color=always`
+- **AND** the applyability contract SHALL NOT apply
 
 ### Requirement: Path filters routed to owning repositories
 User-supplied paths SHALL be routed to their owning child repositories as repo-relative pathspecs; only owning repositories are diffed. The aggregate path SHALL be allowed and expand to all child repositories. A path owned by no child repository SHALL be an error.

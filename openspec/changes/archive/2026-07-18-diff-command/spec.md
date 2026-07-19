@@ -72,13 +72,12 @@ diff-local transform** before concatenation (tickets 02 d6, 03 d6):
 
 ### Applyability — a contract
 
-**When stdout is not a TTY, the combined output is a valid patch that
-`git apply -p1` (from the VMR root) accepts**, covering text, binary,
-mode-only, symlink, and rename changes. This is a promise, not an
-implementation accident: the integration suite round-trips it (ticket 03
-d5), and any future change that breaks it is a breaking change. Colour is
-the only applyability spoiler and is TTY-gated off exactly when the
-promise applies.
+**When stdout is not a TTY and colour resolves to `never`, the combined
+output is a valid patch that `git apply -p1` (from the VMR root) accepts**,
+covering text, binary, mode-only, symlink, and rename changes. This is a
+promise, not an implementation accident: the integration suite round-trips
+it (ticket 03 d5), and any future change that breaks it is a breaking
+change. Explicit `--color=always` overrides this promise.
 
 ## Colour and paging
 
