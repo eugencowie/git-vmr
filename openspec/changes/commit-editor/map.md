@@ -21,6 +21,7 @@ Skills: use `/grilling` and `/domain-modeling` for grilling tickets; `/codebase-
 <!-- one line per closed ticket -->
 
 - [Research: git's editor and message-cleanup semantics](tickets/01-git-editor-semantics-research.md) — Git separates editor resolution, shell-aware execution, dynamic buffer presentation, and cleanup; unset/`dumb` `TERM` with no explicit editor is the special no-value case, not non-TTY stdin.
+- [Prototype: the editor buffer template](tickets/02-template-prototype.md) — Use branch-grouped Git-style staged/unstaged sections with VMR-root-relative paths; omit identities, untracked files, and scissors presentation.
 
 ## Not yet specified
 
