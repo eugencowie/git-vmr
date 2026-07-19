@@ -124,7 +124,7 @@ fn foreach_renders_parallel_results_in_repository_order()
             "--quiet",
             shell_command(
                 "if [ \"$name\" = zeta ]; then sleep 0.2; fi; echo \"$name\"",
-                "if %name%==zeta ping -n 2 127.0.0.1 >NUL & echo %name%"
+                "if %name%==zeta (ping -n 2 127.0.0.1 >NUL&echo %name%) else echo %name%"
             )
         ])
         .assert()
@@ -143,7 +143,7 @@ fn foreach_replays_stdout_stderr_and_default_headers()
         .current_dir(tmp.path())
         .args([
             "foreach",
-            shell_command("echo out; echo err >&2", "echo out & echo err 1>&2")
+            shell_command("echo out; echo err >&2", "echo out&echo err>&2")
         ])
         .assert()
         .success()
