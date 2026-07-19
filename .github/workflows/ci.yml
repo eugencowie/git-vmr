@@ -8,7 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
@@ -16,20 +19,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo +nightly fmt --check
-      - run: cargo clippy --all-targets
-      - run: cargo test
-
-  # Caveat: GitHub's windows-latest runners ship Git for Windows with `sh`
-  # on PATH, so this job does not reproduce the hostile recommended-install
-  # environment (no `sh` visible from cmd/PowerShell). It proves the
-  # honest-breakage class — path separators, spawn semantics, IsTerminal
-  # assumptions, the VT probe compiling and running — not the degradation
-  # paths, which stay covered by the platform-neutral unit tests.
-  test-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets
       - run: cargo test
