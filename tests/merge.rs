@@ -1,6 +1,8 @@
 mod common;
 
-use common::{git, git_output, git_vmr, init_repo, init_vmr, write_commit};
+use common::{
+    git, git_command, git_output, git_vmr, init_repo, init_vmr, write_commit
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -28,7 +30,7 @@ fn setup_repo_with_initial_commit(path: &Path)
 
 fn branch_contains_head(path: &Path, branch: &str) -> bool
 {
-    std::process::Command::new("git")
+    git_command()
         .args(["merge-base", "--is-ancestor", branch, "HEAD"])
         .current_dir(path)
         .status()

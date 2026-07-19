@@ -24,6 +24,29 @@ fn status_errors_outside_a_vmr()
 }
 
 #[test]
+fn status_skips_non_git_dirs_alongside_child_repos()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path());
+    fs::create_dir(tmp.path().join("docs"))
+        .expect("failed to create non repo dir");
+    let repo = tmp.path().join("backend");
+    init_repo(&repo);
+    commit_file(&repo, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("On branch master")
+                .and(predicate::str::contains("docs").not())
+        )
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
 fn status_in_vmr_root_reports_child_repo_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");

@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    clone_repo, git, git_output, git_vmr, init_repo, init_vmr, write_commit
+    clone_repo, git, git_command, git_output, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -22,7 +23,7 @@ fn head(path: &Path, rev: &str) -> String
 
 fn ref_exists(path: &Path, rev: &str) -> bool
 {
-    std::process::Command::new("git")
+    git_command()
         .args(["rev-parse", "--verify", rev])
         .current_dir(path)
         .output()

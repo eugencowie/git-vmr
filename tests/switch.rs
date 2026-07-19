@@ -1,6 +1,8 @@
 mod common;
 
-use common::{git, git_output, git_vmr, init_repo, init_vmr, write_commit};
+use common::{
+    git, git_command, git_output, git_vmr, init_repo, init_vmr, write_commit
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -36,21 +38,15 @@ fn setup_repo_behind_upstream(
 {
     fs::create_dir_all(remote.parent().unwrap())
         .expect("failed to create remote parent");
-    run_git(
-        std::process::Command::new("git").arg("init").arg("--bare").arg(remote)
-    );
-    run_git(
-        std::process::Command::new("git").arg("clone").arg(remote).arg(seed)
-    );
+    run_git(git_command().arg("init").arg("--bare").arg(remote));
+    run_git(git_command().arg("clone").arg(remote).arg(seed));
     git(seed, ["config", "user.email", "test@example.com"]);
     git(seed, ["config", "user.name", "Test User"]);
     write_commit(seed, "README.md", "initial\n", "initial");
     git(seed, ["branch", "-M", "develop"]);
     git(seed, ["push", "-u", "origin", "develop"]);
     git(remote, ["symbolic-ref", "HEAD", "refs/heads/develop"]);
-    run_git(
-        std::process::Command::new("git").arg("clone").arg(remote).arg(path)
-    );
+    run_git(git_command().arg("clone").arg(remote).arg(path));
     git(path, ["switch", "-c", "other"]);
 
     for index in 1..=behind_count

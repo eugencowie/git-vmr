@@ -1,13 +1,15 @@
 mod common;
 
-use common::{TestVmr, commit_file, git, git_vmr, init_repo, write_commit};
+use common::{
+    TestVmr, commit_file, git, git_command, git_vmr, init_repo, write_commit
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
 
 fn branch_exists(path: &Path, branch: &str) -> bool
 {
-    std::process::Command::new("git")
+    git_command()
         .args(["rev-parse", "--verify", branch])
         .current_dir(path)
         .output()
@@ -18,7 +20,7 @@ fn branch_exists(path: &Path, branch: &str) -> bool
 
 fn current_branch(path: &Path) -> String
 {
-    let output = std::process::Command::new("git")
+    let output = git_command()
         .args(["branch", "--show-current"])
         .current_dir(path)
         .output()
@@ -29,7 +31,7 @@ fn current_branch(path: &Path) -> String
 
 fn head_short(path: &Path) -> String
 {
-    let output = std::process::Command::new("git")
+    let output = git_command()
         .args(["rev-parse", "--short=8", "HEAD"])
         .current_dir(path)
         .output()

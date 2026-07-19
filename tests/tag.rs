@@ -1,13 +1,13 @@
 mod common;
 
-use common::{commit_file, git, git_output, git_vmr, init_repo};
+use common::{commit_file, git, git_command, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
 
 fn tag_exists(path: &Path, tag: &str) -> bool
 {
-    std::process::Command::new("git")
+    git_command()
         .args(["rev-parse", "--verify", tag])
         .current_dir(path)
         .output()
