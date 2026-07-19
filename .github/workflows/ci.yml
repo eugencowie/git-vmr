@@ -14,6 +14,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+        with: { persist-credentials: false }
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: rustfmt }
       - uses: dtolnay/rust-toolchain@stable
