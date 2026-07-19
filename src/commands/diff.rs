@@ -110,9 +110,8 @@ impl Git
         args.push(OsString::from("--no-textconv"));
         args.push(OsString::from("--binary"));
         args.push(OsString::from("--"));
-        args.extend(paths.iter().map(|path| path.as_os_str().to_owned()));
 
-        let output = match self.output(&repo.path, args)
+        let output = match self.path_output(&repo.path, args, paths)
         {
             Ok(output) => output,
             Err(error) => return (String::new(), Err(error))

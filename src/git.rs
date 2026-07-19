@@ -102,11 +102,7 @@ impl Git
         let args = args
             .into_iter()
             .map(|arg| arg.as_ref().to_owned())
-            .chain(
-                paths
-                    .into_iter()
-                    .map(|path| path.as_ref().as_os_str().to_owned())
-            )
+            .chain(paths.into_iter().map(|path| git_path_arg(path.as_ref())))
             .collect::<Vec<_>>();
         self.output(repo_path, args)
     }
@@ -138,6 +134,38 @@ pub type GitCommandResult = Result<RepoOutcome>;
 pub(crate) fn git_style_path(path: &Path) -> String
 {
     path.display().to_string().replace('\\', "/")
+}
+
+/// A filesystem path passed to Git as a pathspec or repository-relative
+/// operand. Git for Windows accepts forward slashes and reports paths in that
+/// form; preserve Unix backslashes, where they are valid filename bytes.
+fn git_path_arg(path: &Path) -> OsString
+{
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+        let wide =
+            path.as_os_str()
+                .encode_wide()
+                .map(|unit| {
+                    if unit == u16::from(b'\\')
+                    {
+                        u16::from(b'/')
+                    }
+                    else
+                    {
+                        unit
+                    }
+                })
+                .collect::<Vec<_>>();
+        OsString::from_wide(&wide)
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.as_os_str().to_owned()
+    }
 }
 
 pub(crate) fn quiet_success() -> RepoOutcome

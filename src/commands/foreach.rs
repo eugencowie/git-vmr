@@ -299,11 +299,18 @@ mod child_environment_tests
     #[test]
     fn displaypath_without_a_relative_route_falls_back_to_the_repo_path()
     {
-        // Act: a relative repo path has no route from an absolute working dir
-        let environment = environment("rel/backend", "/vmr", "/vmr");
+        #[cfg(unix)]
+        let (repo, root, expected) =
+            ("rel/backend", "/vmr", Path::new("rel/backend"));
+        #[cfg(windows)]
+        let (repo, root, expected) =
+            (r"D:\rel\backend", r"C:\vmr", Path::new(r"D:\rel\backend"));
+
+        // Act: the repo and working dir have no relative route
+        let environment = environment(repo, root, root);
 
         // Assert
-        assert_eq!(environment.displaypath, Path::new("rel/backend"));
+        assert_eq!(environment.displaypath, expected);
     }
 }
 
