@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+### 🚀 Features
+
+- Add 'diff' command ([#106](https://github.com/eugencowie/git-vmr/pull/106))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update skills ([#104](https://github.com/eugencowie/git-vmr/pull/104))
+
 ## 0.11.0
 
 ### 🚀 Features
