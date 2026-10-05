@@ -22,7 +22,8 @@ jobs:
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - &install-rust
         name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: jdx/mise-action@v5
+        with: { install_args: rust }
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
