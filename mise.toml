@@ -10,7 +10,7 @@ node = "latest"
 "npm:@fission-ai/openspec" = "latest"
 pandoc = "latest"
 release-plz = "latest"
-rust = "nightly"
+rust = ["stable", { version = "nightly", profile = "minimal", components = "rustfmt" }] # nightly for rustfmt.toml only
 shellcheck = "latest"
 
 [tasks.build]
@@ -23,7 +23,8 @@ run = "cargo test"
 
 [tasks.format]
 description = "Fix formatting issues"
-run = "cargo +nightly fmt"
+tools = { rust = "nightly" }
+run = "cargo fmt"
 
 [tasks.lint]
 description = "Fix linting issues"
@@ -31,7 +32,7 @@ run = "cargo clippy --all-targets --fix --allow-dirty"
 
 [tasks.check]
 description = "Check formatting/linting/tests"
-run = ["cargo +nightly fmt --check", "cargo clippy --all-targets", "cargo test"]
+run = ["mise run format --check", "cargo clippy --all-targets", "cargo test"]
 
 [tasks.changelog]
 description = "Update changelog"
