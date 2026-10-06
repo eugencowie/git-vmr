@@ -19,7 +19,7 @@ on:
   # completely broke oranda/mdbook. Sadly we don't provide previews (yet)!
   pull_request:
 
-  # Whenever something gets pushed to develop, update the docs!
+  # Whenever something gets pushed to main, update the docs!
   # This is great for getting docs changes live without cutting a full release.
   #
   # Note that if you're using cargo-dist, this will "race" the Release workflow
@@ -34,7 +34,7 @@ on:
   # when you want the docs to update.
   push:
     branches:
-      - develop
+      - main
 
   # Whenever a workflow called "Release" completes, update the docs!
   #
@@ -85,8 +85,8 @@ jobs:
   deploy:
     name: Deploy site and docs
     needs: build
-    # ONLY if we're on develop (so no PRs or feature branches allowed!)
-    if: ${{ github.ref == 'refs/heads/develop' }}
+    # ONLY if we're on main (so no PRs or feature branches allowed!)
+    if: ${{ github.ref == 'refs/heads/main' }}
     concurrency:
       group: pages
       cancel-in-progress: false

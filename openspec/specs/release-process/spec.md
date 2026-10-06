@@ -8,19 +8,19 @@ distribution, project site deployment, and controlled bootstrap process for
 
 ### Requirement: Reviewable release preparation
 The repository SHALL use release-plz to prepare release pull requests against
-`develop` that update the crate version, SHALL use standalone git-cliff to add a
+`main` that update the crate version, SHALL use standalone git-cliff to add a
 changelog generated from merged conventional commits to those pull requests,
 and SHALL publish a release only after the corresponding release pull request
 has been merged.
 
 #### Scenario: Prepare a release pull request
-- **WHEN** releasable changes have been merged into `develop`
+- **WHEN** releasable changes have been merged into `main`
 - **THEN** automation opens or updates a release pull request containing the
   proposed crate version and a git-cliff changelog generated from merged
   conventional commits
 
 #### Scenario: Keep an ordinary merge unpublished
-- **WHEN** a non-release pull request is merged into `develop`
+- **WHEN** a non-release pull request is merged into `main`
 - **THEN** automation does not publish a new crate version unless an approved
   release pull request has established the release
 
@@ -29,7 +29,7 @@ The repository SHALL publish an approved release to crates.io and create a
 corresponding tagged GitHub Release.
 
 #### Scenario: Publish an approved release
-- **WHEN** an approved release pull request is merged into `develop`
+- **WHEN** an approved release pull request is merged into `main`
 - **THEN** automation publishes the crate version to crates.io and creates the
   corresponding version tag and GitHub Release
 
@@ -64,7 +64,7 @@ installation information and SHALL deploy the generated site to GitHub Pages
 independently of package publication.
 
 #### Scenario: Deploy documentation changes
-- **WHEN** site-relevant changes are merged into `develop`
+- **WHEN** site-relevant changes are merged into `main`
 - **THEN** automation builds the Oranda site and deploys it to GitHub Pages
 
 #### Scenario: Refresh the site after release completion
