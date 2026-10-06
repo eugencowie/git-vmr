@@ -20,13 +20,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
-      - &install-rust
-        name: Install Rust toolchain
+      - &install-tools
+        name: Install tools
+        id: mise
         uses: jdx/mise-action@v5
-        with: { install_args: rust }
+        with:
+          install_args: rust release-plz git-cliff
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
+          version: ${{ steps.mise.outputs.release-plz }}
           command: release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
@@ -44,19 +47,16 @@ jobs:
       cancel-in-progress: false
     steps:
       - *checkout
-      - *install-rust
+      - *install-tools
       - name: Generate changelog
         id: git-cliff
         uses: orhun/git-cliff-action@v4
         with:
+          version: v${{ steps.mise.outputs.git-cliff }}
           args: --bump
         env:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
-      - name: Install release-plz
-        uses: taiki-e/install-action@v2.85.5
-        with:
-          tool: release-plz
       - name: Set release version
         env:
           RELEASE_VERSION: ${{ steps.git-cliff.outputs.version }}
@@ -64,6 +64,7 @@ jobs:
       - name: Run release-plz
         uses: release-plz/action@v0.5
         with:
+          version: ${{ steps.mise.outputs.release-plz }}
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
