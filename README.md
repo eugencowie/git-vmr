@@ -28,17 +28,17 @@ These are common git-vmr commands used in various situations:
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [clone](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/clone.md) | Clone a repository into a new directory | ✅ |
-| [init](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/init.md) | Create an empty virtual monorepo or reinitialize an existing one | ✅ |
+| [clone](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/clone.md) | Clone a repository into a new directory | ✅ |
+| [init](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/init.md) | Create an empty virtual monorepo or reinitialize an existing one | ✅ |
 
 ### Work on the current change
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [add](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/add.md) | Add file contents to the index | ✅ |
-| [mv](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/mv.md) | Move or rename a file, a directory, or a symlink | ✅ |
-| [restore](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/restore.md) | Restore working tree files | ✅ |
-| [rm](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/rm.md) | Remove files from the working tree and from the index | ✅ |
+| [add](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/add.md) | Add file contents to the index | ✅ |
+| [mv](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/mv.md) | Move or rename a file, a directory, or a symlink | ✅ |
+| [restore](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/restore.md) | Restore working tree files | ✅ |
+| [rm](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/rm.md) | Remove files from the working tree and from the index | ✅ |
 
 ### Examine the history and state
 
@@ -49,36 +49,36 @@ These are common git-vmr commands used in various situations:
 | grep    | Print lines matching a pattern | ❌ |
 | log     | Show commit logs | ❌ |
 | show    | Show various types of objects | ❌ |
-| [status](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/status.md) | Show the working tree status | ✅ |
+| [status](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/status.md) | Show the working tree status | ✅ |
 
 ### Grow, mark and tweak your common history
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
 | backfill| Download missing objects in a partial clone | ❌ |
-| [branch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/branch.md) | List, create, or delete branches | ✅ |
-| [commit](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/commit.md) | Record changes to the repository | ✅ |
-| [merge](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/merge.md) | Join two or more development histories together | ✅ |
-| [rebase](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/rebase.md) | Reapply commits on top of another base tip | ✅ |
-| [reset](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/reset.md) | Set `HEAD` or the index to a known state | ✅ |
-| [switch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/switch.md) | Switch branches | ✅ |
-| [tag](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/tag.md) | Create, list, delete or verify tags | ✅ |
+| [branch](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/branch.md) | List, create, or delete branches | ✅ |
+| [commit](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/commit.md) | Record changes to the repository | ✅ |
+| [merge](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/merge.md) | Join two or more development histories together | ✅ |
+| [rebase](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/rebase.md) | Reapply commits on top of another base tip | ✅ |
+| [reset](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/reset.md) | Set `HEAD` or the index to a known state | ✅ |
+| [switch](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/switch.md) | Switch branches | ✅ |
+| [tag](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/tag.md) | Create, list, delete or verify tags | ✅ |
 
 ### Collaborate
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [fetch](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/fetch.md) | Download objects and refs from another repository | ✅ |
-| [pull](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch | ✅ |
-| [push](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/push.md) | Update remote refs along with associated objects | ✅ |
+| [fetch](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/fetch.md) | Download objects and refs from another repository | ✅ |
+| [pull](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch | ✅ |
+| [push](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/push.md) | Update remote refs along with associated objects | ✅ |
 
 ### Unique commands
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [foreach](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr/foreach.md) | Evaluates an arbitrary shell command in each checked out repository | ✅ |
+| [foreach](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr/foreach.md) | Evaluates an arbitrary shell command in each checked out repository | ✅ |
 
-[docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/develop/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
+[docs/git-vmr.md](https://github.com/eugencowie/git-vmr/blob/main/docs/git-vmr.md) lists available subcommands. See `docs/git-vmr/<command>.md` to read about a specific subcommand or concept.
 
 ## Analytics
 
