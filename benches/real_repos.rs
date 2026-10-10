@@ -1,3 +1,13 @@
+//! Real-repository benchmarks: full-command wall time against a fixture of
+//! pinned open-source repositories.
+//!
+//! The first run clones each repository into the fixture directory
+//! (`DEFAULT_FIXTURE_DIR`, or `GITVMR_BENCH_FIXTURE_DIR` if set) and creates
+//! the `.gitvmr/` marker. Later runs reuse existing repository directories
+//! without fetching or pulling, so setup time is not part of the measured
+//! warm-cache wall time. Run with `mise run bench`; remove the fixture with
+//! `mise run bench:clean`.
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

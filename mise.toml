@@ -33,6 +33,14 @@ run = "cargo clippy --all-targets --fix --allow-dirty"
 description = "Check formatting/linting/tests"
 run = ["mise run format --check", "cargo clippy --all-targets", "cargo test"]
 
+[tasks.bench]
+description = "Run benchmarks using real repositories (approx. 5 GB)"
+run = "cargo bench --bench real_repos"
+
+[tasks."bench:clean"]
+description = "Remove real repositories benchmark fixture"
+run = 'rm -rf "${GITVMR_BENCH_FIXTURE_DIR:-target/bench-fixtures/real-repos}"'
+
 [tasks.changelog]
 description = "Update changelog"
 run = "git cliff --bump"
