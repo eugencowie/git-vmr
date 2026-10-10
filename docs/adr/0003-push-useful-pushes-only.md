@@ -1,10 +1,6 @@
----
-status: accepted
----
-
 # Push attempts only provably useful pushes
 
-`git vmr push` was a verbatim arg-passer: every child repo got the user's arguments untouched, and all repository-state judgment was delegated to Git (the push spec explicitly forbade pre-filtering on branch state). This polluted remotes in the core VMR workflow — create a feature branch across the workspace, commit in two or three repos, push — by creating empty branches (and firing CI) in every repo with nothing new. We reversed the delegation requirement: push now attempts only useful pushes — those proven, from local remote-tracking refs alone, to transmit novel commits or to update or delete a ref that already exists on the target remote — and skips everything unproven, reporting each skip with its reason.
+`git vmr push` was a verbatim arg-passer: every child repo got the user's arguments untouched, and all repository-state judgment was delegated to Git. This polluted remotes in the core VMR workflow — create a feature branch across the workspace, commit in two or three repos, push — by creating empty branches (and firing CI) in every repo with nothing new. We reversed that: push now attempts only useful pushes — those proven, from local remote-tracking refs alone, to transmit novel commits or to update or delete a ref that already exists on the target remote — and skips everything unproven, reporting each skip with its reason.
 
 The governing asymmetry: a wrong push creates an empty branch and triggers CI while looking like an ordinary success — invisible; a wrong skip is reported, visible, and recoverable (`git vmr foreach 'git push'` is the deliberate fallback — there is no override flag). So the filter errs toward skipping, not pushing. Evidence is local-only — never the network — so skipped repos cost nothing; a stale picture degrades to a redundant push that Git absorbs.
 
@@ -17,7 +13,7 @@ The governing asymmetry: a wrong push creates an empty branch and triggers CI wh
 
 ## Consequences
 
-- git-vmr is no longer a verbatim arg-passer: what runs in a child repo is a computed subset of what the user typed. The push spec's delegation requirement is rewritten accordingly.
+- git-vmr is no longer a verbatim arg-passer: what runs in a child repo is a computed subset of what the user typed.
 - The usefulness test applies to branch destinations only — the sole ref class whose creation constitutes pollution. Singular non-branch refs (tags, deletes) pass on explicit intent (tag existence is locally unverifiable, and a tag's commit pre-existing on the remote is the normal case); wildcard refspecs skip as unclassifiable; a URL repository argument delegates the whole push (no local picture, strongest intent).
 - Repo outcome gains a third variant, skipped, with a required reason — aggregated and repo-suffixed like the others, printed to stdout, never affecting the exit code. An all-skipped run exits 0 and is not silent.
-- Detached and unborn heads may be delegated or skipped, whichever the implementation makes simplest; Git's repo-suffixed errors are acceptable there.
+- A bare push from a detached or unborn head is delegated to Git unfiltered; Git's repo-suffixed errors are acceptable there.

@@ -123,6 +123,9 @@ impl<'a> Workspace<'a>
     /// Routes a single operand to its owning child repo. Single-operand
     /// routing always denies the aggregate path: one operand cannot expand
     /// to many child repos.
+    ///
+    /// A deliberate pass-through, like `target`: slices must not construct
+    /// a `Router` or know it exists.
     pub fn route_single(&self, path: &Path) -> Result<(Repo, PathBuf)>
     {
         self.router().route_single(path)
