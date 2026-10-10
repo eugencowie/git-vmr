@@ -1,19 +1,5 @@
 # Agent Instructions
 
-## Agent skills
-
-### Issue tracker
-
-Tickets live as local Markdown files in `openspec/changes/`. See `openspec/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default canonical labels. See `openspec/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context layout: `CONTEXT.md` at the repo root and ADRs in `openspec/decisions/`. See `openspec/agents/domain.md`.
-
 ## Development environment
 
 This project uses mise to manage the development environment.

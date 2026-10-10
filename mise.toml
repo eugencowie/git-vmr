@@ -7,7 +7,6 @@ cargo-dist = "latest"
 gh = "latest"
 git-cliff = "latest"
 node = "latest"
-"npm:@fission-ai/openspec" = "latest"
 pandoc = "latest"
 release-plz = "latest"
 rust = ["stable", { version = "nightly", profile = "minimal", components = "rustfmt" }] # nightly for rustfmt.toml only
@@ -34,6 +33,14 @@ run = "cargo clippy --all-targets --fix --allow-dirty"
 description = "Check formatting/linting/tests"
 run = ["mise run format --check", "cargo clippy --all-targets", "cargo test"]
 
+[tasks.bench]
+description = "Run benchmarks using real repositories (approx. 5 GB)"
+run = "cargo bench --bench real_repos"
+
+[tasks."bench:clean"]
+description = "Remove real repositories benchmark fixture"
+run = 'rm -rf "${GITVMR_BENCH_FIXTURE_DIR:-target/bench-fixtures/real-repos}"'
+
 [tasks.changelog]
 description = "Update changelog"
 run = "git cliff --bump"
@@ -54,3 +61,8 @@ run = ["oranda build", "node .github/scripts/rewrite-install-commands.mjs"]
 description = "Build and serve website"
 depends = ["site"]
 run = "oranda serve"
+
+[tasks.man-to-md]
+description = "Convert a git man page to docs/parity/<man-page>.md"
+usage = 'arg "<man_page>" help="Man page to convert, e.g. git-add"'
+run = 'scripts/man-to-md.sh "$usage_man_page" "docs/parity/$usage_man_page.md"'

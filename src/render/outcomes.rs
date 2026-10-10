@@ -14,7 +14,9 @@ use std::collections::HashSet;
 /// The scope — repo names, duplicates allowed — must be supplied by the
 /// caller: outcomes cannot self-describe it, because quiet successes and
 /// hard errors carry no repo name, and a repo in scope (a move's
-/// destination) may produce no outcome at all.
+/// destination) may produce no outcome at all. Deriving the scope from the
+/// outcomes would undercount it, and a failure confined to one repo would
+/// lose its suffix and read as applying to every repo.
 pub fn outcomes<'a>(
     results: Vec<GitCommandResult>,
     scope: impl IntoIterator<Item = &'a str>
