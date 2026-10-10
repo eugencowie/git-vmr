@@ -5,8 +5,8 @@
 # Usage: man-to-md.sh <man-page> <path/to/output.md>
 #
 # Examples:
-#   man-to-md.sh git git.md
-#   man-to-md.sh git-add git/add.md
+#   scripts/man-to-md.sh git docs/parity/git.md
+#   scripts/man-to-md.sh git-add docs/parity/git-add.md
 #
 
 set -euo pipefail

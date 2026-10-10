@@ -72,50 +72,50 @@ ancillary user utilities.
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [add](git-vmr/add.md) | Add file contents to the index. | ✅ |
+| [add](git-add.md) | Add file contents to the index. | ✅ |
 | am | Apply a series of patches from a mailbox. | ❌ |
 | archive | Create an archive of files from a named tree. | ❌ |
 | backfill | Download missing objects in a partial clone. | ❌ |
 | bisect | Use binary search to find the commit that introduced a bug. | ❌ |
-| [branch](git-vmr/branch.md) | List, create, or delete branches. | ✅ |
+| [branch](git-branch.md) | List, create, or delete branches. | ✅ |
 | bundle | Move objects and refs by archive. | ❌ |
 | checkout | Switch branches or restore working tree files. | ❌ |
 | cherry-pick | Apply the changes introduced by some existing commits. | ❌ |
 | citool | Graphical alternative to git-commit. | ❌ |
 | clean | Remove untracked files from the working tree. | ❌ |
-| [clone](git-vmr/clone.md) | Clone a repository into a new directory. | ✅ |
-| [commit](git-vmr/commit.md) | Record changes to the repository. | ✅ |
+| [clone](git-clone.md) | Clone a repository into a new directory. | ✅ |
+| [commit](git-commit.md) | Record changes to the repository. | ✅ |
 | describe | Give an object a human readable name based on an available ref. | ❌ |
 | diff | Show changes between commits, commit and working tree, etc. | ❌ |
-| [fetch](git-vmr/fetch.md) | Download objects and refs from another repository. | ✅ |
-| [foreach](git-vmr/foreach.md) | Evaluates an arbitrary shell command in each checked out repository. | ✅ |
+| [fetch](git-fetch.md) | Download objects and refs from another repository. | ✅ |
+| [foreach](git-submodule.md) | Evaluates an arbitrary shell command in each checked out repository. | ✅ |
 | format-patch | Prepare patches for e-mail submission. | ❌ |
 | gc | Cleanup unnecessary files and optimize the local repository. | ❌ |
 | grep | Print lines matching a pattern. | ❌ |
 | gui | A portable graphical interface to Git. | ❌ |
-| [init](git-vmr/init.md) | Create an empty Git repository or reinitialize an existing one. | ✅ |
+| [init](git-init.md) | Create an empty Git repository or reinitialize an existing one. | ✅ |
 | log | Show commit logs. | ❌ |
 | maintenance | Run tasks to optimize Git repository data. | ❌ |
-| [merge](git-vmr/merge.md) | Join two or more development histories together. | ✅ |
-| [mv](git-vmr/mv.md) | Move or rename a file, a directory, or a symlink. | ✅ |
+| [merge](git-merge.md) | Join two or more development histories together. | ✅ |
+| [mv](git-mv.md) | Move or rename a file, a directory, or a symlink. | ✅ |
 | notes | Add or inspect object notes. | ❌ |
-| [pull](git-vmr/pull.md) | Fetch from and integrate with another repository or a local branch. | ✅ |
-| [push](git-vmr/push.md) | Update remote refs along with associated objects. | ✅ |
+| [pull](git-pull.md) | Fetch from and integrate with another repository or a local branch. | ✅ |
+| [push](git-push.md) | Update remote refs along with associated objects. | ✅ |
 | range-diff | Compare two commit ranges (e.g. two versions of a branch). | ❌ |
-| [rebase](git-vmr/rebase.md) | Reapply commits on top of another base tip. | ✅ |
-| [reset](git-vmr/reset.md) | Set **HEAD** or the index to a known state. | ✅ |
-| [restore](git-vmr/restore.md) | Restore working tree files. | ✅ |
+| [rebase](git-rebase.md) | Reapply commits on top of another base tip. | ✅ |
+| [reset](git-reset.md) | Set **HEAD** or the index to a known state. | ✅ |
+| [restore](git-restore.md) | Restore working tree files. | ✅ |
 | revert | Revert some existing commits. | ❌ |
-| [rm](git-vmr/rm.md) | Remove files from the working tree and from the index. | ✅ |
+| [rm](git-rm.md) | Remove files from the working tree and from the index. | ✅ |
 | shortlog | Summarize *git log* output. | ❌ |
 | show | Show various types of objects. | ❌ |
 | sparse-checkout | Reduce your working tree to a subset of tracked files. | ❌ |
 | stash | Stash the changes in a dirty working directory away. | ❌ |
-| [status](git-vmr/status.md) | Show the working tree status. | ✅ |
+| [status](git-status.md) | Show the working tree status. | ✅ |
 | submodule | Initialize, update or inspect submodules. | ❌ |
-| [switch](git-vmr/switch.md) | Switch branches. | ✅ |
-| [tag](git-vmr/tag.md) | Create, list, delete or verify tags. | ✅ |
-| [worktree](git-vmr/worktree.md) | Manage multiple working trees. | ✅ |
+| [switch](git-switch.md) | Switch branches. | ✅ |
+| [tag](git-tag.md) | Create, list, delete or verify tags. | ✅ |
+| [worktree](git-worktree.md) | Manage multiple working trees. | ✅ |
 | gitk | The Git repository browser. | ❌ |
 | scalar | A tool for managing large Git repositories. | ❌ |
 

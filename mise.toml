@@ -61,3 +61,8 @@ run = ["oranda build", "node .github/scripts/rewrite-install-commands.mjs"]
 description = "Build and serve website"
 depends = ["site"]
 run = "oranda serve"
+
+[tasks.man-to-md]
+description = "Convert a git man page to docs/parity/<man-page>.md"
+usage = 'arg "<man_page>" help="Man page to convert, e.g. git-add"'
+run = 'scripts/man-to-md.sh "$usage_man_page" "docs/parity/$usage_man_page.md"'
