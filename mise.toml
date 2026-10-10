@@ -7,7 +7,6 @@ cargo-dist = "latest"
 gh = "latest"
 git-cliff = "latest"
 node = "latest"
-"npm:@fission-ai/openspec" = "latest"
 pandoc = "latest"
 release-plz = "latest"
 rust = ["stable", { version = "nightly", profile = "minimal", components = "rustfmt" }] # nightly for rustfmt.toml only
