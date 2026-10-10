@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.1
+
+### 📚 Documentation
+
+- Remove specs and prune repo docs ([#129](https://github.com/eugencowie/git-vmr/pull/129))
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove skills tooling and align repo structure ([#118](https://github.com/eugencowie/git-vmr/pull/118))
+- Run Rust tooling through mise locally and in CI ([#125](https://github.com/eugencowie/git-vmr/pull/125))
+- Pin release-plz and git-cliff to mise.lock versions ([#126](https://github.com/eugencowie/git-vmr/pull/126))
+- Rename default branch to main ([#127](https://github.com/eugencowie/git-vmr/pull/127))
+
+### 🛡️ Security
+
+- Upgrade rustls to 0.23.45 to fix GHSA-2mjx-qc3c-rqvc ([#128](https://github.com/eugencowie/git-vmr/pull/128))
+
 ## 0.12.0
 
 ### 🚀 Features
