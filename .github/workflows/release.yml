@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  prepare-release:
+    if: ${{ github.repository_owner == 'eugencowie' }}
+    name: Prepare release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - &checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - &install-tools
+        id: mise
+        uses: jdx/mise-action@v5
+        with:
+          install_args: rust release-plz git-cliff
+      - id: git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          version: v${{ steps.mise.outputs.git-cliff }}
+          args: --bump
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+      - env:
+          RELEASE_VERSION: ${{ steps.git-cliff.outputs.version }}
+        run: release-plz set-version "${RELEASE_VERSION#v}"
+      - uses: release-plz/action@v0.5
+        with:
+          version: ${{ steps.mise.outputs.release-plz }}
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  release:
+    if: ${{ github.repository_owner == 'eugencowie' }}
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - *checkout
+      - *install-tools
+      - uses: release-plz/action@v0.5
+        with:
+          version: ${{ steps.mise.outputs.release-plz }}
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
