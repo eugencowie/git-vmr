@@ -11,6 +11,15 @@ use tempfile::TempDir;
 static NEXT_TEST_ENV_ID: AtomicUsize = AtomicUsize::new(0);
 const TEST_GIT_DATE: &str = "2000-01-01T00:00:00Z";
 
+/// Disables Git's auto-maintenance, which otherwise runs detached after
+/// commits and briefly creates lock files in `.git` that race with tests
+/// copying or inspecting repositories.
+const NO_AUTO_MAINTENANCE: [(&str, &str); 3] = [
+    ("GIT_CONFIG_COUNT", "1"),
+    ("GIT_CONFIG_KEY_0", "maintenance.auto"),
+    ("GIT_CONFIG_VALUE_0", "false")
+];
+
 /// Git's repository-local environment variables, as reported by git itself.
 /// Git exports these when it spawns subprocesses (e.g. `git rebase --exec`);
 /// if inherited, they redirect every git operation from the test fixture
@@ -60,6 +69,7 @@ pub fn git_vmr() -> Command
     {
         command.env_remove(var);
     }
+    command.envs(NO_AUTO_MAINTENANCE);
     command
 }
 
@@ -68,8 +78,9 @@ pub fn git<const N: usize>(dir: &Path, args: [&str; N])
     run_git(dir, args);
 }
 
-/// A `git` command with the fixture-safe environment: fixed dates and no
-/// inherited `GIT_*` overrides. All test git invocations must start here.
+/// A `git` command with the fixture-safe environment: fixed dates, no
+/// auto-maintenance, and no inherited `GIT_*` overrides. All test git
+/// invocations must start here.
 pub fn git_command() -> std::process::Command
 {
     let mut command = std::process::Command::new("git");
@@ -80,6 +91,7 @@ pub fn git_command() -> std::process::Command
     {
         command.env_remove(var);
     }
+    command.envs(NO_AUTO_MAINTENANCE);
     command
 }
 
