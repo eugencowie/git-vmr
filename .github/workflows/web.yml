@@ -76,11 +76,15 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with: { install_args: rust cargo-binstall cargo:oranda node }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      # Run oranda and rewrite the homepage install commands
+      # If you use any mdbook plugins, here's the place to install them!
+
+      # Run oranda (and mdbook)!
       #
-      # This will write all output to ./target/public/
-      - run: mise run site
+      # This will write all output to ./target/public/ (including copying mdbook's output to there).
+      - name: Run oranda
+        run: mise run site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
@@ -88,18 +92,18 @@ jobs:
           path: target/public
 
   deploy:
-    name: Deploy site and docs
-    needs: build
     # ONLY if we're on main (so no PRs or feature branches allowed!)
     if: ${{ github.ref == 'refs/heads/main' }}
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    name: Deploy site and docs
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: build
     permissions:
       pages: write
       id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       # Deploy to GitHub Pages
       # The "target/public" dir that oranda made above will become the root dir
