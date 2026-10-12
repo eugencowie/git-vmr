@@ -67,7 +67,7 @@ jobs:
           submodules: recursive
       - name: Install dist
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-        with: { install_args: cargo-dist }
+        with: { install_args: cargo-dist, cache: false }
       - name: Locate dist
         id: dist
         run: echo "path=$(mise which dist)" >> "$GITHUB_OUTPUT"
@@ -113,7 +113,7 @@ jobs:
       #
       # - runner: the github runner
       # - dist-args: cli flags to pass to dist
-      # - install-dist: expression to run to install dist on the runner
+      # - install-dist: unused; dist is installed through mise so it's checksummed
       #
       # Typically there will be:
       # - 1 "global" task that builds universal installers
@@ -135,7 +135,8 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Install dist
-        run: ${{ matrix.install_dist.run }}
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with: { install_args: cargo-dist, cache: false }
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
