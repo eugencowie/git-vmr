@@ -18,6 +18,7 @@ body = """
 """
 
 [git]
+tag_pattern = "^v[0-9]"
 commit_parsers = [
     { message = "^feat", group = "<!-- 0 -->🚀 Features" },
     { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
@@ -38,3 +39,7 @@ commit_parsers = [
 commit_preprocessors = [
     { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/eugencowie/git-vmr/pull/${1}))" },
 ]
+
+[bump]
+# Breaking changes bump the minor version while pre-1.0
+breaking_always_bump_major = false
