@@ -32,10 +32,10 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
-          install_args: rust jactionlint shellcheck
+          install_args: rust mr-boxington jactionlint shellcheck
 
       - name: Set up build cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240 # v1.7.2
 
       - name: Run checks
         run: mise run check
