@@ -76,20 +76,19 @@ jobs:
         with:
           name: cargo-dist-cache
           path: ${{ steps.dist.outputs.path }}
-      # On a tag push, plan the release for that tag; on a pull request, just plan.
-      # The tag goes through env so it's never interpolated into the script.
+      # sure would be cool if github gave us proper conditionals...
+      # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
+      # functionality based on whether this is a pull_request, and whether it's from a fork.
+      # (PRs run on the *source* but secrets are usually on the *target* -- that's *good*
+      # but also really annoying to build CI around when it needs secrets to work right.)
       - id: plan
-        env:
-          TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
         run: |
-          if [ -n "$TAG" ]; then
-            dist host --steps=create --tag="$TAG" --output-format=json > plan-dist-manifest.json
-          else
-            dist plan --output-format=json > plan-dist-manifest.json
-          fi
+          dist ${{ (!github.event.pull_request && 'host --steps=create --tag="$TAG"') || 'plan' }} --output-format=json > plan-dist-manifest.json
           echo "dist ran successfully"
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ github.ref_name }}
       - name: "Upload dist-manifest.json"
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -235,7 +234,7 @@ jobs:
     runs-on: "ubuntu-22.04"
     timeout-minutes: 15
     permissions:
-      "contents": "write"
+      contents: write
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
