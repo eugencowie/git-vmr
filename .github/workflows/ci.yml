@@ -27,7 +27,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@v5
         with:
-          install_args: rust
+          install_args: rust jactionlint shellcheck
 
       - name: Set up build cache
         uses: Swatinem/rust-cache@v2

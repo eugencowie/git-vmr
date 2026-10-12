@@ -1,11 +1,11 @@
 [tools]
-actionlint = "latest"
 cargo-binstall = "latest"
 cargo-dist = "0.33.0" # keep in sync with cargo-dist-version in Cargo.toml
 "cargo:cargo-edit" = "latest"
 "cargo:oranda" = "latest"
 gh = "latest"
 git-cliff = "latest"
+jactionlint = "latest"
 node = "latest"
 pandoc = "latest"
 release-plz = "latest"
@@ -31,7 +31,13 @@ run = "cargo clippy --all-targets --fix --allow-dirty"
 
 [tasks.check]
 description = "Check formatting/linting/tests"
+depends = ["check:workflows"]
 run = ["mise run format --check", "cargo clippy --all-targets", "cargo test"]
+
+[tasks."check:workflows"]
+hide = true
+description = "Check GitHub Actions workflows"
+run = "jactionlint"
 
 [tasks.bench]
 description = "Run benchmarks using real repositories (approx. 5 GB)"
