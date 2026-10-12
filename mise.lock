@@ -101,11 +101,6 @@ version = "0.13.11"
 backend = "cargo:cargo-edit"
 specifiers = ["latest"]
 
-[[tools."cargo:oranda"]]
-version = "0.6.5"
-backend = "cargo:oranda"
-specifiers = ["latest"]
-
 [[tools.gh]]
 version = "2.96.0"
 backend = "aqua:cli/cli"
@@ -192,6 +187,53 @@ url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/40585019
 checksum = "sha256:3ae3a5549e85c7ad5b20192ebcfee4371269deca51255f6f2f2e051c6541f5ca"
 url = "https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/orhun/git-cliff/releases/assets/405851866"
+
+[[tools."github:axodotdev/oranda"]]
+version = "0.6.5"
+backend = "github:axodotdev/oranda"
+specifiers = ["latest"]
+
+[tools."github:axodotdev/oranda"."platforms.linux-arm64"]
+checksum = "sha256:07d1cc07964c53f674da152ef5eb5e213db7f291934440508f64c58a86a1d27a"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755894"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.linux-arm64-musl"]
+checksum = "sha256:bcbc9df8c351e1b5745ab8573e214aea0c63c8c0546c88e62631f80eab3a8a78"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755897"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.linux-x64"]
+checksum = "sha256:2db065e8b06253526a81595b9312b8c4468ff42f3f9fbe50a6ff21a42d3516d1"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755908"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.linux-x64-musl"]
+checksum = "sha256:05171447b827f681ec19142d0bb983a8691f65c54820d821e66ee7a419fbd88b"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755910"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.macos-arm64"]
+checksum = "sha256:0c2361627b4ce922cfc6c607b1760576692ef2c2c36834c5bb61e26854ecbded"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755892"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.macos-x64"]
+checksum = "sha256:8a786557aeece0bcc7e06b7be7d5ebb757cf9943a85bbcf2be2801efb1ac1611"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755903"
+provenance = "github-attestations"
+
+[tools."github:axodotdev/oranda"."platforms.windows-x64"]
+checksum = "sha256:fa42627ae135a203bc08893401c8548419730f93aced4b594af88266e11a7e50"
+url = "https://github.com/axodotdev/oranda/releases/download/v0.6.5/oranda-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/axodotdev/oranda/releases/assets/184755906"
+provenance = "github-attestations"
 
 [[tools.jactionlint]]
 version = "2.1.0"
