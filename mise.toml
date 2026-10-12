@@ -51,7 +51,10 @@ run = 'rm -rf "${GITVMR_BENCH_FIXTURE_DIR:-target/bench-fixtures/real-repos}"'
 
 [tasks."release:prepare"]
 description = "Update CHANGELOG.md and Cargo.toml to the next version"
+shell = "bash -c"
 run = [
+  # Ignore commits off HEAD's first-parent chain (branch and upstream commits)
+  "comm -23 <(git rev-list HEAD | sort) <(git rev-list --first-parent HEAD | sort) > .cliffignore",
   "git cliff --bump -o CHANGELOG.md",
   'version=$(git cliff --bumped-version) && release-plz set-version "${version#v}"',
 ]
