@@ -22,7 +22,7 @@ on:
   # Whenever something gets pushed to main, update the docs!
   # This is great for getting docs changes live without cutting a full release.
   #
-  # Note that if you're using cargo-dist, this will "race" the Release workflow
+  # Note that if you're using cargo-dist, this will "race" the Release assets workflow
   # that actually builds the Github Release that oranda tries to read (and
   # this will almost certainly complete first). As a result you will publish
   # docs for the latest commit but the oranda landing page won't know about
@@ -36,7 +36,7 @@ on:
     branches:
       - main
 
-  # Whenever a workflow called "Release" completes, update the docs!
+  # Whenever a workflow called "Release assets" completes, update the docs!
   #
   # If you're using cargo-dist, this is recommended, as it will ensure that
   # oranda always sees the latest release right when it's available. Note
@@ -45,7 +45,7 @@ on:
   # tab for your repo to see this one running (the gh-pages deploy will also
   # only show up there).
   workflow_run:
-    workflows: ["Release"]
+    workflows: ["Release assets"]
     types:
       - completed
 
