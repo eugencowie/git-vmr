@@ -43,18 +43,13 @@ on:
   # tab for your repo to see this one running (the gh-pages deploy will also
   # only show up there).
   #
-  # Release assets also runs on pull requests, including those from forks. For a tag
-  # push the run's branch is the tag, so the filter below keeps to release tags,
-  # and the build job also skips any run that wasn't a push, as a branch can
-  # share a tag's name. It reads nothing from the triggering run: it checks out
-  # main and rebuilds from there.
+  # This reads nothing from the triggering run: it checks out main and rebuilds
+  # from there.
   # jactionlint ignore=dangerous-triggers
   workflow_run:
     workflows: ["Release assets"]
     types:
       - completed
-    branches:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
 
 # Queue deploys rather than cancel them; a newer PR push cancels the older build
 concurrency:
@@ -69,8 +64,6 @@ env:
 jobs:
   build:
     name: Build site and docs
-    # Skip Release runs that weren't tag pushes (see workflow_run above)
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
