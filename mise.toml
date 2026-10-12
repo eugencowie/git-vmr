@@ -4,10 +4,14 @@ gh = "latest"
 git-cliff = "latest"
 "github:axodotdev/oranda" = "latest"
 jactionlint = "latest"
+mr-boxington = "latest"
 node = "latest"
 pandoc = "latest"
 release-plz = "latest"
-rust = ["stable", { version = "nightly", profile = "minimal", components = "rustfmt" }] # nightly for rustfmt.toml only
+rust = [
+    { version = "stable", mr_boxington = true },
+    { version = "nightly", profile = "minimal", components = "rustfmt" }, # nightly for rustfmt only
+]
 shellcheck = "latest"
 
 [tasks.build]
