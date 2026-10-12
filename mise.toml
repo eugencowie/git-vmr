@@ -49,13 +49,26 @@ run = "cargo bench --bench real_repos"
 description = "Remove real repositories benchmark fixture"
 run = 'rm -rf "${GITVMR_BENCH_FIXTURE_DIR:-target/bench-fixtures/real-repos}"'
 
-[tasks.changelog]
-description = "Update changelog"
-run = "git cliff --bump"
+[tasks."release:prepare"]
+description = "Update CHANGELOG.md and Cargo.toml to the next version"
+run = [
+  "git cliff --bump -o CHANGELOG.md",
+  'version=$(git cliff --bumped-version) && release-plz set-version "${version#v}"',
+]
 
-[tasks.release]
-description = "Perform release process locally"
-run = "release-plz update"
+[tasks."release:notes"]
+hide = true
+description = "Print a version's changelog section"
+usage = 'arg "<version>" help="Version, without a leading v"'
+quiet = true
+run = '''
+awk -v heading="## $usage_version" '
+  $0 == heading {in_section=1; next}
+  /^## / {in_section=0}
+  in_section {print; if (NF) found=1}
+  END {if (!found) {print "CHANGELOG.md has no " heading " section" > "/dev/stderr"; exit 1}}
+' CHANGELOG.md
+'''
 
 [tasks.dist]
 description = "Plan distribution process"
