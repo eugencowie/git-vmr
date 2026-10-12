@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare-release:
     if: ${{ github.repository_owner == 'eugencowie' }}
@@ -12,22 +16,24 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
     steps:
       - &checkout
+        name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: true
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
       - &install-tools
+        name: Install tools
         id: mise
         uses: jdx/mise-action@v5
         with:
           install_args: rust release-plz git-cliff
-      - id: git-cliff
+
+      - name: Update changelog
+        id: git-cliff
         uses: orhun/git-cliff-action@v4
         with:
           version: v${{ steps.mise.outputs.git-cliff }}
@@ -35,10 +41,14 @@ jobs:
         env:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
-      - env:
-          RELEASE_VERSION: ${{ steps.git-cliff.outputs.version }}
+
+      - name: Update version
         run: release-plz set-version "${RELEASE_VERSION#v}"
-      - uses: release-plz/action@v0.5
+        env:
+          RELEASE_VERSION: ${{ steps.git-cliff.outputs.version }}
+
+      - name: Create or update release PR
+        uses: release-plz/action@v0.5
         with:
           version: ${{ steps.mise.outputs.release-plz }}
           command: release-pr
@@ -55,7 +65,9 @@ jobs:
     steps:
       - *checkout
       - *install-tools
-      - uses: release-plz/action@v0.5
+
+      - name: Publish release
+        uses: release-plz/action@v0.5
         with:
           version: ${{ steps.mise.outputs.release-plz }}
           command: release

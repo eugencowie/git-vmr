@@ -1,24 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 permissions:
   contents: read
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+env:
+  MISE_TASK_RUN_AUTO_INSTALL: false
 
 jobs:
-  test:
+  check:
+    name: Check
     strategy:
       matrix:
         runner: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.runner }}
-    env:
-      # Stop `mise run` installing tools beyond what mise-action installed
-      MISE_TASK_RUN_AUTO_INSTALL: false
     steps:
-      - uses: actions/checkout@v7
-        with: { persist-credentials: false }
-      - uses: jdx/mise-action@v5
-        with: { install_args: rust }
-      - uses: Swatinem/rust-cache@v2
-      - run: mise run check
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install tools
+        uses: jdx/mise-action@v5
+        with:
+          install_args: rust
+
+      - name: Set up build cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run checks
+        run: mise run check
