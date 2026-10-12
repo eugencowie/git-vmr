@@ -51,7 +51,9 @@ on:
     types:
       - completed
 
-# Queue deploys rather than cancel them; a newer PR push cancels the older build
+# A newer PR push cancels the older build. Other runs wait for the running one
+# instead; GitHub keeps only the newest waiting run, which is fine as every
+# deploy rebuilds from main
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

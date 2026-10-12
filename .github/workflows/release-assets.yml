@@ -76,11 +76,8 @@ jobs:
         with:
           name: cargo-dist-cache
           path: ${{ steps.dist.outputs.path }}
-      # sure would be cool if github gave us proper conditionals...
-      # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
-      # functionality based on whether this is a pull_request, and whether it's from a fork.
-      # (PRs run on the *source* but secrets are usually on the *target* -- that's *good*
-      # but also really annoying to build CI around when it needs secrets to work right.)
+      # On a tag push, plan the release for that tag; on a pull request, just plan.
+      # The tag goes through env so it's never interpolated into the script.
       - id: plan
         env:
           TAG: ${{ !github.event.pull_request && github.ref_name || '' }}
