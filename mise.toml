@@ -15,7 +15,7 @@ rust = [
 shellcheck = "latest"
 
 [env]
-RUSTFMT = "{{config_root}}/scripts/rustfmt-nightly.sh"
+RUSTFMT = "{{config_root}}/scripts/rustfmt-nightly.{% if os() == 'windows' %}cmd{% else %}sh{% endif %}"
 
 [tasks.build]
 description = "Build project"
