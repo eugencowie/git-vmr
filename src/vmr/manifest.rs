@@ -7,7 +7,7 @@ use toml::Spanned;
 use toml_edit::{DocumentMut, Item, Table, value};
 
 /// The `.gitvmr` manifest: the child repos the root repo declares.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct Manifest
 {
     declarations: Vec<Declaration>

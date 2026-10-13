@@ -3,7 +3,7 @@ mod routing;
 use crate::git::{Git, GitCommandResult, stderr};
 use crate::render::{self, Rendered};
 pub use crate::vmr::Repo;
-use crate::vmr::{Declaration, Gitignore, Manifest, Vmr};
+use crate::vmr::{Gitignore, Manifest, Membership, Vmr};
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use routing::Router;
@@ -18,18 +18,9 @@ pub struct Workspace<'a>
 {
     git: &'a Git,
     vmr: Vmr,
-    members: Members,
+    membership: Membership,
     warnings: Vec<String>,
     working_dir: PathBuf
-}
-
-/// The child repos a workspace snapshots from its manifest.
-struct Members
-{
-    /// The declared child repos that are cloned, sorted by path.
-    repos: Vec<Repo>,
-    /// The paths of declared child repos that are not cloned.
-    missing: Vec<String>
 }
 
 impl<'a> Workspace<'a>
@@ -41,29 +32,13 @@ impl<'a> Workspace<'a>
         let vmr = Vmr::find(working_dir)?;
         let manifest = vmr.manifest()?;
 
-        let (cloned, missing): (Vec<&Declaration>, Vec<&Declaration>) =
-            manifest.declarations().iter().partition(|declaration| {
-                vmr.path.join(declaration.path.as_str()).join(".git").exists()
-            });
-        let members = Members {
-            repos: cloned
-                .into_iter()
-                .map(|declaration| Repo {
-                    name: declaration.path.to_string(),
-                    path: vmr.path.join(declaration.path.as_str())
-                })
-                .collect(),
-            missing: missing
-                .into_iter()
-                .map(|declaration| declaration.path.to_string())
-                .collect()
-        };
-        let warnings = load_warnings(git, &vmr.path, &manifest, &members);
+        let membership = Membership::read(&vmr.path, &manifest)?;
+        let warnings = load_warnings(git, &vmr.path, &manifest, &membership);
 
         Ok(Self {
             git,
             vmr,
-            members,
+            membership,
             warnings,
             working_dir: working_dir.to_path_buf()
         })
@@ -90,7 +65,7 @@ impl<'a> Workspace<'a>
     /// The snapshotted child repos, sorted by name.
     pub fn repos(&self) -> &[Repo]
     {
-        &self.members.repos
+        self.membership.cloned()
     }
 
     /// Runs a git operation in every child repo in parallel, then renders
@@ -98,7 +73,7 @@ impl<'a> Workspace<'a>
     pub fn run<F>(&self, op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
-        self.run_in(&self.members.repos, op)
+        self.run_in(self.membership.cloned(), op)
     }
 
     /// Runs a git operation in an explicit subset of child repos in
@@ -136,7 +111,11 @@ impl<'a> Workspace<'a>
         F: Fn(&Git, &Repo) -> Result<T> + Sync,
         T: Send
     {
-        self.members.repos.par_iter().map(|repo| op(self.git, repo)).collect()
+        self.membership
+            .cloned()
+            .par_iter()
+            .map(|repo| op(self.git, repo))
+            .collect()
     }
 
     /// Routes the scope to its owning child repos and gathers a value from
@@ -184,7 +163,7 @@ impl<'a> Workspace<'a>
 
     fn router(&self) -> Router<'_>
     {
-        Router::new(&self.vmr.path, &self.members, &self.working_dir)
+        Router::new(&self.vmr.path, &self.membership, &self.working_dir)
     }
 }
 
@@ -195,16 +174,21 @@ fn load_warnings(
     git: &Git,
     root: &Path,
     manifest: &Manifest,
-    members: &Members
+    membership: &Membership
 ) -> Vec<String>
 {
     let mut warnings = Vec::new();
-    if !members.missing.is_empty()
+    if !membership.missing().is_empty()
     {
         warnings.push(format!(
             "{} declared in .gitvmr but not cloned; run 'git vmr clone' to \
              clone them",
-            quoted_list(&members.missing)
+            quoted_list(
+                membership
+                    .missing()
+                    .iter()
+                    .map(|declaration| declaration.path.as_str())
+            )
         ));
     }
 
@@ -270,9 +254,9 @@ fn unignored<'p>(
 }
 
 /// Paths as a quoted, comma-separated list.
-fn quoted_list(paths: &[String]) -> String
+fn quoted_list<'p>(paths: impl Iterator<Item = &'p str>) -> String
 {
-    paths.iter().map(|path| format!("'{path}'")).collect::<Vec<_>>().join(", ")
+    paths.map(|path| format!("'{path}'")).collect::<Vec<_>>().join(", ")
 }
 
 #[cfg(test)]
@@ -300,55 +284,6 @@ mod tests
                 failure_message(&repo.name, stderr(&output))
             }
         )
-    }
-
-    #[test]
-    fn open_labels_child_repos_by_manifest_path_sorted_by_path()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        root_repo(tmp.path(), &[], &["a", "b"]);
-        fs::write(
-            tmp.path().join(".gitvmr"),
-            "[repo.zeta]\npath = \"a\"\nurl = \"u\"\n\n\
-             [repo.alpha]\npath = \"b\"\nurl = \"u\"\n"
-        )
-        .unwrap();
-        fs::create_dir_all(tmp.path().join("a/.git")).unwrap();
-        fs::create_dir_all(tmp.path().join("b/.git")).unwrap();
-        let git = Git::with(ScriptedFake::new());
-
-        // Act
-        let workspace = Workspace::open(&git, tmp.path()).unwrap();
-
-        // Assert
-        assert_eq!(workspace.repos(), [
-            Repo { name: "a".to_owned(), path: tmp.path().join("a") },
-            Repo { name: "b".to_owned(), path: tmp.path().join("b") }
-        ]);
-        assert!(workspace.warnings().is_empty());
-    }
-
-    #[test]
-    fn open_leaves_out_undeclared_repos()
-    {
-        // Arrange
-        let tmp = vmr_fixture();
-        fs::create_dir_all(tmp.path().join("scratch/.git")).unwrap();
-        let git = Git::with(ScriptedFake::new());
-
-        // Act
-        let workspace = Workspace::open(&git, tmp.path()).unwrap();
-
-        // Assert
-        assert_eq!(
-            workspace
-                .repos()
-                .iter()
-                .map(|repo| repo.name.as_str())
-                .collect::<Vec<_>>(),
-            ["backend", "frontend"]
-        );
     }
 
     #[test]
@@ -480,6 +415,7 @@ mod tests
 
         // Assert
         assert_eq!(workspace.root(), tmp.path());
+        assert!(workspace.warnings().is_empty());
         assert_eq!(
             workspace
                 .repos()

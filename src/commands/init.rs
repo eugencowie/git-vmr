@@ -2,8 +2,8 @@ use crate::cli::CliContext;
 use crate::git::{Git, stderr};
 use crate::render::Rendered;
 use crate::vmr::{
-    self, Declaration, Gitignore, Layout, MANIFEST, ManifestEditor, RepoPath,
-    RepoUrl
+    self, Declaration, Gitignore, Layout, MANIFEST, Manifest, ManifestEditor,
+    Membership, RepoPath, RepoUrl
 };
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
@@ -92,12 +92,14 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
         target_dir.display()
     );
 
-    // Backfill the manifest from the Git repositories already present
+    // Backfill the manifest from the Git repositories already present, all
+    // of them undeclared against an empty manifest
+    let membership = Membership::read(&target_dir, &Manifest::default())?;
     let mut editor = ManifestEditor::new();
     let mut declared = Vec::new();
-    for name in first_level_repos(&target_dir)?
+    for name in membership.undeclared()
     {
-        match backfill(git, &target_dir, &name)?
+        match backfill(git, &target_dir, name)?
         {
             Backfill::Declare(declaration) =>
             {
@@ -175,26 +177,6 @@ fn backfill(git: &Git, root: &Path, name: &str) -> Result<Backfill>
     }
 
     Ok(Backfill::Declare(Declaration { name: name.to_owned(), path, url }))
-}
-
-/// The names of the target's immediate subdirectories that are Git
-/// repositories, sorted. Names that are not valid UTF-8 cannot be declared
-/// and are left out.
-fn first_level_repos(target_dir: &Path) -> Result<Vec<String>>
-{
-    let mut repos = fs::read_dir(target_dir)
-        .with_context(|| {
-            format!("fatal: failed to read '{}'", target_dir.display())
-        })?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-        .filter(|entry| entry.path().join(".git").exists())
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name != ".git")
-        .collect::<Vec<_>>();
-    repos.sort();
-
-    Ok(repos)
 }
 
 impl Git

@@ -57,6 +57,7 @@ The root repo is not yet a member; children come from the manifest instead of sc
   - `.gitvmr` is an empty file with no `.git` → old-style worktree root; remove its child worktrees with `git worktree remove` in each repo, then recreate it with `git vmr worktree add`. No migration command.
   - No match → "not a virtual monorepo", hinting that the root repo may be on a branch without a manifest (indistinguishable from an ordinary repo, so a hint rather than a diagnosis).
 - **Opening the workspace becomes a pipeline step** for workspace commands: build context → open workspace → report load warnings → execute. Commands receive the opened workspace instead of calling `Workspace::find`. Opening failures (not a VMR, bad manifest, old shape) report at this one choke point.
+- **Membership.** One module in `src/vmr/`, private to the workspace core but built directly by `init`, owns which Git repositories sit at a VMR root: built from a root and a manifest, it reads the root's first level once (a real directory holding `.git`, named in UTF-8) and holds the cloned children, the missing children (as manifest entries, for clone), and the undeclared repos. A pure constructor takes the listing, so routing tests stay literal paths. `Workspace::open` builds it, `init` builds it over an empty manifest to backfill from its undeclared repos, and the Router asks it who owns a first path component instead of probing the disk. It does not know what is ignored. Children only until 2b.
 - **Load warnings** from opening:
   - Declared children missing from disk: one warning naming them and `git vmr clone`. Fan-out ignores them; a path routed into one is an error ("`x` is not cloned").
   - Declared children not ignored: a text scan of `.gitignore` for the exact `/path/` line; only children that miss it go through one `git check-ignore`, so hand-written patterns like `/*/` still count. Warns; never edits.
@@ -74,14 +75,15 @@ A pure refactor with no expected-output changes.
   - a member repo plus repo-relative path — inside a present child, otherwise the root repo;
   - a child root;
   - inside an undeclared repo — a first-level `.git` not in the manifest (ignored or not), with the path relative to it;
-  - an error: outside the VMR, inside a missing child, or inside a Git repository nested below the first level (a few `stat`s per routed path, so the root repo never silently embeds one through an explicit path).
+  - an error: outside the VMR, or inside a missing child.
 
-  Generic routing turns a child root into "that child, path `.`" and rejects undeclared repos ("not declared; `git vmr add` it"), so the other commands' interface is unchanged. `add`, `rm`, and `mv` consume the raw classification.
+  Generic routing turns a child root into "that child, path `.`" and rejects undeclared repos with today's "not owned by a child Git repository" error until step 4, where it becomes "not declared; `git vmr add` it" as `add` starts declaring, so the other commands' interface is unchanged. `add`, `rm`, and `mv` consume the raw classification.
 
 ### Step 2b — Root repo as a member
 
 - `fetch`, `pull`, and `push` skip any member repo with no remote configured, with the reason "no remote", instead of failing — every upgraded VMR starts with a remote-less root repo.
 - The root repo joins the member set: fan-out, aggregation scope, routing of root-level paths and `.gitvmr`, and the aggregate path.
+- A root-owned path inside a Git repository nested below the first level is an error (a few `stat`s per routed path, done by membership, so the root repo never silently embeds one through an explicit path). Inside a child repo, nesting is that child's business.
 - foreach's member environment gives the root `name` and `sm_path` of `.`.
 - One mechanical PR: nearly every changed expectation across the ~290 integration tests is "the root repo now appears".
 

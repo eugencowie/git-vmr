@@ -22,6 +22,10 @@ _Avoid_: repo (unqualified, when the VMR's repos are meant)
 The `.gitvmr` file committed in the root repo, declaring each child repo by name, path, and remote URL — no branch, no commit. The name identifies the entry; the path is where the repo lives. Authoritative: a Git repository on disk that the manifest does not declare is not part of the VMR, and a declared one missing from disk is skipped, not an error.
 _Avoid_: marker, config, lockfile
 
+**Membership**:
+Which Git repositories at a VMR root are member repos, fixed when a workspace opens: the root repo and the cloned child repos are; missing child repos (declared, not on disk) and undeclared repos (first-level Git repositories the manifest does not declare) are not.
+_Avoid_: member set, repo scan
+
 **Workspace**:
 A VMR opened by one command: the working dir it was opened from and the member repos declared at that moment, held fixed for the duration of the command, plus the means to run git across them. The disk can change mid-command; the workspace cannot — except through the command's own declarations, which are applied before any fan-out so the command runs over the resulting membership.
 _Avoid_: VMR (when the fixed, opened view is meant), context, session

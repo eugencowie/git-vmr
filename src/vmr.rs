@@ -1,10 +1,12 @@
 mod gitignore;
 mod manifest;
+mod membership;
 mod repo;
 
 use anyhow::{Context, Result, anyhow, bail};
 pub use gitignore::Gitignore;
 pub use manifest::{Declaration, Manifest, ManifestEditor, RepoPath, RepoUrl};
+pub use membership::{Membership, Owner};
 use path_clean::PathClean;
 pub use repo::Repo;
 use std::fs;
