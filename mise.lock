@@ -401,11 +401,6 @@ version = "stable"
 backend = "core:rust"
 specifiers = ["stable"]
 
-[[tools.rust]]
-version = "nightly-2026-10-12"
-backend = "core:rust"
-specifiers = ["nightly"]
-
 [[tools.shellcheck]]
 version = "0.11.0"
 backend = "aqua:koalaman/shellcheck"
