@@ -175,7 +175,7 @@ mod tests
             ""
         ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = run(&workspace, &cli_context(tmp.path()), &AddArgs {
@@ -209,7 +209,7 @@ mod tests
             ""
         ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let paths = vec![PathBuf::from("backend/src/main.rs")];
 
         // Act

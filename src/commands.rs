@@ -95,7 +95,14 @@ pub enum WorkspaceCommand
 
 impl Command
 {
-    pub fn run(&self, context: &CliContext) -> Result<Rendered>
+    /// Runs the command. A workspace command runs in the workspace `open`
+    /// opens — a pipeline step, so opening failures and load warnings are
+    /// reported before the command sees anything.
+    pub fn run<'c>(
+        &self,
+        context: &'c CliContext,
+        open: impl FnOnce(&'c CliContext) -> Result<Workspace<'c>>
+    ) -> Result<Rendered>
     {
         match self
         {
@@ -103,12 +110,7 @@ impl Command
 
             Command::Init(args) => init::run(context, args),
 
-            Command::Workspace(command) =>
-            {
-                let workspace =
-                    Workspace::find(&context.git, &context.working_dir)?;
-                command.run(&workspace, context)
-            }
+            Command::Workspace(command) => command.run(&open(context)?, context)
         }
     }
 }

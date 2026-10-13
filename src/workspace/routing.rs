@@ -35,6 +35,8 @@ pub struct Router<'a>
 {
     root: &'a Path,
     repos: &'a [Repo],
+    /// The paths of declared child repos that are not cloned.
+    missing: &'a [String],
     working_dir: &'a Path
 }
 
@@ -43,10 +45,11 @@ impl<'a> Router<'a>
     pub fn new(
         root: &'a Path,
         repos: &'a [Repo],
+        missing: &'a [String],
         working_dir: &'a Path
     ) -> Router<'a>
     {
-        Router { root, repos, working_dir }
+        Router { root, repos, missing, working_dir }
     }
 
     /// Resolves a user-supplied path against the working dir and
@@ -185,6 +188,15 @@ impl<'a> Router<'a>
             );
         }
 
+        // Reject paths inside declared child repositories that are not cloned
+        if self.missing.iter().any(|path| repo_name == path.as_str())
+        {
+            bail!(
+                "error: '{}' is not cloned; run 'git vmr clone' to clone it",
+                repo_name.to_string_lossy()
+            );
+        }
+
         // Require explicit paths to be owned by snapshotted child repositories
         let repo_path = self.root.join(repo_name);
         let repo = self
@@ -233,7 +245,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed = router.route_single(Path::new("backend")).unwrap();
@@ -248,7 +260,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed =
@@ -267,7 +279,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed = router
@@ -297,7 +309,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed = router.route(Scope::EntireVmr).unwrap();
@@ -315,7 +327,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed = router
@@ -341,7 +353,7 @@ mod tests
         for (working_dir, path) in [(root, "."), (backend.as_path(), "..")]
         {
             // Arrange
-            let router = Router::new(root, &repos, working_dir);
+            let router = Router::new(root, &repos, &[], working_dir);
 
             // Act
             let err = router
@@ -362,7 +374,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let routed = router
@@ -383,7 +395,7 @@ mod tests
         // Arrange: the unroutable path precedes the denied aggregate path
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let err = router
@@ -403,7 +415,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let err = router
@@ -420,7 +432,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let err = router
@@ -438,7 +450,7 @@ mod tests
         // root file
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         for path in ["docs/readme.md", "README.md"]
         {
@@ -458,7 +470,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let repos = repos(root);
-        let router = Router::new(root, &repos, root);
+        let router = Router::new(root, &repos, &[], root);
 
         // Act
         let err = router.route_single(Path::new(".")).unwrap_err();
@@ -474,7 +486,7 @@ mod tests
         let root = Path::new("/vmr");
         let repos = repos(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &repos, &working_dir);
+        let router = Router::new(root, &repos, &[], &working_dir);
 
         // Act
         let target = router.target(Path::new("../backend/a.rs"));
@@ -490,7 +502,7 @@ mod tests
         let root = Path::new("/vmr");
         let repos = repos(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &repos, &working_dir);
+        let router = Router::new(root, &repos, &[], &working_dir);
 
         // Act
         let target = router.target(Path::new("/vmr/backend/../backend/a.rs"));

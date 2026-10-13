@@ -73,7 +73,7 @@ mod tests
         let tmp = vmr_fixture();
         let fake = Arc::new(ScriptedFake::new().on(["fetch"], 0, "", ""));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = run(&workspace, &cli_context(tmp.path()), &FetchArgs {
@@ -107,7 +107,7 @@ mod tests
             ""
         ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = run(&workspace, &cli_context(tmp.path()), &FetchArgs {

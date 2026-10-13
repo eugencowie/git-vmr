@@ -153,7 +153,7 @@ _Avoid_: repo annotation, repo tag
 ### Invocation
 
 **Run pipeline**:
-The fixed sequence every invocation passes through after parsing: build context, report load warnings, execute and report the command, record analytics, check for updates, save state. Notices never fail the command; the exit code mirrors the command result.
+The fixed sequence every invocation passes through after parsing: build context, report load warnings, open the workspace and report its load warnings (workspace commands only), execute and report the command, record analytics, check for updates, save state. Notices never fail the command; the exit code mirrors the command result.
 _Avoid_: command lifecycle, post-command tail
 
 ### Analytics

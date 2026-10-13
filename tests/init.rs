@@ -1,11 +1,38 @@
 mod common;
 
-use common::git_vmr;
+use common::{commit_file, git, git_output, git_vmr, init_repo};
 use predicates::prelude::*;
 use std::fs;
+use std::path::Path;
+
+/// A child repo at `dir/name`, with `origin` set to `url` when given.
+fn child_repo(dir: &Path, name: &str, origin: Option<&str>)
+{
+    let repo = dir.join(name);
+    init_repo(&repo);
+    if let Some(url) = origin
+    {
+        git(&repo, ["remote", "add", "origin", url]);
+    }
+}
+
+fn read(path: &Path) -> String
+{
+    fs::read_to_string(path).expect("failed to read file")
+}
+
+fn next_steps(files: &str) -> String
+{
+    format!(
+        "\nNext, commit the manifest and add a remote:\n  \
+         git add {files}\n  \
+         git commit -m \"Create virtual monorepo\"\n  \
+         git remote add origin <url>\n"
+    )
+}
 
 #[test]
-fn init_creates_default_config_in_current_directory()
+fn init_creates_root_repo_with_empty_manifest()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
 
@@ -14,18 +41,195 @@ fn init_creates_default_config_in_current_directory()
         .arg("init")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created .gitvmr in"))
+        .stdout(format!(
+            "Initialized virtual monorepo in {}\n{}",
+            tmp.path().display(),
+            next_steps(".gitvmr")
+        ))
         .stderr(predicate::str::is_empty());
 
-    let config_path = tmp.path().join(".gitvmr/config");
-    let config =
-        fs::read_to_string(config_path).expect("failed to read config");
-    assert!(config.contains("[core]"));
-    assert!(config.contains("version = 0"));
+    assert!(tmp.path().join(".git").is_dir());
+    assert_eq!(read(&tmp.path().join(".gitvmr")), "");
+    assert!(!tmp.path().join(".gitignore").exists());
+    git_vmr().current_dir(tmp.path()).arg("status").assert().success();
 }
 
 #[test]
-fn init_with_working_dir_argument_creates_config_in_requested_directory()
+fn init_declares_existing_repos_from_their_origin()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    child_repo(tmp.path(), "frontend", Some("git@host:org/frontend.git"));
+    child_repo(tmp.path(), "backend", Some("https://host/org/backend.git"));
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create dir");
+    fs::create_dir_all(tmp.path().join("nested/deeper/.git"))
+        .expect("failed to create nested repo");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(format!(
+            "Initialized virtual monorepo in {}\n\
+             Declared 'backend'\n\
+             Declared 'frontend'\n{}",
+            tmp.path().display(),
+            next_steps(".gitvmr .gitignore")
+        ))
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(
+        read(&tmp.path().join(".gitvmr")),
+        "[repo.backend]\n\
+         path = \"backend\"\n\
+         url = \"https://host/org/backend.git\"\n\
+         \n\
+         [repo.frontend]\n\
+         path = \"frontend\"\n\
+         url = \"git@host:org/frontend.git\"\n"
+    );
+    assert_eq!(read(&tmp.path().join(".gitignore")), "/backend/\n/frontend/\n");
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("status")
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn init_skips_repos_without_an_origin()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    child_repo(tmp.path(), "backend", Some("../backend.git"));
+    child_repo(tmp.path(), "scratch", None);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Declared 'backend'\n"))
+        .stdout(predicate::str::contains("scratch").not())
+        .stderr("warning: skipped 'scratch': it has no 'origin' remote\n");
+
+    assert!(!read(&tmp.path().join(".gitvmr")).contains("scratch"));
+    assert_eq!(read(&tmp.path().join(".gitignore")), "/backend/\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn init_skips_repos_whose_name_cannot_be_declared()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    child_repo(tmp.path(), "a\\b", Some("../ab.git"));
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Declared").not())
+        .stderr(
+            "warning: skipped 'a\\b': path 'a\\b' must be a single directory \
+             name, other than '.git' or '.gitvmr'\n"
+        );
+
+    git_vmr().current_dir(tmp.path()).arg("status").assert().success();
+}
+
+#[test]
+fn init_skips_repos_whose_directory_the_root_repo_tracks()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_repo(tmp.path().join("root").as_path());
+    let root = tmp.path().join("root");
+    commit_file(&root, "vendor/lib.rs");
+    child_repo(&root, "backend", Some("../backend.git"));
+    git(&root.join("vendor"), ["init", "--quiet"]);
+    git(&root.join("vendor"), ["remote", "add", "origin", "../vendor.git"]);
+
+    git_vmr()
+        .current_dir(&root)
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Declared 'backend'\n"))
+        .stderr(
+            "warning: skipped 'vendor': the root repo tracks files under it\n"
+        );
+
+    assert!(!read(&root.join(".gitvmr")).contains("vendor"));
+}
+
+#[test]
+fn init_keeps_an_existing_root_repo_and_gitignore()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_repo(tmp.path().join("root").as_path());
+    let root = tmp.path().join("root");
+    fs::write(root.join(".gitignore"), "target\n/backend/").unwrap();
+    commit_file(&root, "README.md");
+    child_repo(&root, "backend", Some("../backend.git"));
+    child_repo(&root, "frontend", Some("../frontend.git"));
+
+    git_vmr().current_dir(&root).arg("init").assert().success();
+
+    assert_eq!(git_output(&root, ["log", "--format=%s"]), "initial");
+    assert_eq!(
+        read(&root.join(".gitignore")),
+        "target\n/backend/\n/frontend/\n"
+    );
+}
+
+#[test]
+fn init_converts_an_old_style_vmr()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr")).expect("failed to create dir");
+    fs::write(tmp.path().join(".gitvmr/config"), "[core]\nversion = 0\n")
+        .expect("failed to write config");
+    child_repo(tmp.path(), "backend", Some("../backend.git"));
+
+    git_vmr().current_dir(tmp.path()).arg("init").assert().success().stdout(
+        predicate::str::starts_with(format!(
+            "Removed old-style .gitvmr directory\n\
+             Initialized virtual monorepo in {}\n\
+             Declared 'backend'\n",
+            tmp.path().display()
+        ))
+    );
+
+    assert!(read(&tmp.path().join(".gitvmr")).contains("[repo.backend]"));
+    git_vmr().current_dir(tmp.path()).arg("status").assert().success();
+}
+
+#[test]
+fn init_reports_reinitialized_without_changing_anything()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    child_repo(tmp.path(), "backend", Some("../backend.git"));
+    git_vmr().current_dir(tmp.path()).arg("init").assert().success();
+    let manifest = read(&tmp.path().join(".gitvmr"));
+    child_repo(tmp.path(), "frontend", Some("../frontend.git"));
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(format!(
+            "Reinitialized existing virtual monorepo in {}\n",
+            tmp.path().display()
+        ))
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(read(&tmp.path().join(".gitvmr")), manifest);
+    assert_eq!(read(&tmp.path().join(".gitignore")), "/backend/\n");
+}
+
+#[test]
+fn init_with_working_dir_argument_initializes_requested_directory()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let target = tmp.path().join("target");
@@ -37,15 +241,19 @@ fn init_with_working_dir_argument_creates_config_in_requested_directory()
         .arg("init")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created .gitvmr in"))
+        .stdout(predicate::str::starts_with(format!(
+            "Initialized virtual monorepo in {}\n",
+            target.display()
+        )))
         .stderr(predicate::str::is_empty());
 
-    assert!(target.join(".gitvmr/config").is_file());
+    assert!(target.join(".gitvmr").is_file());
+    assert!(target.join(".git").is_dir());
     assert!(!tmp.path().join(".gitvmr").exists());
 }
 
 #[test]
-fn init_with_existing_directory_argument_creates_config_in_target()
+fn init_with_existing_directory_argument_initializes_target()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let target = tmp.path().join("project");
@@ -57,15 +265,14 @@ fn init_with_existing_directory_argument_creates_config_in_target()
         .arg("project")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created .gitvmr in"))
         .stderr(predicate::str::is_empty());
 
-    assert!(target.join(".gitvmr/config").is_file());
+    assert!(target.join(".gitvmr").is_file());
     assert!(!tmp.path().join(".gitvmr").exists());
 }
 
 #[test]
-fn init_with_missing_directory_argument_creates_target_and_config()
+fn init_with_missing_directory_argument_creates_target()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let target = tmp.path().join("project");
@@ -76,11 +283,10 @@ fn init_with_missing_directory_argument_creates_target_and_config()
         .arg("project")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created .gitvmr in"))
         .stderr(predicate::str::is_empty());
 
-    assert!(target.is_dir());
-    assert!(target.join(".gitvmr/config").is_file());
+    assert!(target.join(".gitvmr").is_file());
+    assert!(target.join(".git").is_dir());
 }
 
 #[test]
@@ -97,10 +303,9 @@ fn init_directory_argument_is_relative_to_working_dir_argument()
         .arg("project")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created .gitvmr in"))
         .stderr(predicate::str::is_empty());
 
-    assert!(base.join("project/.gitvmr/config").is_file());
+    assert!(base.join("project/.gitvmr").is_file());
     assert!(!tmp.path().join("project").exists());
 }
 
@@ -122,32 +327,6 @@ fn init_errors_when_directory_argument_is_file()
             predicate::str::contains("fatal: cannot initialize")
                 .and(predicate::str::contains("Not a directory"))
         );
-
-    assert!(!file.join(".gitvmr/config").exists());
-}
-
-#[test]
-fn init_reports_reinitialized_without_overwriting_existing_config()
-{
-    let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    let config_dir = tmp.path().join(".gitvmr");
-    let config_path = config_dir.join("config");
-    fs::create_dir_all(&config_dir).expect("failed to create config dir");
-    fs::write(&config_path, "custom content").expect("failed to write config");
-
-    git_vmr()
-        .current_dir(tmp.path())
-        .arg("init")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(
-            "Reinitialized existing virtual monorepo in"
-        ))
-        .stderr(predicate::str::is_empty());
-
-    let config =
-        fs::read_to_string(config_path).expect("failed to read config");
-    assert_eq!(config, "custom content");
 }
 
 #[test]

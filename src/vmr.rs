@@ -1,20 +1,29 @@
+mod manifest;
 mod repo;
 
-use crate::config::Config;
-use crate::store::FileStore;
 use anyhow::{Context, Result, bail};
+pub use manifest::{Declaration, Manifest, ManifestEditor, validate_path};
 use path_clean::PathClean;
 pub use repo::Repo;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-/// Whether `Vmr::init` created a new VMR root or found an existing one.
-#[derive(Debug, Eq, PartialEq)]
-pub enum InitOutcome
+/// The manifest's file name, at the VMR root.
+pub const MANIFEST: &str = ".gitvmr";
+
+/// The root repo's `.gitignore`, or nothing if it has none.
+pub fn read_gitignore(root: &Path) -> String
 {
-    Created,
-    Reinitialized
+    fs::read_to_string(root.join(".gitignore")).unwrap_or_default()
+}
+
+/// Whether `.gitignore` text has the exact anchored line git-vmr writes to
+/// ignore the child repo at `path`.
+pub fn has_ignore_line(gitignore: &str, path: &str) -> bool
+{
+    let line = format!("/{path}/");
+    gitignore.lines().any(|candidate| candidate.trim_end() == line)
 }
 
 #[derive(Debug)]
@@ -30,50 +39,74 @@ impl Vmr
         Vmr { path: path.clean() }
     }
 
+    /// Discovers the VMR that owns `working_dir`: the nearest directory,
+    /// walking up, where a `.gitvmr` manifest file sits beside `.git` (a
+    /// directory, or a file in a linked worktree). A filesystem check only:
+    /// a root repo on a branch without a manifest is indistinguishable from
+    /// any other Git repository.
     pub fn find(working_dir: &Path) -> Result<Vmr>
     {
-        // Search working directory and ancestors
-        for dir in working_dir.ancestors()
+        for dir in working_dir.clean().ancestors()
         {
-            if Vmr::is_root(dir)
+            let manifest = dir.join(MANIFEST);
+            if manifest.is_dir()
             {
-                return Ok(Vmr::new(dir));
+                bail!(
+                    "fatal: '{}' is an old-style virtual monorepo\n\
+                     hint: run 'git vmr init' there to convert it",
+                    dir.display()
+                );
+            }
+
+            if manifest.is_file()
+            {
+                if dir.join(".git").exists()
+                {
+                    return Ok(Vmr::new(dir));
+                }
+
+                Vmr::reject_old_worktree_root(dir)?;
             }
         }
 
-        // Report missing VMR root
         bail!(
-            "fatal: not a virtual monorepo (or any of the parent directories): .gitvmr"
+            "fatal: not a virtual monorepo (or any of the parent \
+             directories): .gitvmr\n\
+             hint: if this is a root repo, the checked-out branch may not \
+             have a .gitvmr manifest"
         )
     }
 
-    /// Whether a directory is a VMR root, of either kind: a main root
-    /// (marker directory) or a worktree root (marker file).
-    pub fn is_root(dir: &Path) -> bool
+    /// Rejects an old-style worktree root: an empty `.gitvmr` file with no
+    /// `.git` beside it.
+    pub fn reject_old_worktree_root(dir: &Path) -> Result<()>
     {
-        dir.join(".gitvmr").exists()
-    }
-
-    /// Initializes a main VMR root: a `.gitvmr` marker directory holding
-    /// the default VMR config.
-    pub fn init(target_dir: &Path) -> Result<InitOutcome>
-    {
-        let vmr_dir = target_dir.join(".gitvmr");
-        let config_path = vmr_dir.join("config");
-
-        if config_path.is_file()
+        let empty_manifest = fs::metadata(dir.join(MANIFEST))
+            .is_ok_and(|meta| meta.is_file() && meta.len() == 0);
+        if empty_manifest && !dir.join(".git").exists()
         {
-            return Ok(InitOutcome::Reinitialized);
+            bail!(
+                "fatal: '{}' is an old-style worktree root\n\
+                 hint: remove its child worktrees with 'git worktree remove' \
+                 in each repo, then recreate it with 'git vmr worktree add'",
+                dir.display()
+            );
         }
 
-        fs::create_dir_all(&vmr_dir)
-            .context("fatal: failed to create .gitvmr directory")?;
+        Ok(())
+    }
 
-        FileStore::new(config_path, Config::default())
-            .write()
-            .context("fatal: failed to write .gitvmr/config")?;
+    /// Reads and validates the manifest from the working tree.
+    pub fn manifest(&self) -> Result<Manifest>
+    {
+        let path = self.path.join(MANIFEST);
+        let text = fs::read_to_string(&path).with_context(|| {
+            format!("fatal: failed to read '{}'", path.display())
+        })?;
 
-        Ok(InitOutcome::Created)
+        Manifest::parse(&text).with_context(|| {
+            format!("fatal: invalid manifest '{}'", path.display())
+        })
     }
 
     /// Materializes a worktree root: the target directory with a `.gitvmr`
@@ -132,39 +165,6 @@ impl Vmr
             })
         }
     }
-
-    pub fn repos(&self) -> Result<Vec<Repo>>
-    {
-        let mut repos = Vec::new();
-
-        // Scan immediate child directories
-        for repo_path in fs::read_dir(&self.path)
-            .with_context(|| {
-                format!(
-                    "fatal: failed to read VMR root '{}'",
-                    self.path.display()
-                )
-            })?
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
-            })
-            .filter(|entry| entry.file_name() != ".gitvmr")
-            .map(|entry| entry.path())
-            .collect::<Vec<_>>()
-        {
-            // Add children that are Git repositories
-            if let Some(repo) = Repo::find(repo_path)
-            {
-                repos.push(repo);
-            }
-        }
-
-        // Keep repository order deterministic
-        repos.sort_by(|a, b| a.name.cmp(&b.name));
-
-        Ok(repos)
-    }
 }
 
 #[cfg(test)]
@@ -173,12 +173,20 @@ mod tests
     use super::*;
     use std::fs;
 
+    /// A VMR root: a root repo (a `.git` directory, enough for discovery)
+    /// carrying a manifest.
+    fn root_repo(dir: &Path)
+    {
+        fs::create_dir_all(dir.join(".git")).unwrap();
+        fs::write(dir.join(".gitvmr"), "").unwrap();
+    }
+
     #[test]
-    fn finds_marker_in_start_dir()
+    fn finds_root_repo_with_manifest_in_start_dir()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        root_repo(tmp.path());
 
         // Act
         let result = Vmr::find(tmp.path()).unwrap();
@@ -192,7 +200,7 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        root_repo(tmp.path());
         fs::create_dir(tmp.path().join("child")).unwrap();
         let working_dir = tmp.path().join("child").join("..");
 
@@ -204,13 +212,14 @@ mod tests
     }
 
     #[test]
-    fn finds_marker_in_ancestor()
+    fn finds_root_repo_from_inside_a_child_repo()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
+        root_repo(tmp.path());
         let nested = tmp.path().join("repo/src");
         fs::create_dir_all(&nested).unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
+        fs::create_dir(tmp.path().join("repo/.git")).unwrap();
 
         // Act
         let result = Vmr::find(&nested).unwrap();
@@ -220,69 +229,98 @@ mod tests
     }
 
     #[test]
-    fn errors_when_marker_is_missing()
+    fn accepts_a_git_file_beside_the_manifest()
+    {
+        // Arrange: a linked worktree's `.git` is a file
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join(".git"), "gitdir: elsewhere\n").unwrap();
+        fs::write(tmp.path().join(".gitvmr"), "").unwrap();
+
+        // Act
+        let result = Vmr::find(tmp.path()).unwrap();
+
+        // Assert
+        assert_eq!(result.path, tmp.path());
+    }
+
+    #[test]
+    fn nearest_vmr_wins()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
+        root_repo(tmp.path());
+        let inner = tmp.path().join("inner");
+        root_repo(&inner);
+
+        // Act
+        let result = Vmr::find(&inner).unwrap();
+
+        // Assert
+        assert_eq!(result.path, inner);
+    }
+
+    #[test]
+    fn errors_when_no_root_repo_carries_a_manifest()
+    {
+        // Arrange: a Git repository without a manifest is not a VMR
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join(".git")).unwrap();
 
         // Act
         let err = Vmr::find(tmp.path()).unwrap_err();
 
         // Assert
-        assert!(format!("{err:#}").contains("not a virtual monorepo"));
-    }
-
-    #[test]
-    fn is_root_accepts_marker_directory_and_file()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let main_root = tmp.path().join("main");
-        fs::create_dir_all(main_root.join(".gitvmr")).unwrap();
-        let worktree_root = tmp.path().join("worktree");
-        fs::create_dir_all(&worktree_root).unwrap();
-        fs::write(worktree_root.join(".gitvmr"), "").unwrap();
-        let plain = tmp.path().join("plain");
-        fs::create_dir_all(&plain).unwrap();
-
-        // Assert
-        assert!(Vmr::is_root(&main_root));
-        assert!(Vmr::is_root(&worktree_root));
-        assert!(!Vmr::is_root(&plain));
-    }
-
-    #[test]
-    fn init_creates_marker_directory_with_config()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        let outcome = Vmr::init(tmp.path()).unwrap();
-
-        // Assert
-        assert_eq!(outcome, InitOutcome::Created);
-        assert!(tmp.path().join(".gitvmr").is_dir());
-        assert!(tmp.path().join(".gitvmr/config").is_file());
-    }
-
-    #[test]
-    fn init_detects_an_existing_root()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        Vmr::init(tmp.path()).unwrap();
-        let config =
-            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
-
-        // Act
-        let outcome = Vmr::init(tmp.path()).unwrap();
-
-        // Assert
-        assert_eq!(outcome, InitOutcome::Reinitialized);
         assert_eq!(
-            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap(),
-            config
+            format!("{err:#}"),
+            "fatal: not a virtual monorepo (or any of the parent \
+             directories): .gitvmr\n\
+             hint: if this is a root repo, the checked-out branch may not \
+             have a .gitvmr manifest"
+        );
+    }
+
+    #[test]
+    fn errors_on_an_old_style_vmr()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join(".gitvmr")).unwrap();
+        let nested = tmp.path().join("backend");
+        fs::create_dir(&nested).unwrap();
+
+        // Act
+        let err = Vmr::find(&nested).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            format!("{err:#}"),
+            format!(
+                "fatal: '{}' is an old-style virtual monorepo\n\
+                 hint: run 'git vmr init' there to convert it",
+                tmp.path().display()
+            )
+        );
+    }
+
+    #[test]
+    fn errors_on_an_old_style_worktree_root()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join(".gitvmr"), "").unwrap();
+
+        // Act
+        let err = Vmr::find(tmp.path()).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            format!("{err:#}"),
+            format!(
+                "fatal: '{}' is an old-style worktree root\n\
+                 hint: remove its child worktrees with 'git worktree remove' \
+                 in each repo, then recreate it with 'git vmr worktree add'",
+                tmp.path().display()
+            )
         );
     }
 
@@ -299,7 +337,6 @@ mod tests
         // Assert
         assert!(target.is_dir());
         assert!(target.join(".gitvmr").is_file());
-        assert!(Vmr::is_root(&target));
     }
 
     #[test]
@@ -360,33 +397,5 @@ mod tests
 
         // Assert
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn vmr_repos_skips_non_git_dirs_and_sorts_by_name()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir(tmp.path().join(".gitvmr")).unwrap();
-        fs::create_dir(tmp.path().join("zeta")).unwrap();
-        fs::create_dir(tmp.path().join("zeta/.git")).unwrap();
-        fs::create_dir(tmp.path().join("docs")).unwrap();
-        fs::create_dir(tmp.path().join("alpha")).unwrap();
-        fs::create_dir(tmp.path().join("alpha/.git")).unwrap();
-        let vmr = Vmr::find(tmp.path()).unwrap();
-
-        // Act
-        let repos = vmr.repos().unwrap();
-
-        // Assert
-        assert_eq!(repos, vec![
-            repo(tmp.path(), "alpha"),
-            repo(tmp.path(), "zeta")
-        ]);
-    }
-
-    fn repo(root: &Path, name: &str) -> Repo
-    {
-        Repo { name: name.to_owned(), path: root.join(name) }
     }
 }

@@ -1,9 +1,14 @@
 use crate::cli::CliContext;
+use crate::git::{Git, stderr};
 use crate::render::Rendered;
-use crate::vmr::{InitOutcome, Vmr};
+use crate::vmr::{
+    self, Declaration, MANIFEST, ManifestEditor, Vmr, validate_path
+};
 use anyhow::{Context, Result, bail};
+use path_clean::PathClean;
+use std::fmt::Write;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Create an empty virtual monorepo or reinitialize an existing one
 #[derive(clap::Args)]
@@ -23,7 +28,7 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     let target_dir = match args.directory.as_deref()
     {
         // Resolve provided directory against the effective working directory
-        Some(directory) => working_dir.join(directory),
+        Some(directory) => working_dir.join(directory).clean(),
 
         // If none provided, use the effective working directory
         None => working_dir.to_path_buf()
@@ -46,164 +51,206 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
         )
     })?;
 
-    let message = match Vmr::init(&target_dir)?
-    {
-        InitOutcome::Created =>
-            format!("Created .gitvmr in {}\n", target_dir.display()),
-        InitOutcome::Reinitialized => format!(
-            "Reinitialized existing virtual monorepo in {}/\n",
-            target_dir.join(".gitvmr").display()
-        )
-    };
+    let git = &context.git;
+    let manifest_path = target_dir.join(MANIFEST);
+    let mut rendered = Rendered::default();
 
-    Ok(message.into())
+    // An existing manifest is left alone: declaring later is `add`'s job
+    if manifest_path.is_file()
+    {
+        Vmr::reject_old_worktree_root(&target_dir)?;
+        git.init_root(&target_dir)?;
+        rendered.stdout = format!(
+            "Reinitialized existing virtual monorepo in {}\n",
+            target_dir.display()
+        );
+        return Ok(rendered);
+    }
+
+    // Convert an old-style VMR, whose marker directory held only config
+    if manifest_path.is_dir()
+    {
+        fs::remove_dir_all(&manifest_path).with_context(|| {
+            format!("fatal: failed to remove '{}'", manifest_path.display())
+        })?;
+        rendered.stdout.push_str("Removed old-style .gitvmr directory\n");
+    }
+
+    git.init_root(&target_dir)?;
+    let _ = writeln!(
+        rendered.stdout,
+        "Initialized virtual monorepo in {}",
+        target_dir.display()
+    );
+
+    // Backfill the manifest from the Git repositories already present
+    let mut editor = ManifestEditor::new();
+    let mut declared = Vec::new();
+    for path in first_level_repos(&target_dir)?
+    {
+        if let Err(reason) = validate_path(&path)
+        {
+            let _ = writeln!(
+                rendered.stderr,
+                "warning: skipped '{path}': {reason}"
+            );
+            continue;
+        }
+
+        let skipped = match git.origin_url(&target_dir.join(&path))?
+        {
+            None => Some("it has no 'origin' remote"),
+            Some(_) if git.tracks_under(&target_dir, &path)? =>
+                Some("the root repo tracks files under it"),
+            Some(url) =>
+            {
+                editor.declare(&Declaration {
+                    name: path.clone(),
+                    path: path.clone(),
+                    url
+                });
+                let _ = writeln!(rendered.stdout, "Declared '{path}'");
+                declared.push(path.clone());
+                None
+            }
+        };
+        if let Some(reason) = skipped
+        {
+            let _ = writeln!(
+                rendered.stderr,
+                "warning: skipped '{path}': {reason}"
+            );
+        }
+    }
+
+    fs::write(&manifest_path, editor.to_string()).with_context(|| {
+        format!("fatal: failed to write '{}'", manifest_path.display())
+    })?;
+    let mut files = MANIFEST.to_owned();
+    if !declared.is_empty()
+    {
+        ignore(&target_dir, &declared)?;
+        files.push_str(" .gitignore");
+    }
+
+    // Until its first commit the root repo is unborn
+    let _ = write!(
+        rendered.stdout,
+        "\nNext, commit the manifest and add a remote:\n  \
+         git add {files}\n  \
+         git commit -m \"Create virtual monorepo\"\n  \
+         git remote add origin <url>\n"
+    );
+
+    Ok(rendered)
 }
 
-#[cfg(test)]
-mod tests
+/// The names of the target's immediate subdirectories that are Git
+/// repositories, sorted. Names that are not valid UTF-8 cannot be declared
+/// and are left out.
+fn first_level_repos(target_dir: &Path) -> Result<Vec<String>>
 {
-    use super::*;
-    use crate::config::Config;
-    use crate::test_support::cli_context;
-    use std::fs;
-    use std::path::Path;
+    let mut repos = fs::read_dir(target_dir)
+        .with_context(|| {
+            format!("fatal: failed to read '{}'", target_dir.display())
+        })?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter(|entry| entry.path().join(".git").exists())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name != ".git")
+        .collect::<Vec<_>>();
+    repos.sort();
 
-    #[test]
-    fn creates_config_directory_and_file()
+    Ok(repos)
+}
+
+/// Ignores child repos in the root repo: appends an anchored `/<path>/`
+/// line to its `.gitignore` for each path that lacks one, keeping the rest
+/// of the file as it is.
+///
+/// Not `.git/info/exclude`: that file is shared by every worktree of the
+/// root repo while manifests are per branch, so one worktree's ignore lines
+/// would be another's too.
+fn ignore(root: &Path, paths: &[String]) -> Result<()>
+{
+    let mut gitignore = vmr::read_gitignore(root);
+    let missing = paths
+        .iter()
+        .filter(|path| !vmr::has_ignore_line(&gitignore, path))
+        .collect::<Vec<_>>();
+    if missing.is_empty()
     {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
-
-        // Assert
-        assert!(tmp.path().join(".gitvmr").exists());
-        assert!(tmp.path().join(".gitvmr/config").exists());
+        return Ok(());
     }
 
-    #[test]
-    fn creates_config_in_absolute_target_directory()
+    if !gitignore.is_empty() && !gitignore.ends_with('\n')
     {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let target = tmp.path().join("project");
-
-        // Act
-        run(&cli_context(Path::new("/ignored")), &InitArgs {
-            directory: Some(target.clone())
-        })
-        .unwrap();
-
-        // Assert
-        assert!(target.join(".gitvmr/config").is_file());
+        gitignore.push('\n');
+    }
+    for path in missing
+    {
+        let _ = writeln!(gitignore, "/{path}/");
     }
 
-    #[test]
-    fn writes_default_config()
+    let gitignore_path = root.join(".gitignore");
+    fs::write(&gitignore_path, gitignore).with_context(|| {
+        format!("fatal: failed to write '{}'", gitignore_path.display())
+    })
+}
+
+impl Git
+{
+    /// Makes `dir` a Git repository unless it already is one.
+    fn init_root(&self, dir: &Path) -> Result<()>
     {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
+        if dir.join(".git").exists()
+        {
+            return Ok(());
+        }
 
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
+        let output = self.output(dir, ["init", "--quiet"])?;
+        if !output.status.success()
+        {
+            bail!("fatal: git init failed: {}", stderr(&output));
+        }
 
-        // Assert
-        let contents =
-            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
-        let expected = toml::to_string(&Config::default()).unwrap();
-        assert_eq!(contents, expected);
+        Ok(())
     }
 
-    #[test]
-    fn is_idempotent()
+    /// Whether the root repo tracks anything at or under `path` — a
+    /// directory both repos would claim, since ignore rules do not untrack
+    /// files.
+    fn tracks_under(&self, root: &Path, path: &str) -> Result<bool>
     {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
-        let first =
-            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
+        let tracked = self.stdout(root, [
+            "--literal-pathspecs",
+            "ls-files",
+            "-z",
+            "--",
+            path
+        ])?;
 
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
-
-        // Assert
-        let second =
-            fs::read_to_string(tmp.path().join(".gitvmr/config")).unwrap();
-        assert_eq!(first, second);
+        Ok(!tracked.is_empty())
     }
 
-    #[test]
-    fn does_not_overwrite_existing_config()
+    /// The repo's `origin` URL as configured, if it has one.
+    fn origin_url(&self, repo: &Path) -> Result<Option<String>>
     {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let config_dir = tmp.path().join(".gitvmr");
-        fs::create_dir_all(&config_dir).unwrap();
-        fs::write(config_dir.join("config"), "custom content").unwrap();
+        let output =
+            self.output(repo, ["config", "--get", "remote.origin.url"])?;
 
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs { directory: None }).unwrap();
-
-        // Assert
-        let contents = fs::read_to_string(config_dir.join("config")).unwrap();
-        assert_eq!(contents, "custom content");
-    }
-
-    #[test]
-    fn errors_when_target_exists_as_file()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let file = tmp.path().join("file");
-        fs::write(&file, "").unwrap();
-
-        // Act
-        let err = run(&cli_context(tmp.path()), &InitArgs {
-            directory: Some(PathBuf::from("file"))
-        })
-        .unwrap_err();
-
-        // Assert
-        let msg = format!("{err:#}");
-        assert!(msg.contains("Not a directory"), "unexpected error: {msg}");
-        assert!(!file.join(".gitvmr/config").exists());
-    }
-
-    #[test]
-    fn creates_missing_target_directory()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let target = tmp.path().join("project");
-
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs {
-            directory: Some(PathBuf::from("project"))
-        })
-        .unwrap();
-
-        // Assert
-        assert!(target.is_dir());
-        assert!(target.join(".gitvmr/config").is_file());
-    }
-
-    #[test]
-    fn creates_config_in_existing_target_directory()
-    {
-        // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        let target = tmp.path().join("project");
-        fs::create_dir(&target).unwrap();
-
-        // Act
-        run(&cli_context(tmp.path()), &InitArgs {
-            directory: Some(PathBuf::from("project"))
-        })
-        .unwrap();
-
-        // Assert
-        assert!(target.join(".gitvmr/config").is_file());
-        assert!(!tmp.path().join(".gitvmr").exists());
+        match output.status.code()
+        {
+            Some(0) => Ok(Some(
+                String::from_utf8_lossy(&output.stdout).trim().to_owned()
+            )),
+            Some(1) => Ok(None),
+            _ => bail!(
+                "fatal: failed to read the 'origin' remote of '{}': {}",
+                repo.display(),
+                stderr(&output)
+            )
+        }
     }
 }

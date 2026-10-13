@@ -24,10 +24,99 @@ fn status_errors_outside_a_vmr()
 }
 
 #[test]
+fn status_errors_in_an_old_style_vmr()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::create_dir(tmp.path().join(".gitvmr")).expect("failed to create dir");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("status")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(format!(
+            "fatal: '{}' is an old-style virtual monorepo\n\
+             hint: run 'git vmr init' there to convert it\n",
+            tmp.path().display()
+        ));
+}
+
+#[test]
+fn status_errors_on_an_invalid_manifest()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path(), &[]);
+    fs::write(tmp.path().join(".gitvmr"), "[repo.backend]\nulr = \"u\"\n")
+        .expect("failed to write manifest");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("status")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(
+            predicate::str::starts_with("fatal: invalid manifest")
+                .and(predicate::str::contains("unknown field `ulr`"))
+        );
+}
+
+#[test]
+fn status_warns_about_declared_repos_that_are_not_cloned()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path(), &["api", "backend"]);
+    let repo = tmp.path().join("backend");
+    init_repo(&repo);
+    commit_file(&repo, "README.md");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("On branch master"))
+        .stderr(
+            "warning: 'api' declared in .gitvmr but not cloned; run 'git vmr \
+             clone' to clone them\n"
+        );
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "api/file.txt"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "'api' is not cloned; run 'git vmr clone' to clone it"
+        ));
+}
+
+#[test]
+fn status_warns_about_declared_repos_that_are_not_ignored()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
+    fs::write(tmp.path().join(".gitignore"), "/fr*/\n")
+        .expect("failed to write .gitignore");
+    for name in ["backend", "frontend"]
+    {
+        let repo = tmp.path().join(name);
+        init_repo(&repo);
+        commit_file(&repo, "README.md");
+    }
+
+    git_vmr().current_dir(tmp.path()).arg("status").assert().success().stderr(
+        "warning: 'backend' is not ignored by the root repo; add \
+             '/backend/' to .gitignore\n"
+    );
+}
+
+#[test]
 fn status_skips_non_git_dirs_alongside_child_repos()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs"))
         .expect("failed to create non repo dir");
     let repo = tmp.path().join("backend");
@@ -50,7 +139,7 @@ fn status_skips_non_git_dirs_alongside_child_repos()
 fn status_in_vmr_root_reports_child_repo_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -72,7 +161,7 @@ fn status_in_vmr_root_reports_child_repo_changes()
 fn status_reports_clean_summary_for_clean_child_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -90,7 +179,7 @@ fn status_reports_clean_summary_for_clean_child_repo()
 fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["committed", "new-repo"]);
     let committed = tmp.path().join("committed");
     let new_repo = tmp.path().join("new-repo");
     init_repo(&committed);
@@ -124,7 +213,7 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
 fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -148,7 +237,7 @@ fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 fn status_with_no_child_repos_succeeds_with_no_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs"))
         .expect("failed to create non repo dir");
 
@@ -165,7 +254,7 @@ fn status_with_no_child_repos_succeeds_with_no_output()
 fn status_reports_staged_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
@@ -188,7 +277,7 @@ fn status_reports_staged_changes()
 fn status_fails_on_corrupted_git_dir()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["broken"]);
     let repo = tmp.path().join("broken");
     fs::create_dir(&repo).expect("failed to create repo");
     fs::write(repo.join(".git"), "not a gitfile\n")

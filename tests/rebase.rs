@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    git, git_command, git_output, git_vmr, init_repo, init_vmr, write_commit
+    declare, git, git_command, git_output, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -54,7 +55,7 @@ fn head(path: &Path) -> String
 fn rebase_clean_histories_across_multiple_child_repositories_succeeds_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -78,7 +79,7 @@ fn rebase_clean_histories_across_multiple_child_repositories_succeeds_quietly()
 fn rebase_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -93,6 +94,7 @@ fn rebase_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     setup_repo_with_initial_commit(&backend);
     create_rebasable_history(&backend, "origin/main");
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["rebase", "origin/main"])
@@ -109,7 +111,7 @@ fn rebase_missing_upstream_fails_only_affected_repository_and_still_attempts_oth
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -135,7 +137,7 @@ fn rebase_missing_upstream_fails_only_affected_repository_and_still_attempts_oth
 fn rebase_conflict_preserves_rebase_state_and_does_not_stop_clean_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -159,7 +161,7 @@ fn rebase_conflict_preserves_rebase_state_and_does_not_stop_clean_repositories()
 fn rebase_successes_are_not_rolled_back_after_another_repository_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -181,7 +183,7 @@ fn rebase_successes_are_not_rolled_back_after_another_repository_fails()
 fn rebase_reports_repository_suffixes_and_orders_failures_by_repository_name()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "beta", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let beta = tmp.path().join("beta");
     let zeta = tmp.path().join("zeta");
@@ -207,7 +209,7 @@ fn rebase_reports_repository_suffixes_and_orders_failures_by_repository_name()
 fn rebase_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);

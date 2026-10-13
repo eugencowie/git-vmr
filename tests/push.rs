@@ -50,7 +50,7 @@ fn push_publishes_commits_across_multiple_child_repositories()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     let (frontend_remote, frontend) =
@@ -79,7 +79,7 @@ fn push_forwards_repository_and_refspec_arguments()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     git(&backend, ["checkout", "-b", "release"]);
@@ -102,7 +102,7 @@ fn push_treats_single_positional_argument_as_repository()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     git(&backend, ["remote", "rename", "origin", "main"]);
@@ -124,7 +124,7 @@ fn push_treats_single_positional_argument_as_repository()
 fn push_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -142,7 +142,7 @@ fn push_failure_does_not_stop_successful_repositories()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (_backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (frontend_remote, frontend) =
@@ -170,7 +170,7 @@ fn push_reports_success_failure_and_failure_order_with_repository_suffixes()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["alpha", "backend", "zeta"]);
     let (_alpha_remote, alpha) =
         setup_remote_and_clone(tmp.path(), "alpha", "README.md");
     let (backend_remote, backend) =
@@ -203,7 +203,7 @@ fn push_delegates_missing_upstream_and_rejected_pushes_to_git_without_rollback()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     git(&backend, ["branch", "--unset-upstream"]);
@@ -247,7 +247,7 @@ fn bare_push_pushes_novel_branches_and_skips_empty_branch_creations()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "docs", "frontend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     let (frontend_remote, frontend) =
@@ -286,7 +286,7 @@ fn bare_push_does_not_recreate_a_branch_deleted_on_the_remote()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     git(&backend, ["checkout", "-b", "feature"]);
@@ -315,7 +315,7 @@ fn bare_push_with_a_stale_local_picture_still_pushes()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     git(&backend, ["config", "push.autoSetupRemote", "true"]);
@@ -343,7 +343,7 @@ fn bare_push_with_every_repository_skipped_exits_zero_and_reports()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     let (frontend_remote, frontend) =
@@ -372,7 +372,7 @@ fn mixed_refspec_list_pushes_only_the_useful_subset()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     // `master` gains novel commits; `feature` would be an empty branch
@@ -401,7 +401,7 @@ fn multiple_useful_refspecs_push_together_in_user_order()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     write_commit(&backend, "backend.txt", "updated\n", "backend update");
@@ -424,7 +424,7 @@ fn push_with_repository_argument_alone_classifies_against_that_remote()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     write_commit(&backend, "backend.txt", "updated\n", "backend update");
@@ -446,7 +446,7 @@ fn repository_with_no_useful_refspecs_gets_no_invocation()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["docs"]);
     let (docs_remote, docs) =
         setup_remote_and_clone(tmp.path(), "docs", "docs.txt");
     git(&docs, ["branch", "feature"]);
@@ -468,7 +468,7 @@ fn identical_refspec_skip_reasons_group_across_repositories()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (_backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     let (_frontend_remote, frontend) =
@@ -493,7 +493,7 @@ fn tag_refspec_is_always_pushed()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     // The tag points at a commit already on the remote.
@@ -515,7 +515,7 @@ fn delete_refspec_is_always_pushed()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     git(&backend, ["push", "origin", "master:gone-branch"]);
@@ -537,7 +537,7 @@ fn wildcard_refspec_is_skipped_as_unclassifiable()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     git(&backend, ["branch", "feature"]);
@@ -562,7 +562,7 @@ fn url_repository_argument_delegates_the_whole_push()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let (_backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "backend.txt");
     // A URL repository argument passes the whole push through unfiltered.
@@ -585,7 +585,7 @@ fn push_uses_nested_working_dir_and_global_c_option_for_discovery()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir_all(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let (backend_remote, backend) =
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (frontend_remote, frontend) =

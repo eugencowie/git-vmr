@@ -121,9 +121,33 @@ pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-pub fn init_vmr(path: &Path)
+/// Makes `path` a VMR root: a root repo declaring `repos` (see [`declare`]).
+/// The child repos themselves are created separately, so a declared name
+/// without a matching [`init_repo`] is a child repo that is not cloned.
+pub fn init_vmr(path: &Path, repos: &[&str])
 {
-    fs::create_dir(path.join(".gitvmr")).expect("failed to create marker");
+    git(path, ["init", "--quiet", "--initial-branch=master"]);
+    declare(path, repos);
+}
+
+/// Rewrites the VMR root's manifest to declare exactly `repos` (name =
+/// path, with `file://` URLs) and its `.gitignore` to ignore them.
+pub fn declare(path: &Path, repos: &[&str])
+{
+    let manifest = repos
+        .iter()
+        .map(|repo| {
+            let url = format!("file:///remotes/{repo}.git");
+            format!("[repo.\"{repo}\"]\npath = \"{repo}\"\nurl = \"{url}\"\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(path.join(".gitvmr"), manifest)
+        .expect("failed to write manifest");
+    let gitignore =
+        repos.iter().map(|repo| format!("/{repo}/\n")).collect::<String>();
+    fs::write(path.join(".gitignore"), gitignore)
+        .expect("failed to write .gitignore");
 }
 
 pub fn init_repo(path: &Path)
@@ -170,7 +194,7 @@ pub fn commit_file(path: &Path, file: &str)
 }
 
 /// A materialized VMR fixture: a tempdir holding a `vmr` subdirectory with
-/// the `.gitvmr` marker and one committed child repo per requested name.
+/// a root repo declaring one committed child repo per requested name.
 ///
 /// Owning the [`TempDir`] keeps the fixture alive for the test's duration;
 /// the VMR sits in a subdirectory so worktree roots can materialize as
@@ -188,7 +212,7 @@ impl TestVmr
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let vmr = tmp.path().join("vmr");
         fs::create_dir(&vmr).expect("failed to create vmr dir");
-        init_vmr(&vmr);
+        init_vmr(&vmr, repos);
 
         for repo in repos
         {
