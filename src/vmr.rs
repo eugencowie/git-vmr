@@ -1,8 +1,10 @@
+mod gitignore;
 mod manifest;
 mod repo;
 
-use anyhow::{Context, Result, bail};
-pub use manifest::{Declaration, Manifest, ManifestEditor, validate_path};
+use anyhow::{Context, Result, anyhow, bail};
+pub use gitignore::Gitignore;
+pub use manifest::{Declaration, Manifest, ManifestEditor, RepoPath, RepoUrl};
 use path_clean::PathClean;
 pub use repo::Repo;
 use std::fs;
@@ -12,18 +14,63 @@ use std::path::{Path, PathBuf};
 /// The manifest's file name, at the VMR root.
 pub const MANIFEST: &str = ".gitvmr";
 
-/// The root repo's `.gitignore`, or nothing if it has none.
-pub fn read_gitignore(root: &Path) -> String
+/// What a directory holds, as far as git-vmr is concerned.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Layout
 {
-    fs::read_to_string(root.join(".gitignore")).unwrap_or_default()
+    /// No `.gitvmr` at all.
+    NoManifest,
+    /// A `.gitvmr` manifest beside `.git` (a directory, or a file in a
+    /// linked worktree): a VMR root.
+    Root,
+    /// A non-empty `.gitvmr` file with no `.git` beside it.
+    ManifestWithoutGit,
+    /// A `.gitvmr` directory: a VMR from before root repos.
+    OldVmr,
+    /// An empty `.gitvmr` file with no `.git` beside it: a worktree root
+    /// from before root repos.
+    OldWorktreeRoot
 }
 
-/// Whether `.gitignore` text has the exact anchored line git-vmr writes to
-/// ignore the child repo at `path`.
-pub fn has_ignore_line(gitignore: &str, path: &str) -> bool
+impl Layout
 {
-    let line = format!("/{path}/");
-    gitignore.lines().any(|candidate| candidate.trim_end() == line)
+    pub fn of(dir: &Path) -> Layout
+    {
+        let Ok(manifest) = fs::metadata(dir.join(MANIFEST))
+        else
+        {
+            return Layout::NoManifest;
+        };
+
+        if manifest.is_dir()
+        {
+            Layout::OldVmr
+        }
+        else if dir.join(".git").exists()
+        {
+            Layout::Root
+        }
+        else if manifest.len() == 0
+        {
+            Layout::OldWorktreeRoot
+        }
+        else
+        {
+            Layout::ManifestWithoutGit
+        }
+    }
+}
+
+/// The error for an old-style worktree root at `dir`, which nothing can
+/// convert in place.
+pub fn old_worktree_root_error(dir: &Path) -> anyhow::Error
+{
+    anyhow!(
+        "fatal: '{}' is an old-style worktree root\n\
+         hint: remove its child worktrees with 'git worktree remove' in each \
+         repo, then recreate it with 'git vmr worktree add'",
+        dir.display()
+    )
 }
 
 #[derive(Debug)]
@@ -34,38 +81,26 @@ pub struct Vmr
 
 impl Vmr
 {
-    pub fn new(path: &Path) -> Vmr
-    {
-        Vmr { path: path.clean() }
-    }
-
     /// Discovers the VMR that owns `working_dir`: the nearest directory,
-    /// walking up, where a `.gitvmr` manifest file sits beside `.git` (a
-    /// directory, or a file in a linked worktree). A filesystem check only:
-    /// a root repo on a branch without a manifest is indistinguishable from
-    /// any other Git repository.
+    /// walking up, that is a VMR root. A filesystem check only: a root repo
+    /// on a branch without a manifest is indistinguishable from any other
+    /// Git repository.
     pub fn find(working_dir: &Path) -> Result<Vmr>
     {
         for dir in working_dir.clean().ancestors()
         {
-            let manifest = dir.join(MANIFEST);
-            if manifest.is_dir()
+            match Layout::of(dir)
             {
-                bail!(
+                Layout::Root => return Ok(Vmr { path: dir.to_path_buf() }),
+                Layout::OldVmr => bail!(
                     "fatal: '{}' is an old-style virtual monorepo\n\
                      hint: run 'git vmr init' there to convert it",
                     dir.display()
-                );
-            }
-
-            if manifest.is_file()
-            {
-                if dir.join(".git").exists()
-                {
-                    return Ok(Vmr::new(dir));
-                }
-
-                Vmr::reject_old_worktree_root(dir)?;
+                ),
+                Layout::OldWorktreeRoot =>
+                    return Err(old_worktree_root_error(dir)),
+                Layout::NoManifest | Layout::ManifestWithoutGit =>
+                {}
             }
         }
 
@@ -75,25 +110,6 @@ impl Vmr
              hint: if this is a root repo, the checked-out branch may not \
              have a .gitvmr manifest"
         )
-    }
-
-    /// Rejects an old-style worktree root: an empty `.gitvmr` file with no
-    /// `.git` beside it.
-    pub fn reject_old_worktree_root(dir: &Path) -> Result<()>
-    {
-        let empty_manifest = fs::metadata(dir.join(MANIFEST))
-            .is_ok_and(|meta| meta.is_file() && meta.len() == 0);
-        if empty_manifest && !dir.join(".git").exists()
-        {
-            bail!(
-                "fatal: '{}' is an old-style worktree root\n\
-                 hint: remove its child worktrees with 'git worktree remove' \
-                 in each repo, then recreate it with 'git vmr worktree add'",
-                dir.display()
-            );
-        }
-
-        Ok(())
     }
 
     /// Reads and validates the manifest from the working tree.

@@ -1,3 +1,4 @@
+use super::Members;
 use crate::vmr::Repo;
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
@@ -27,16 +28,14 @@ pub enum Scope
 }
 
 /// The router: a borrowed view over a workspace's fixed snapshot — the
-/// VMR root, the child repos, and the working dir the workspace was
-/// opened from — turning a scope into owning child repos with
+/// VMR root, its members, and the working dir the workspace was opened
+/// from — turning a scope into owning child repos with
 /// repo-relative paths. Private to the workspace core; slices reach
 /// routing only through the workspace.
 pub struct Router<'a>
 {
     root: &'a Path,
-    repos: &'a [Repo],
-    /// The paths of declared child repos that are not cloned.
-    missing: &'a [String],
+    members: &'a Members,
     working_dir: &'a Path
 }
 
@@ -44,12 +43,11 @@ impl<'a> Router<'a>
 {
     pub fn new(
         root: &'a Path,
-        repos: &'a [Repo],
-        missing: &'a [String],
+        members: &'a Members,
         working_dir: &'a Path
     ) -> Router<'a>
     {
-        Router { root, repos, missing, working_dir }
+        Router { root, members, working_dir }
     }
 
     /// Resolves a user-supplied path against the working dir and
@@ -81,6 +79,7 @@ impl<'a> Router<'a>
             Scope::EntireVmr =>
             {
                 return Ok(self
+                    .members
                     .repos
                     .iter()
                     .map(|repo| (repo.clone(), vec![PathBuf::from(".")]))
@@ -150,6 +149,7 @@ impl<'a> Router<'a>
         if self.is_aggregate(target)
         {
             return Ok(self
+                .members
                 .repos
                 .iter()
                 .map(|repo| (repo.clone(), PathBuf::from(".")))
@@ -189,7 +189,7 @@ impl<'a> Router<'a>
         }
 
         // Reject paths inside declared child repositories that are not cloned
-        if self.missing.iter().any(|path| repo_name == path.as_str())
+        if self.members.missing.iter().any(|path| repo_name == path.as_str())
         {
             bail!(
                 "error: '{}' is not cloned; run 'git vmr clone' to clone it",
@@ -200,6 +200,7 @@ impl<'a> Router<'a>
         // Require explicit paths to be owned by snapshotted child repositories
         let repo_path = self.root.join(repo_name);
         let repo = self
+            .members
             .repos
             .iter()
             .find(|repo| repo.path == repo_path)
@@ -234,9 +235,12 @@ mod tests
         Repo { name: name.to_owned(), path: root.join(name) }
     }
 
-    fn repos(root: &Path) -> Vec<Repo>
+    fn members(root: &Path) -> Members
     {
-        vec![repo(root, "backend"), repo(root, "frontend")]
+        Members {
+            repos: vec![repo(root, "backend"), repo(root, "frontend")],
+            missing: Vec::new()
+        }
     }
 
     #[test]
@@ -244,8 +248,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed = router.route_single(Path::new("backend")).unwrap();
@@ -259,8 +263,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed =
@@ -278,8 +282,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed = router
@@ -308,8 +312,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed = router.route(Scope::EntireVmr).unwrap();
@@ -326,8 +330,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed = router
@@ -346,14 +350,14 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
+        let members = members(root);
         let backend = root.join("backend");
 
         // The aggregate path is denied however the user spells it
         for (working_dir, path) in [(root, "."), (backend.as_path(), "..")]
         {
             // Arrange
-            let router = Router::new(root, &repos, &[], working_dir);
+            let router = Router::new(root, &members, working_dir);
 
             // Act
             let err = router
@@ -373,8 +377,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let routed = router
@@ -394,8 +398,8 @@ mod tests
     {
         // Arrange: the unroutable path precedes the denied aggregate path
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let err = router
@@ -414,8 +418,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let err = router
@@ -431,8 +435,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let err = router
@@ -449,8 +453,8 @@ mod tests
         // Arrange: docs is not a snapshotted child repo, README.md is a
         // root file
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         for path in ["docs/readme.md", "README.md"]
         {
@@ -469,8 +473,8 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
-        let router = Router::new(root, &repos, &[], root);
+        let members = members(root);
+        let router = Router::new(root, &members, root);
 
         // Act
         let err = router.route_single(Path::new(".")).unwrap_err();
@@ -484,9 +488,9 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
+        let members = members(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &repos, &[], &working_dir);
+        let router = Router::new(root, &members, &working_dir);
 
         // Act
         let target = router.target(Path::new("../backend/a.rs"));
@@ -500,9 +504,9 @@ mod tests
     {
         // Arrange
         let root = Path::new("/vmr");
-        let repos = repos(root);
+        let members = members(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &repos, &[], &working_dir);
+        let router = Router::new(root, &members, &working_dir);
 
         // Act
         let target = router.target(Path::new("/vmr/backend/../backend/a.rs"));

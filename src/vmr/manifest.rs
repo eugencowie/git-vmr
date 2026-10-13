@@ -18,8 +18,8 @@ pub struct Manifest
 pub struct Declaration
 {
     pub name: String,
-    pub path: String,
-    pub url: String
+    pub path: RepoPath,
+    pub url: RepoUrl
 }
 
 impl Manifest
@@ -35,7 +35,7 @@ impl Manifest
         let mut declared_by = HashMap::new();
         for (name, raw) in &entries
         {
-            let path = &raw.path.get_ref().0;
+            let path = raw.path.get_ref();
             if let Some(first) = declared_by.insert(path, name)
             {
                 bail!(
@@ -49,8 +49,8 @@ impl Manifest
             .into_iter()
             .map(|(name, raw)| Declaration {
                 name,
-                path: raw.path.into_inner().0,
-                url: raw.url.0
+                path: raw.path.into_inner(),
+                url: raw.url
             })
             .collect::<Vec<_>>();
         declarations.sort_by(|a, b| a.path.cmp(&b.path));
@@ -95,8 +95,8 @@ impl ManifestEditor
     pub fn declare(&mut self, declaration: &Declaration)
     {
         let mut table = Table::new();
-        table.insert("path", value(&declaration.path));
-        table.insert("url", value(&declaration.url));
+        table.insert("path", value(declaration.path.as_str()));
+        table.insert("url", value(declaration.url.as_str()));
         if !self.is_empty()
         {
             table.decor_mut().set_prefix("\n");
@@ -141,27 +141,15 @@ struct RawDeclaration
 
 /// A child repo path: a single directory name directly under the VMR
 /// root, never one the root repo or git-vmr reserves.
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[serde(try_from = "String")]
-struct RepoPath(String);
+pub struct RepoPath(String);
 
-impl TryFrom<String> for RepoPath
+impl RepoPath
 {
-    type Error = String;
-
-    fn try_from(path: String) -> Result<Self, Self::Error>
+    pub fn parse(path: String) -> Result<RepoPath, String>
     {
-        validate_path(&path)?;
-        Ok(RepoPath(path))
-    }
-}
-
-/// Checks that `path` can be declared as a child repo path: a single
-/// directory name, other than one the root repo or git-vmr reserves.
-pub fn validate_path(path: &str) -> Result<(), String>
-{
-    {
-        let mut components = Path::new(path).components();
+        let mut components = Path::new(&path).components();
         let single_name = matches!(
             (components.next(), components.next()),
             (Some(Component::Normal(_)), None)
@@ -175,27 +163,63 @@ pub fn validate_path(path: &str) -> Result<(), String>
             ));
         }
 
-        Ok(())
+        Ok(RepoPath(path))
+    }
+
+    pub fn as_str(&self) -> &str
+    {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RepoPath
+{
+    type Error = String;
+
+    fn try_from(path: String) -> Result<Self, Self::Error>
+    {
+        RepoPath::parse(path)
+    }
+}
+
+impl fmt::Display for RepoPath
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        f.write_str(&self.0)
     }
 }
 
 /// A child repo's remote URL, absolute or relative to the root repo's.
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "String")]
-struct RepoUrl(String);
+pub struct RepoUrl(String);
 
-impl TryFrom<String> for RepoUrl
+impl RepoUrl
 {
-    type Error = &'static str;
-
-    fn try_from(url: String) -> Result<Self, Self::Error>
+    pub fn parse(url: String) -> Result<RepoUrl, String>
     {
         if url.is_empty()
         {
-            return Err("url must not be empty");
+            return Err("url must not be empty".to_owned());
         }
 
         Ok(RepoUrl(url))
+    }
+
+    pub fn as_str(&self) -> &str
+    {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for RepoUrl
+{
+    type Error = String;
+
+    fn try_from(url: String) -> Result<Self, Self::Error>
+    {
+        RepoUrl::parse(url)
     }
 }
 
@@ -208,8 +232,8 @@ mod tests
     {
         Declaration {
             name: name.to_owned(),
-            path: path.to_owned(),
-            url: url.to_owned()
+            path: RepoPath::parse(path.to_owned()).unwrap(),
+            url: RepoUrl::parse(url.to_owned()).unwrap()
         }
     }
 

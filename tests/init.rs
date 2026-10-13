@@ -117,6 +117,46 @@ fn init_skips_repos_without_an_origin()
     assert_eq!(read(&tmp.path().join(".gitignore")), "/backend/\n");
 }
 
+#[test]
+fn init_skips_repos_whose_origin_url_is_empty()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    child_repo(tmp.path(), "backend", None);
+    git(&tmp.path().join("backend"), ["config", "remote.origin.url", ""]);
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Declared").not())
+        .stderr("warning: skipped 'backend': its 'origin' URL is empty\n");
+
+    git_vmr().current_dir(tmp.path()).arg("status").assert().success();
+}
+
+#[test]
+fn init_errors_in_an_old_style_worktree_root()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    fs::write(tmp.path().join(".gitvmr"), "").expect("failed to write marker");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(format!(
+            "fatal: '{}' is an old-style worktree root\n\
+             hint: remove its child worktrees with 'git worktree remove' in \
+             each repo, then recreate it with 'git vmr worktree add'\n",
+            shown_dir(tmp.path()).display()
+        ));
+
+    assert!(!tmp.path().join(".git").exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn init_skips_repos_whose_name_cannot_be_declared()

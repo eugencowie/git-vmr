@@ -3,7 +3,7 @@ mod routing;
 use crate::git::{Git, GitCommandResult, stderr};
 use crate::render::{self, Rendered};
 pub use crate::vmr::Repo;
-use crate::vmr::{self, Vmr};
+use crate::vmr::{Declaration, Gitignore, Manifest, Vmr};
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use routing::Router;
@@ -18,66 +18,52 @@ pub struct Workspace<'a>
 {
     git: &'a Git,
     vmr: Vmr,
+    members: Members,
+    warnings: Vec<String>,
+    working_dir: PathBuf
+}
+
+/// The child repos a workspace snapshots from its manifest.
+struct Members
+{
     /// The declared child repos that are cloned, sorted by path.
     repos: Vec<Repo>,
     /// The paths of declared child repos that are not cloned.
-    missing: Vec<String>,
-    warnings: Vec<String>,
-    working_dir: PathBuf
+    missing: Vec<String>
 }
 
 impl<'a> Workspace<'a>
 {
     /// Opens the VMR that owns `working_dir`, snapshotting the child repos
-    /// its manifest declares and noting load warnings: declared repos that
-    /// are not cloned, and declared repos the root repo does not ignore.
+    /// its manifest declares and noting load warnings.
     pub fn open(git: &'a Git, working_dir: &Path) -> Result<Workspace<'a>>
     {
         let vmr = Vmr::find(working_dir)?;
         let manifest = vmr.manifest()?;
 
-        let (repos, missing): (Vec<_>, Vec<_>) = manifest
-            .declarations()
-            .iter()
-            .map(|declaration| Repo {
-                name: declaration.path.clone(),
-                path: vmr.path.join(&declaration.path)
-            })
-            .partition(|repo| repo.path.join(".git").exists());
-        let missing =
-            missing.into_iter().map(|repo| repo.name).collect::<Vec<_>>();
-
-        let mut warnings = Vec::new();
-        if !missing.is_empty()
-        {
-            warnings.push(format!(
-                "{} declared in .gitvmr but not cloned; run 'git vmr clone' \
-                 to clone them",
-                quoted_list(&missing)
-            ));
-        }
-        let declared = manifest
-            .declarations()
-            .iter()
-            .map(|declaration| declaration.path.as_str())
-            .collect::<Vec<_>>();
-        match unignored(git, &vmr.path, &declared)
-        {
-            Ok(unignored) => warnings
-                .extend(unignored.into_iter().map(|path| {
-                format!(
-                    "'{path}' is not ignored by the root repo; add '/{path}/' \
-                     to .gitignore"
-                )
-            })),
-            Err(error) => warnings.push(format!("{error:#}"))
-        }
+        let (cloned, missing): (Vec<&Declaration>, Vec<&Declaration>) =
+            manifest.declarations().iter().partition(|declaration| {
+                vmr.path.join(declaration.path.as_str()).join(".git").exists()
+            });
+        let members = Members {
+            repos: cloned
+                .into_iter()
+                .map(|declaration| Repo {
+                    name: declaration.path.to_string(),
+                    path: vmr.path.join(declaration.path.as_str())
+                })
+                .collect(),
+            missing: missing
+                .into_iter()
+                .map(|declaration| declaration.path.to_string())
+                .collect()
+        };
+        let warnings = load_warnings(git, &vmr.path, &manifest, &members);
 
         Ok(Self {
             git,
             vmr,
-            repos,
-            missing,
+            members,
             warnings,
             working_dir: working_dir.to_path_buf()
         })
@@ -104,7 +90,7 @@ impl<'a> Workspace<'a>
     /// The snapshotted child repos, sorted by name.
     pub fn repos(&self) -> &[Repo]
     {
-        &self.repos
+        &self.members.repos
     }
 
     /// Runs a git operation in every child repo in parallel, then renders
@@ -112,7 +98,7 @@ impl<'a> Workspace<'a>
     pub fn run<F>(&self, op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
-        self.run_in(&self.repos, op)
+        self.run_in(&self.members.repos, op)
     }
 
     /// Runs a git operation in an explicit subset of child repos in
@@ -150,7 +136,7 @@ impl<'a> Workspace<'a>
         F: Fn(&Git, &Repo) -> Result<T> + Sync,
         T: Send
     {
-        self.repos.par_iter().map(|repo| op(self.git, repo)).collect()
+        self.members.repos.par_iter().map(|repo| op(self.git, repo)).collect()
     }
 
     /// Routes the scope to its owning child repos and gathers a value from
@@ -198,31 +184,62 @@ impl<'a> Workspace<'a>
 
     fn router(&self) -> Router<'_>
     {
-        Router::new(
-            &self.vmr.path,
-            &self.repos,
-            &self.missing,
-            &self.working_dir
-        )
+        Router::new(&self.vmr.path, &self.members, &self.working_dir)
     }
 }
 
+/// The load warnings for a workspace's members: declared repos that are
+/// not cloned, and declared repos the root repo does not ignore. Neither
+/// fails the command, and nor does failing to check.
+fn load_warnings(
+    git: &Git,
+    root: &Path,
+    manifest: &Manifest,
+    members: &Members
+) -> Vec<String>
+{
+    let mut warnings = Vec::new();
+    if !members.missing.is_empty()
+    {
+        warnings.push(format!(
+            "{} declared in .gitvmr but not cloned; run 'git vmr clone' to \
+             clone them",
+            quoted_list(&members.missing)
+        ));
+    }
+
+    let declared = manifest
+        .declarations()
+        .iter()
+        .map(|declaration| declaration.path.as_str());
+    match unignored(git, root, declared)
+    {
+        Ok(unignored) => warnings.extend(unignored.into_iter().map(|path| {
+            format!(
+                "'{path}' is not ignored by the root repo; add '{}' to \
+                 .gitignore",
+                Gitignore::line(path)
+            )
+        })),
+        Err(error) => warnings.push(format!("{error:#}"))
+    }
+
+    warnings
+}
+
 /// The declared child repo paths the root repo does not ignore. A
-/// `.gitignore` line of exactly `/<path>/` — the line git-vmr writes —
-/// settles a path without spawning git; only the rest go through one
-/// `git check-ignore`, so hand-written patterns still count.
+/// `.gitignore` line that git-vmr would write settles a path without
+/// spawning git; only the rest go through one `git check-ignore`, so
+/// hand-written patterns still count.
 fn unignored<'p>(
     git: &Git,
     root: &Path,
-    paths: &[&'p str]
+    paths: impl Iterator<Item = &'p str>
 ) -> Result<Vec<&'p str>>
 {
-    let gitignore = vmr::read_gitignore(root);
-    let unlisted = paths
-        .iter()
-        .copied()
-        .filter(|path| !vmr::has_ignore_line(&gitignore, path))
-        .collect::<Vec<_>>();
+    let gitignore = Gitignore::read(root);
+    let unlisted =
+        paths.filter(|path| !gitignore.has_line(path)).collect::<Vec<_>>();
     if unlisted.is_empty()
     {
         return Ok(unlisted);

@@ -2,7 +2,9 @@
 
 use crate::cli::CliContext;
 use crate::git::Git;
-use crate::vmr::Repo;
+use crate::vmr::{
+    Declaration, Gitignore, ManifestEditor, Repo, RepoPath, RepoUrl
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -37,17 +39,15 @@ pub(crate) fn vmr_fixture() -> TempDir
 pub(crate) fn root_repo(dir: &Path, declared: &[&str], ignored: &[&str])
 {
     fs::create_dir_all(dir.join(".git")).unwrap();
-    let manifest = declared
-        .iter()
-        .map(|path| {
-            format!(
-                "[repo.{path}]\npath = \"{path}\"\nurl = \"../{path}.git\"\n"
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    fs::write(dir.join(".gitvmr"), manifest).unwrap();
-    let gitignore =
-        ignored.iter().map(|path| format!("/{path}/\n")).collect::<String>();
-    fs::write(dir.join(".gitignore"), gitignore).unwrap();
+    let mut editor = ManifestEditor::new();
+    for path in declared
+    {
+        editor.declare(&Declaration {
+            name: (*path).to_owned(),
+            path: RepoPath::parse((*path).to_owned()).unwrap(),
+            url: RepoUrl::parse(format!("../{path}.git")).unwrap()
+        });
+    }
+    fs::write(dir.join(".gitvmr"), editor.to_string()).unwrap();
+    Gitignore::read(dir).ignore(ignored.iter().copied()).unwrap();
 }

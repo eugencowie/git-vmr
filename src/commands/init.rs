@@ -2,7 +2,8 @@ use crate::cli::CliContext;
 use crate::git::{Git, stderr};
 use crate::render::Rendered;
 use crate::vmr::{
-    self, Declaration, MANIFEST, ManifestEditor, Vmr, validate_path
+    self, Declaration, Gitignore, Layout, MANIFEST, ManifestEditor, RepoPath,
+    RepoUrl
 };
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
@@ -55,25 +56,33 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     let manifest_path = target_dir.join(MANIFEST);
     let mut rendered = Rendered::default();
 
-    // An existing manifest is left alone: declaring later is `add`'s job
-    if manifest_path.is_file()
+    match Layout::of(&target_dir)
     {
-        Vmr::reject_old_worktree_root(&target_dir)?;
-        git.init_root(&target_dir)?;
-        rendered.stdout = format!(
-            "Reinitialized existing virtual monorepo in {}\n",
-            target_dir.display()
-        );
-        return Ok(rendered);
-    }
+        // An existing manifest is left alone: declaring later is `add`'s job
+        Layout::Root | Layout::ManifestWithoutGit =>
+        {
+            git.init_root(&target_dir)?;
+            rendered.stdout = format!(
+                "Reinitialized existing virtual monorepo in {}\n",
+                target_dir.display()
+            );
+            return Ok(rendered);
+        }
 
-    // Convert an old-style VMR, whose marker directory held only config
-    if manifest_path.is_dir()
-    {
-        fs::remove_dir_all(&manifest_path).with_context(|| {
-            format!("fatal: failed to remove '{}'", manifest_path.display())
-        })?;
-        rendered.stdout.push_str("Removed old-style .gitvmr directory\n");
+        Layout::OldWorktreeRoot =>
+            return Err(vmr::old_worktree_root_error(&target_dir)),
+
+        // Convert an old-style VMR, whose marker directory held only config
+        Layout::OldVmr =>
+        {
+            fs::remove_dir_all(&manifest_path).with_context(|| {
+                format!("fatal: failed to remove '{}'", manifest_path.display())
+            })?;
+            rendered.stdout.push_str("Removed old-style .gitvmr directory\n");
+        }
+
+        Layout::NoManifest =>
+        {}
     }
 
     git.init_root(&target_dir)?;
@@ -86,40 +95,23 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     // Backfill the manifest from the Git repositories already present
     let mut editor = ManifestEditor::new();
     let mut declared = Vec::new();
-    for path in first_level_repos(&target_dir)?
+    for name in first_level_repos(&target_dir)?
     {
-        if let Err(reason) = validate_path(&path)
+        match backfill(git, &target_dir, &name)?
         {
-            let _ = writeln!(
-                rendered.stderr,
-                "warning: skipped '{path}': {reason}"
-            );
-            continue;
-        }
-
-        let skipped = match git.origin_url(&target_dir.join(&path))?
-        {
-            None => Some("it has no 'origin' remote"),
-            Some(_) if git.tracks_under(&target_dir, &path)? =>
-                Some("the root repo tracks files under it"),
-            Some(url) =>
+            Backfill::Declare(declaration) =>
             {
-                editor.declare(&Declaration {
-                    name: path.clone(),
-                    path: path.clone(),
-                    url
-                });
-                let _ = writeln!(rendered.stdout, "Declared '{path}'");
-                declared.push(path.clone());
-                None
+                editor.declare(&declaration);
+                let _ = writeln!(rendered.stdout, "Declared '{name}'");
+                declared.push(declaration.path);
             }
-        };
-        if let Some(reason) = skipped
-        {
-            let _ = writeln!(
-                rendered.stderr,
-                "warning: skipped '{path}': {reason}"
-            );
+            Backfill::Skip(reason) =>
+            {
+                let _ = writeln!(
+                    rendered.stderr,
+                    "warning: skipped '{name}': {reason}"
+                );
+            }
         }
     }
 
@@ -129,7 +121,8 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     let mut files = MANIFEST.to_owned();
     if !declared.is_empty()
     {
-        ignore(&target_dir, &declared)?;
+        Gitignore::read(&target_dir)
+            .ignore(declared.iter().map(RepoPath::as_str))?;
         files.push_str(" .gitignore");
     }
 
@@ -143,6 +136,45 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     );
 
     Ok(rendered)
+}
+
+/// What backfilling does with a Git repository found in the target.
+enum Backfill
+{
+    Declare(Declaration),
+    Skip(String)
+}
+
+/// Decides whether the repo at `root/name` can be declared: it needs a
+/// declarable name, an `origin` URL to declare, and a directory the root
+/// repo does not already track files under.
+fn backfill(git: &Git, root: &Path, name: &str) -> Result<Backfill>
+{
+    let path = match RepoPath::parse(name.to_owned())
+    {
+        Ok(path) => path,
+        Err(reason) => return Ok(Backfill::Skip(reason))
+    };
+
+    let Some(url) = git.origin_url(&root.join(name))?
+    else
+    {
+        return Ok(Backfill::Skip("it has no 'origin' remote".to_owned()));
+    };
+    let Ok(url) = RepoUrl::parse(url)
+    else
+    {
+        return Ok(Backfill::Skip("its 'origin' URL is empty".to_owned()));
+    };
+
+    if git.tracks_under(root, name)?
+    {
+        return Ok(Backfill::Skip(
+            "the root repo tracks files under it".to_owned()
+        ));
+    }
+
+    Ok(Backfill::Declare(Declaration { name: name.to_owned(), path, url }))
 }
 
 /// The names of the target's immediate subdirectories that are Git
@@ -163,40 +195,6 @@ fn first_level_repos(target_dir: &Path) -> Result<Vec<String>>
     repos.sort();
 
     Ok(repos)
-}
-
-/// Ignores child repos in the root repo: appends an anchored `/<path>/`
-/// line to its `.gitignore` for each path that lacks one, keeping the rest
-/// of the file as it is.
-///
-/// Not `.git/info/exclude`: that file is shared by every worktree of the
-/// root repo while manifests are per branch, so one worktree's ignore lines
-/// would be another's too.
-fn ignore(root: &Path, paths: &[String]) -> Result<()>
-{
-    let mut gitignore = vmr::read_gitignore(root);
-    let missing = paths
-        .iter()
-        .filter(|path| !vmr::has_ignore_line(&gitignore, path))
-        .collect::<Vec<_>>();
-    if missing.is_empty()
-    {
-        return Ok(());
-    }
-
-    if !gitignore.is_empty() && !gitignore.ends_with('\n')
-    {
-        gitignore.push('\n');
-    }
-    for path in missing
-    {
-        let _ = writeln!(gitignore, "/{path}/");
-    }
-
-    let gitignore_path = root.join(".gitignore");
-    fs::write(&gitignore_path, gitignore).with_context(|| {
-        format!("fatal: failed to write '{}'", gitignore_path.display())
-    })
 }
 
 impl Git
