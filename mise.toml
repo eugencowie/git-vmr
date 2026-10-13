@@ -14,6 +14,9 @@ rust = [
 ]
 shellcheck = "latest"
 
+[env]
+RUSTFMT = "{{config_root}}/scripts/rustfmt-nightly.{% if os() == 'windows' %}cmd{% else %}sh{% endif %}"
+
 [tasks.build]
 description = "Build project"
 run = "cargo build"
@@ -24,7 +27,6 @@ run = "cargo test"
 
 [tasks.format]
 description = "Fix formatting issues"
-tools = { rust = "nightly" }
 run = "cargo fmt"
 
 [tasks.lint]
