@@ -1,5 +1,10 @@
+# git-cliff ~ configuration file
+# https://git-cliff.org/docs/configuration
+
 [changelog]
+# Header template that will be rendered and added to the beginning of the changelog.
 header = "# Changelog"
+# A Tera template to be rendered for each release in the changelog.
 body = """
 
 {% if version %}\
@@ -18,7 +23,14 @@ body = """
 """
 
 [git]
+# Exclude tags that are not version-shaped.
 tag_pattern = "^v[0-9]"
+# An array of regex based parsers to modify commit messages prior to further processing.
+commit_preprocessors = [
+    # Replace issue numbers with link templates to be updated in `changelog.postprocessors`.
+    { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/eugencowie/git-vmr/pull/${1}))" },
+]
+# An array of regex based parsers for extracting data from the commit message.
 commit_parsers = [
     { message = "^feat", group = "<!-- 0 -->🚀 Features" },
     { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
@@ -36,10 +48,7 @@ commit_parsers = [
     { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
     { message = ".*", group = "<!-- 10 -->💼 Other" },
 ]
-commit_preprocessors = [
-    { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/eugencowie/git-vmr/pull/${1}))" },
-]
 
 [bump]
-# Breaking changes bump the minor version while pre-1.0
+# Breaking changes bump the minor version while pre-1.0.
 breaking_always_bump_major = false
