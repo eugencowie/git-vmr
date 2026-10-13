@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git, git_output, git_vmr, init_repo};
+use common::{commit_file, git, git_output, git_vmr, init_repo, shown_dir};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -43,7 +43,7 @@ fn init_creates_root_repo_with_empty_manifest()
         .success()
         .stdout(format!(
             "Initialized virtual monorepo in {}\n{}",
-            tmp.path().display(),
+            shown_dir(tmp.path()).display(),
             next_steps(".gitvmr")
         ))
         .stderr(predicate::str::is_empty());
@@ -73,7 +73,7 @@ fn init_declares_existing_repos_from_their_origin()
             "Initialized virtual monorepo in {}\n\
              Declared 'backend'\n\
              Declared 'frontend'\n{}",
-            tmp.path().display(),
+            shown_dir(tmp.path()).display(),
             next_steps(".gitvmr .gitignore")
         ))
         .stderr(predicate::str::is_empty());
@@ -196,7 +196,7 @@ fn init_converts_an_old_style_vmr()
             "Removed old-style .gitvmr directory\n\
              Initialized virtual monorepo in {}\n\
              Declared 'backend'\n",
-            tmp.path().display()
+            shown_dir(tmp.path()).display()
         ))
     );
 
@@ -220,7 +220,7 @@ fn init_reports_reinitialized_without_changing_anything()
         .success()
         .stdout(format!(
             "Reinitialized existing virtual monorepo in {}\n",
-            tmp.path().display()
+            shown_dir(tmp.path()).display()
         ))
         .stderr(predicate::str::is_empty());
 
@@ -243,7 +243,7 @@ fn init_with_working_dir_argument_initializes_requested_directory()
         .success()
         .stdout(predicate::str::starts_with(format!(
             "Initialized virtual monorepo in {}\n",
-            target.display()
+            target.canonicalize().unwrap().display()
         )))
         .stderr(predicate::str::is_empty());
 

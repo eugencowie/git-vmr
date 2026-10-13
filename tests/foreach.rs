@@ -1,6 +1,6 @@
 mod common;
 
-use common::{git_vmr, init_vmr};
+use common::{git_vmr, init_vmr, shown_dir};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -25,20 +25,6 @@ fn shell_command<'a>(_unix: &'a str, windows: &'a str) -> &'a str
 fn child_lines(lines: &[&str]) -> String
 {
     format!("{}{}", lines.join(CHILD_NEWLINE), CHILD_NEWLINE)
-}
-
-#[cfg(unix)]
-fn expected_current_dir(path: &Path) -> std::path::PathBuf
-{
-    path.canonicalize().unwrap()
-}
-
-#[cfg(windows)]
-fn expected_current_dir(path: &Path) -> std::path::PathBuf
-{
-    // `CliContext` gets the process working directory from GetCurrentDirectory,
-    // which preserves the non-verbatim spelling passed to `current_dir`.
-    path.to_path_buf()
 }
 
 fn create_vmr(repos: &[&str]) -> tempfile::TempDir
@@ -255,7 +241,7 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
         .success()
         .stdout(format!(
             "backend;backend;backend;{};unset{}",
-            expected_current_dir(tmp.path()).display(),
+            shown_dir(tmp.path()).display(),
             CHILD_NEWLINE
         ))
         .stderr(predicate::str::is_empty());

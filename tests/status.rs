@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git, git_vmr, init_repo, init_vmr};
+use common::{commit_file, git, git_vmr, init_repo, init_vmr, shown_dir};
 use predicates::prelude::*;
 use std::fs;
 
@@ -38,7 +38,7 @@ fn status_errors_in_an_old_style_vmr()
         .stderr(format!(
             "fatal: '{}' is an old-style virtual monorepo\n\
              hint: run 'git vmr init' there to convert it\n",
-            tmp.path().display()
+            shown_dir(tmp.path()).display()
         ));
 }
 

@@ -150,6 +150,22 @@ pub fn declare(path: &Path, repos: &[&str])
         .expect("failed to write .gitignore");
 }
 
+/// How the CLI shows the directory it was run from: the process working dir,
+/// which resolves symlinks such as macOS's `/var` on Unix.
+#[cfg(unix)]
+pub fn shown_dir(path: &Path) -> PathBuf
+{
+    path.canonicalize().expect("failed to canonicalize path")
+}
+
+/// How the CLI shows the directory it was run from: GetCurrentDirectory
+/// preserves the spelling passed to `current_dir`.
+#[cfg(windows)]
+pub fn shown_dir(path: &Path) -> PathBuf
+{
+    path.to_path_buf()
+}
+
 pub fn init_repo(path: &Path)
 {
     fs::create_dir(path).expect("failed to create repo dir");
