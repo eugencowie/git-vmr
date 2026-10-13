@@ -14,7 +14,6 @@ use crate::render;
 use crate::state::GlobalState;
 use crate::store::FileStore;
 use crate::updates::{self, Frequency};
-use crate::workspace::Workspace;
 use anyhow::Result;
 use std::io::Write;
 use std::path::PathBuf;
@@ -69,17 +68,9 @@ fn run_with(
         let _ = writeln!(stderr, "warning: {warning}");
     }
 
-    // Run command, opening the workspace for a workspace command and
-    // reporting its load warnings without failing the command
+    // Run command
     let start = Instant::now();
-    let result = command.run(&context, |context| {
-        let workspace = Workspace::open(&context.git, &context.working_dir)?;
-        for warning in workspace.warnings()
-        {
-            let _ = writeln!(stderr, "warning: {warning}");
-        }
-        Ok(workspace)
-    });
+    let result = command.run(&context, stderr);
     let result = render::emit(result);
 
     // Record analytics

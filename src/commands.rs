@@ -40,6 +40,7 @@ pub use rebase::RebaseArgs;
 pub use reset::ResetArgs;
 pub use restore::RestoreArgs;
 pub use rm::RmArgs;
+use std::io::Write;
 pub use switch::SwitchArgs;
 pub use tag::TagArgs;
 pub use worktree::WorktreeCommand;
@@ -95,13 +96,13 @@ pub enum WorkspaceCommand
 
 impl Command
 {
-    /// Runs the command. A workspace command runs in the workspace `open`
-    /// opens — a pipeline step, so opening failures and load warnings are
-    /// reported before the command sees anything.
-    pub fn run<'c>(
+    /// Runs the command. A workspace command first opens the workspace,
+    /// reporting its load warnings to `stderr` before the command sees
+    /// anything.
+    pub fn run(
         &self,
-        context: &'c CliContext,
-        open: impl FnOnce(&'c CliContext) -> Result<Workspace<'c>>
+        context: &CliContext,
+        stderr: &mut impl Write
     ) -> Result<Rendered>
     {
         match self
@@ -110,7 +111,18 @@ impl Command
 
             Command::Init(args) => init::run(context, args),
 
-            Command::Workspace(command) => command.run(&open(context)?, context)
+            Command::Workspace(command) =>
+            {
+                let workspace =
+                    Workspace::open(&context.git, &context.working_dir)?;
+
+                for warning in workspace.warnings()
+                {
+                    let _ = writeln!(stderr, "warning: {warning}");
+                }
+
+                command.run(&workspace, context)
+            }
         }
     }
 }
