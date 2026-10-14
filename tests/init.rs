@@ -151,7 +151,7 @@ fn init_skips_repos_whose_origin_url_is_empty()
 }
 
 #[test]
-fn init_errors_in_an_old_style_worktree_root()
+fn init_errors_in_a_legacy_worktree_root()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -165,7 +165,7 @@ fn init_errors_in_an_old_style_worktree_root()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(format!(
-            "fatal: '{}' is an old-style worktree root\n\
+            "fatal: '{}' is a legacy worktree root\n\
              hint: remove its child worktrees with 'git worktree remove' in \
              each repo, then recreate it with 'git vmr worktree add'\n",
             shown_dir(tmp.path()).display()
@@ -250,7 +250,7 @@ fn init_keeps_an_existing_root_repo_and_gitignore()
 }
 
 #[test]
-fn init_converts_an_old_style_vmr()
+fn init_converts_a_legacy_vmr()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -262,7 +262,7 @@ fn init_converts_an_old_style_vmr()
     // Act
     git_vmr().current_dir(tmp.path()).arg("init").assert().success().stdout(
         predicate::str::starts_with(format!(
-            "Removed old-style .gitvmr directory\n\
+            "Removed legacy .gitvmr directory\n\
              Initialized virtual monorepo in {}\n\
              Declared 'backend'\n",
             shown_dir(tmp.path()).display()

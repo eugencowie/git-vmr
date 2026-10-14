@@ -18,12 +18,12 @@ A VMR is a plain directory outside Git whose child repos are discovered by scann
 - `git vmr init` runs `git init` if needed, writes the manifest, and backfills it from Git repositories already in the directory using each one's `origin` (repos without one are skipped with a reason). This is the upgrade path for existing VMRs. Committing is left to the user.
 - **BREAKING** `git vmr clone <url>` clones the root repo and then every declared child repo, like `git clone --recurse-submodules`. `git vmr clone` with no URL, inside a VMR, clones declared-but-missing child repos (e.g. after a pull adds one); `pull` never clones silently.
 - **BREAKING** Worktree roots are linked worktrees of the root repo, each governed by its own checked-out manifest. The separate marker file disappears.
-- Discovery walks up from the working dir to the nearest root-repo checkout carrying a `.gitvmr` manifest; nearest wins, so VMRs do not compose. Old-style VMRs and worktree roots, and a root repo on a branch without a manifest, fail with clear errors pointing to the fix.
+- Discovery walks up from the working dir to the nearest root-repo checkout carrying a `.gitvmr` manifest; nearest wins, so VMRs do not compose. Legacy VMRs and worktree roots, and a root repo on a branch without a manifest, fail with clear errors pointing to the fix.
 - **BREAKING** VMR config (`.gitvmr/config`) is deleted; it was written but never read.
 
 ## Affected Commands
 
-- Discovery (every workspace command): finds a root-repo checkout carrying a manifest; clear errors for old-style VMRs and for branches without a manifest.
+- Discovery (every workspace command): finds a root-repo checkout carrying a manifest; clear errors for legacy VMRs and for branches without a manifest.
 - `init`: creates the root repo and manifest and backfills from existing repos, replacing `.gitvmr/config` creation.
 - `clone`: builds the whole VMR instead of delegating to `git clone`; with no URL, clones missing children.
 - `add`, `rm`: declaring and undeclaring; the root repo is a routing target.
@@ -35,7 +35,7 @@ A VMR is a plain directory outside Git whose child repos are discovered by scann
 
 ## Design
 
-Delivered as a stack of PRs, each ending in a verified state, each updating the README and `docs/parity/` pages it affects, and titled with `!` where it breaks behavior so release-plz records it. Worktree commands are broken between steps 1 and 5; nothing is released mid-stack, so no compatibility code for the old marker is written.
+Delivered as a stack of PRs, each ending in a verified state, each updating the README and `docs/parity/` pages it affects, and titled with `!` where it breaks behavior so release-plz records it. Worktree commands are broken between steps 1 and 5; nothing is released mid-stack, so no compatibility code for the legacy marker is written.
 
 ### Step 1 — Manifest, discovery, init
 
@@ -53,15 +53,15 @@ The root repo is not yet a member; children come from the manifest instead of sc
 - **Validation** is strict, at the parse boundary, with errors pointing at the line: `path` and `url` required and non-empty; `path` a single component, not `.`, `..`, `.git`, or `.gitvmr`; no duplicate paths; unknown keys are errors (a typo like `ulr` must not pass). A parse failure is fatal for every workspace command.
 - **Reading and writing.** Read with `toml` + serde (`deny_unknown_fields`, span-carrying errors). Write with a new `toml_edit` dependency so comments and formatting survive edits, used only by the declare/undeclare code — outside `FileStore`, whose full re-serialization suits config and state but not a hand-edited, committed file.
 - **Discovery** is a filesystem check, no git subprocess: walking up from the working dir, a directory is a VMR root when `.gitvmr` is a file and `.git` exists beside it (directory or file, covering worktrees). Errors:
-  - `.gitvmr` is a directory → old-style VMR; run `git vmr init` to convert.
-  - `.gitvmr` is an empty file with no `.git` → old-style worktree root; remove its child worktrees with `git worktree remove` in each repo, then recreate it with `git vmr worktree add`. No migration command.
+  - `.gitvmr` is a directory → legacy VMR; run `git vmr init` to convert.
+  - `.gitvmr` is an empty file with no `.git` → legacy worktree root; remove its child worktrees with `git worktree remove` in each repo, then recreate it with `git vmr worktree add`. No migration command.
   - No match → "not a virtual monorepo", hinting that the root repo may be on a branch without a manifest (indistinguishable from an ordinary repo, so a hint rather than a diagnosis).
 - **Opening the workspace becomes a pipeline step** for workspace commands: build context → open workspace → report load warnings → execute. Commands receive the opened workspace instead of calling `Workspace::find`. Opening failures (not a VMR, bad manifest, old shape) report at this one choke point.
 - **Membership.** One module in `src/vmr/`, private to the workspace core but built directly by `init`, owns which Git repositories sit at a VMR root: built from a root and a manifest, it reads the root's first level once (a real directory holding `.git`, named in UTF-8) and holds the cloned children, the missing children (as manifest entries, for clone), and the undeclared repos. A pure constructor takes the listing, so routing tests stay literal paths. `Workspace::open` builds it, `init` builds it over an empty manifest to backfill from its undeclared repos, and the Router asks it who owns a first path component instead of probing the disk. It does not know what is ignored. Children only until 2b.
 - **Load warnings** from opening:
   - Declared children missing from disk: one warning naming them and `git vmr clone`. Fan-out ignores them; a path routed into one is an error ("`x` is not cloned").
   - Declared children not ignored: a text scan of `.gitignore` for the exact `/path/` line; only children that miss it go through one `git check-ignore`, so hand-written patterns like `/*/` still count. Warns; never edits.
-- **Init** runs `git init` if no repo exists, writes the manifest, backfills it (skipping, with a reason, any path the root repo tracks anything under — the overlap check step 4 reuses) from first-level Git repositories using each one's `origin` (no origin → skipped with a reason; name = path = directory name), and writes their `.gitignore` lines. An existing manifest means "Reinitialized" with no changes — `add` is the way to declare later. Converting an old-style VMR removes the `.gitvmr/` directory before writing the manifest. Init ends with the next step — commit `.gitvmr` and `.gitignore`, then add a remote — since until then the root is unborn and cross-VMR `switch` fails on it. No `--commit` flag.
+- **Init** runs `git init` if no repo exists, writes the manifest, backfills it (skipping, with a reason, any path the root repo tracks anything under — the overlap check step 4 reuses) from first-level Git repositories using each one's `origin` (no origin → skipped with a reason; name = path = directory name), and writes their `.gitignore` lines. An existing manifest means "Reinitialized" with no changes — `add` is the way to declare later. Converting a legacy VMR removes the `.gitvmr/` directory before writing the manifest. Init ends with the next step — commit `.gitvmr` and `.gitignore`, then add a remote — since until then the root is unborn and cross-VMR `switch` fails on it. No `--commit` flag.
 - **VMR config** (`src/config.rs`, `.gitvmr/config`) is deleted.
 - **`.gitignore` comment.** The code that writes ignore lines carries a comment recording why not `.git/info/exclude`: it is shared by every worktree of the root repo while manifests are per branch, so one worktree's view would un-ignore another's children.
 - **Fixtures.** `init_vmr(path)` becomes `init_vmr(path, &["backend", "frontend"])`: `git init` on the root plus a manifest with `file://` URLs; children are still created separately, so a missing-child test is a declared name without a matching `init_repo`. Membership is always stated, never inferred. The unit `vmr_fixture()`, the worktree unit tests' hand-built markers, and the benchmark fixture change likewise.

@@ -24,7 +24,7 @@ fn status_errors_outside_a_vmr()
 }
 
 #[test]
-fn status_errors_in_an_old_style_vmr()
+fn status_errors_in_a_legacy_vmr()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
@@ -38,7 +38,7 @@ fn status_errors_in_an_old_style_vmr()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(format!(
-            "fatal: '{}' is an old-style virtual monorepo\n\
+            "fatal: '{}' is a legacy virtual monorepo\n\
              hint: run 'git vmr init' there to convert it\n",
             shown_dir(tmp.path()).display()
         ));

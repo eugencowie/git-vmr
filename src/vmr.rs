@@ -28,10 +28,10 @@ pub enum Layout
     /// A non-empty `.gitvmr` file with no `.git` beside it.
     ManifestWithoutGit,
     /// A `.gitvmr` directory: a VMR from before root repos.
-    OldVmr,
+    LegacyVmr,
     /// An empty `.gitvmr` file with no `.git` beside it: a worktree root
     /// from before root repos.
-    OldWorktreeRoot
+    LegacyWorktreeRoot
 }
 
 impl Layout
@@ -48,7 +48,7 @@ impl Layout
         // Classify by the manifest's kind and whether `.git` sits beside it
         if manifest.is_dir()
         {
-            Layout::OldVmr
+            Layout::LegacyVmr
         }
         else if dir.join(".git").exists()
         {
@@ -56,7 +56,7 @@ impl Layout
         }
         else if manifest.len() == 0
         {
-            Layout::OldWorktreeRoot
+            Layout::LegacyWorktreeRoot
         }
         else
         {
@@ -65,12 +65,12 @@ impl Layout
     }
 }
 
-/// The error for an old-style worktree root at `dir`, which nothing can
+/// The error for a legacy worktree root at `dir`, which nothing can
 /// convert in place.
-pub fn old_worktree_root_error(dir: &Path) -> anyhow::Error
+pub fn legacy_worktree_root_error(dir: &Path) -> anyhow::Error
 {
     anyhow!(
-        "fatal: '{}' is an old-style worktree root\n\
+        "fatal: '{}' is a legacy worktree root\n\
          hint: remove its child worktrees with 'git worktree remove' in each \
          repo, then recreate it with 'git vmr worktree add'",
         dir.display()
@@ -97,13 +97,13 @@ impl Vmr
             match Layout::of(dir)
             {
                 Layout::Root => return Ok(Vmr { path: dir.to_path_buf() }),
-                Layout::OldVmr => bail!(
-                    "fatal: '{}' is an old-style virtual monorepo\n\
+                Layout::LegacyVmr => bail!(
+                    "fatal: '{}' is a legacy virtual monorepo\n\
                      hint: run 'git vmr init' there to convert it",
                     dir.display()
                 ),
-                Layout::OldWorktreeRoot =>
-                    return Err(old_worktree_root_error(dir)),
+                Layout::LegacyWorktreeRoot =>
+                    return Err(legacy_worktree_root_error(dir)),
                 Layout::NoManifest | Layout::ManifestWithoutGit =>
                 {}
             }
@@ -304,7 +304,7 @@ mod tests
     }
 
     #[test]
-    fn errors_on_an_old_style_vmr()
+    fn errors_on_a_legacy_vmr()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
@@ -319,7 +319,7 @@ mod tests
         assert_eq!(
             format!("{err:#}"),
             format!(
-                "fatal: '{}' is an old-style virtual monorepo\n\
+                "fatal: '{}' is a legacy virtual monorepo\n\
                  hint: run 'git vmr init' there to convert it",
                 tmp.path().display()
             )
@@ -327,7 +327,7 @@ mod tests
     }
 
     #[test]
-    fn errors_on_an_old_style_worktree_root()
+    fn errors_on_a_legacy_worktree_root()
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
@@ -340,7 +340,7 @@ mod tests
         assert_eq!(
             format!("{err:#}"),
             format!(
-                "fatal: '{}' is an old-style worktree root\n\
+                "fatal: '{}' is a legacy worktree root\n\
                  hint: remove its child worktrees with 'git worktree remove' \
                  in each repo, then recreate it with 'git vmr worktree add'",
                 tmp.path().display()

@@ -70,16 +70,16 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
             return Ok(rendered);
         }
 
-        Layout::OldWorktreeRoot =>
-            return Err(vmr::old_worktree_root_error(&target_dir)),
+        Layout::LegacyWorktreeRoot =>
+            return Err(vmr::legacy_worktree_root_error(&target_dir)),
 
-        // Convert an old-style VMR, whose marker directory held only config
-        Layout::OldVmr =>
+        // Convert a legacy VMR, whose marker directory held only config
+        Layout::LegacyVmr =>
         {
             fs::remove_dir_all(&manifest_path).with_context(|| {
                 format!("fatal: failed to remove '{}'", manifest_path.display())
             })?;
-            rendered.stdout.push_str("Removed old-style .gitvmr directory\n");
+            rendered.stdout.push_str("Removed legacy .gitvmr directory\n");
         }
 
         Layout::NoManifest =>

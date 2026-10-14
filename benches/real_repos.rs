@@ -411,7 +411,7 @@ fn prepare_fixture(fixture_root: &Path) -> Result<(), String>
 /// converting a fixture prepared with the old `.gitvmr/` marker directory.
 fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
 {
-    // Remove an old-style marker directory
+    // Remove a legacy marker directory
     let manifest_path = fixture_root.join(".gitvmr");
     if manifest_path.is_dir()
     {
