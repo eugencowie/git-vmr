@@ -411,6 +411,7 @@ fn prepare_fixture(fixture_root: &Path) -> Result<(), String>
 /// converting a fixture prepared with the old `.gitvmr/` marker directory.
 fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
 {
+    // Remove an old-style marker directory
     let manifest_path = fixture_root.join(".gitvmr");
     if manifest_path.is_dir()
     {
@@ -422,6 +423,7 @@ fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
         })?;
     }
 
+    // Make the fixture root a Git repository
     if !fixture_root.join(".git").exists()
     {
         let output = Command::new("git")
@@ -443,6 +445,7 @@ fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
         }
     }
 
+    // Declare and ignore every benchmark repository
     let manifest = REPOS
         .iter()
         .map(|repo| {

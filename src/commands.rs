@@ -113,14 +113,17 @@ impl Command
 
             Command::Workspace(command) =>
             {
+                // Open workspace
                 let workspace =
                     Workspace::open(&context.git, &context.working_dir)?;
 
+                // Report workspace load warnings without failing the command
                 for warning in workspace.warnings()
                 {
                     let _ = writeln!(stderr, "warning: {warning}");
                 }
 
+                // Run command
                 command.run(&workspace, context)
             }
         }

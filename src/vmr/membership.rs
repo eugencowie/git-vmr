@@ -32,6 +32,7 @@ impl Membership
     /// there against `manifest`.
     pub fn read(root: &Path, manifest: &Manifest) -> Result<Membership>
     {
+        // List the first-level Git repositories
         let on_disk = fs::read_dir(root)
             .with_context(|| {
                 format!("fatal: failed to read '{}'", root.display())
@@ -43,6 +44,7 @@ impl Membership
             .filter_map(|entry| entry.file_name().into_string().ok())
             .filter(|name| name != ".git");
 
+        // Sort them against the manifest
         Ok(Membership::new(root, manifest, on_disk))
     }
 
@@ -54,6 +56,7 @@ impl Membership
         on_disk: impl IntoIterator<Item = String>
     ) -> Membership
     {
+        // Split the repos on disk into declared and undeclared
         let declarations = manifest.declarations();
         let (declared, mut undeclared): (Vec<String>, Vec<String>) =
             on_disk.into_iter().partition(|name| {
@@ -63,11 +66,13 @@ impl Membership
             });
         undeclared.sort();
 
+        // Split the declarations into cloned and missing
         let (cloned, missing): (Vec<&Declaration>, Vec<&Declaration>) =
             declarations.iter().partition(|declaration| {
                 declared.iter().any(|name| declares(declaration, name))
             });
 
+        // Label cloned repos by manifest path
         Membership {
             cloned: cloned
                 .into_iter()
@@ -103,7 +108,10 @@ impl Membership
     /// The repo that the first-level entry `name` belongs to, if any.
     pub fn owner(&self, name: &OsStr) -> Option<Owner<'_>>
     {
+        // Names that are not valid UTF-8 belong to no repo
         let name = name.to_str()?;
+
+        // Look for a cloned repo, then a missing one, then an undeclared one
         if let Some(repo) = self.cloned.iter().find(|repo| repo.name == name)
         {
             return Some(Owner::Cloned(repo));

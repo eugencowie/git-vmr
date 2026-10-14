@@ -38,8 +38,13 @@ pub(crate) fn vmr_fixture() -> TempDir
 /// `.gitignore` with an anchored line for each of `ignored`.
 pub(crate) fn root_repo(dir: &Path, declared: &[&str], ignored: &[&str])
 {
+    // Mark as a Git repository
     fs::create_dir_all(dir.join(".git")).unwrap();
+
+    // Write manifest
     fs::write(dir.join(".gitvmr"), manifest_text(declared)).unwrap();
+
+    // Ignore child repos
     Gitignore::read(dir).ignore(ignored.iter().copied()).unwrap();
 }
 

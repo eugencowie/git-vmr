@@ -26,6 +26,7 @@ impl Manifest
 {
     pub fn parse(text: &str) -> Result<Manifest>
     {
+        // Parse TOML
         let raw: RawManifest = toml::from_str(text)?;
 
         // Check for duplicate paths in file order, so the later declaration
@@ -45,6 +46,7 @@ impl Manifest
             }
         }
 
+        // Build declarations sorted by path
         let mut declarations = entries
             .into_iter()
             .map(|(name, raw)| Declaration {
@@ -84,6 +86,8 @@ impl ManifestEditor
     /// An empty manifest.
     pub fn new() -> Self
     {
+        // An implicit `[repo]` table writes no header, so an empty manifest
+        // is an empty file
         let mut document = DocumentMut::new();
         let mut repos = Table::new();
         repos.set_implicit(true);
@@ -94,6 +98,7 @@ impl ManifestEditor
     /// Appends a `[repo.<name>]` table declaring a child repo.
     pub fn declare(&mut self, declaration: &Declaration)
     {
+        // Build table, after a blank line unless it is the first
         let mut table = Table::new();
         table.insert("path", value(declaration.path.as_str()));
         table.insert("url", value(declaration.url.as_str()));
@@ -102,6 +107,7 @@ impl ManifestEditor
             table.decor_mut().set_prefix("\n");
         }
 
+        // Add it under `[repo]`
         self.document["repo"]
             .as_table_mut()
             .expect("the repo table is created with the editor")
@@ -149,12 +155,14 @@ impl RepoPath
 {
     pub fn parse(path: String) -> Result<RepoPath, String>
     {
+        // Check for one normal component, with no separator of either kind
         let mut components = Path::new(&path).components();
         let single_name = matches!(
             (components.next(), components.next()),
             (Some(Component::Normal(_)), None)
         ) && !path.contains(['/', '\\']);
 
+        // Reject anything else, and the reserved names
         if !single_name || path == ".git" || path == ".gitvmr"
         {
             return Err(format!(

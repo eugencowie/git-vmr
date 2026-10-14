@@ -29,9 +29,11 @@ impl<'a> Workspace<'a>
     /// its manifest declares and noting load warnings.
     pub fn open(git: &'a Git, working_dir: &Path) -> Result<Workspace<'a>>
     {
+        // Discover VMR and read its manifest
         let vmr = Vmr::find(working_dir)?;
         let manifest = vmr.manifest()?;
 
+        // Snapshot membership and note load warnings
         let membership = Membership::read(&vmr.path, &manifest)?;
         let warnings = load_warnings(git, &vmr.path, &manifest, &membership);
 
@@ -177,6 +179,7 @@ fn load_warnings(
     membership: &Membership
 ) -> Vec<String>
 {
+    // Warn about declared repos that are not cloned
     let mut warnings = Vec::new();
     if !membership.missing().is_empty()
     {
@@ -192,6 +195,7 @@ fn load_warnings(
         ));
     }
 
+    // Warn about declared repos the root repo does not ignore
     let declared = manifest
         .declarations()
         .iter()
@@ -221,6 +225,7 @@ fn unignored<'p>(
     paths: impl Iterator<Item = &'p str>
 ) -> Result<Vec<&'p str>>
 {
+    // Settle paths with a git-vmr ignore line without spawning git
     let gitignore = Gitignore::read(root);
     let unlisted =
         paths.filter(|path| !gitignore.has_line(path)).collect::<Vec<_>>();
@@ -229,7 +234,8 @@ fn unignored<'p>(
         return Ok(unlisted);
     }
 
-    // Trailing slashes mark each path as a directory for pattern matching
+    // Ask git about the rest; trailing slashes mark each path as a
+    // directory for pattern matching
     let output = git.output(
         root,
         ["check-ignore", "--"]
@@ -245,6 +251,7 @@ fn unignored<'p>(
         );
     }
 
+    // Keep the paths git did not report as ignored
     let stdout = String::from_utf8_lossy(&output.stdout);
     let ignored = stdout
         .lines()

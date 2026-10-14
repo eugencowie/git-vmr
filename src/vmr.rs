@@ -38,12 +38,14 @@ impl Layout
 {
     pub fn of(dir: &Path) -> Layout
     {
+        // Check for a manifest
         let Ok(manifest) = fs::metadata(dir.join(MANIFEST))
         else
         {
             return Layout::NoManifest;
         };
 
+        // Classify by the manifest's kind and whether `.git` sits beside it
         if manifest.is_dir()
         {
             Layout::OldVmr
@@ -89,6 +91,7 @@ impl Vmr
     /// Git repository.
     pub fn find(working_dir: &Path) -> Result<Vmr>
     {
+        // Search working directory and ancestors
         for dir in working_dir.clean().ancestors()
         {
             match Layout::of(dir)
@@ -106,6 +109,7 @@ impl Vmr
             }
         }
 
+        // Report missing VMR root
         bail!(
             "fatal: not a virtual monorepo (or any of the parent \
              directories): .gitvmr\n\
@@ -117,11 +121,13 @@ impl Vmr
     /// Reads and validates the manifest from the working tree.
     pub fn manifest(&self) -> Result<Manifest>
     {
+        // Read manifest
         let path = self.path.join(MANIFEST);
         let text = fs::read_to_string(&path).with_context(|| {
             format!("fatal: failed to read '{}'", path.display())
         })?;
 
+        // Parse and validate manifest
         Manifest::parse(&text).with_context(|| {
             format!("fatal: invalid manifest '{}'", path.display())
         })

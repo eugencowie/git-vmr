@@ -26,9 +26,11 @@ fn status_errors_outside_a_vmr()
 #[test]
 fn status_errors_in_an_old_style_vmr()
 {
+    // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     fs::create_dir(tmp.path().join(".gitvmr")).expect("failed to create dir");
 
+    // Act + Assert
     git_vmr()
         .current_dir(tmp.path())
         .arg("status")
@@ -45,11 +47,13 @@ fn status_errors_in_an_old_style_vmr()
 #[test]
 fn status_errors_on_an_invalid_manifest()
 {
+    // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
     fs::write(tmp.path().join(".gitvmr"), "[repo.backend]\nulr = \"u\"\n")
         .expect("failed to write manifest");
 
+    // Act + Assert
     git_vmr()
         .current_dir(tmp.path())
         .arg("status")
@@ -65,12 +69,14 @@ fn status_errors_on_an_invalid_manifest()
 #[test]
 fn status_warns_about_declared_repos_that_are_not_cloned()
 {
+    // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["api", "backend"]);
     let repo = tmp.path().join("backend");
     init_repo(&repo);
     commit_file(&repo, "README.md");
 
+    // Act + Assert: status warns
     git_vmr()
         .current_dir(tmp.path())
         .arg("status")
@@ -82,6 +88,7 @@ fn status_warns_about_declared_repos_that_are_not_cloned()
              clone' to clone them\n"
         );
 
+    // Act + Assert: routing into the missing repo fails
     git_vmr()
         .current_dir(tmp.path())
         .args(["add", "api/file.txt"])
@@ -95,6 +102,7 @@ fn status_warns_about_declared_repos_that_are_not_cloned()
 #[test]
 fn status_warns_about_declared_repos_that_are_not_ignored()
 {
+    // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend", "frontend"]);
     fs::write(tmp.path().join(".gitignore"), "/fr*/\n")
@@ -106,6 +114,7 @@ fn status_warns_about_declared_repos_that_are_not_ignored()
         commit_file(&repo, "README.md");
     }
 
+    // Act + Assert
     git_vmr().current_dir(tmp.path()).arg("status").assert().success().stderr(
         "warning: 'backend' is not ignored by the root repo; add \
              '/backend/' to .gitignore\n"

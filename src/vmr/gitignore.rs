@@ -46,6 +46,7 @@ impl Gitignore
         paths: impl IntoIterator<Item = &'p str>
     ) -> Result<()>
     {
+        // Find the paths that lack a line
         let missing = paths
             .into_iter()
             .filter(|path| !self.has_line(path))
@@ -55,6 +56,7 @@ impl Gitignore
             return Ok(());
         }
 
+        // Append the lines, ending an unterminated last line first
         if !self.text.is_empty() && !self.text.ends_with('\n')
         {
             self.text.push('\n');
@@ -64,6 +66,7 @@ impl Gitignore
             let _ = writeln!(self.text, "{}", Gitignore::line(path));
         }
 
+        // Write file
         fs::write(&self.path, &self.text).with_context(|| {
             format!("fatal: failed to write '{}'", self.path.display())
         })

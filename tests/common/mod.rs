@@ -126,7 +126,10 @@ pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
 /// without a matching [`init_repo`] is a child repo that is not cloned.
 pub fn init_vmr(path: &Path, repos: &[&str])
 {
+    // Make a root repo
     git(path, ["init", "--quiet", "--initial-branch=master"]);
+
+    // Declare child repos
     declare(path, repos);
 }
 
@@ -134,6 +137,7 @@ pub fn init_vmr(path: &Path, repos: &[&str])
 /// path, with `file://` URLs) and its `.gitignore` to ignore them.
 pub fn declare(path: &Path, repos: &[&str])
 {
+    // Write manifest
     let manifest = repos
         .iter()
         .map(|repo| {
@@ -144,6 +148,8 @@ pub fn declare(path: &Path, repos: &[&str])
         .join("\n");
     fs::write(path.join(".gitvmr"), manifest)
         .expect("failed to write manifest");
+
+    // Write .gitignore
     let gitignore =
         repos.iter().map(|repo| format!("/{repo}/\n")).collect::<String>();
     fs::write(path.join(".gitignore"), gitignore)

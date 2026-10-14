@@ -56,6 +56,7 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
     let manifest_path = target_dir.join(MANIFEST);
     let mut rendered = Rendered::default();
 
+    // Reinitialize, refuse or convert by what the target already holds
     match Layout::of(&target_dir)
     {
         // An existing manifest is left alone: declaring later is `add`'s job
@@ -85,6 +86,7 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
         {}
     }
 
+    // Make the target a root repo
     git.init_root(&target_dir)?;
     let _ = writeln!(
         rendered.stdout,
@@ -117,9 +119,12 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
         }
     }
 
+    // Write manifest
     fs::write(&manifest_path, editor.to_string()).with_context(|| {
         format!("fatal: failed to write '{}'", manifest_path.display())
     })?;
+
+    // Ignore the declared child repos in the root repo
     let mut files = MANIFEST.to_owned();
     if !declared.is_empty()
     {
@@ -128,7 +133,7 @@ pub fn run(context: &CliContext, args: &InitArgs) -> Result<Rendered>
         files.push_str(" .gitignore");
     }
 
-    // Until its first commit the root repo is unborn
+    // Suggest next steps: until its first commit the root repo is unborn
     let _ = write!(
         rendered.stdout,
         "\nNext, commit the manifest and add a remote:\n  \
@@ -152,12 +157,14 @@ enum Backfill
 /// repo does not already track files under.
 fn backfill(git: &Git, root: &Path, name: &str) -> Result<Backfill>
 {
+    // Require a declarable name
     let path = match RepoPath::parse(name.to_owned())
     {
         Ok(path) => path,
         Err(reason) => return Ok(Backfill::Skip(reason))
     };
 
+    // Require a non-empty origin URL
     let Some(url) = git.origin_url(&root.join(name))?
     else
     {
@@ -169,6 +176,7 @@ fn backfill(git: &Git, root: &Path, name: &str) -> Result<Backfill>
         return Ok(Backfill::Skip("its 'origin' URL is empty".to_owned()));
     };
 
+    // Require a directory the root repo does not track files under
     if git.tracks_under(root, name)?
     {
         return Ok(Backfill::Skip(
@@ -184,11 +192,13 @@ impl Git
     /// Makes `dir` a Git repository unless it already is one.
     fn init_root(&self, dir: &Path) -> Result<()>
     {
+        // Keep an existing Git repository
         if dir.join(".git").exists()
         {
             return Ok(());
         }
 
+        // Run git init
         let output = self.output(dir, ["init", "--quiet"])?;
         if !output.status.success()
         {
@@ -217,9 +227,11 @@ impl Git
     /// The repo's `origin` URL as configured, if it has one.
     fn origin_url(&self, repo: &Path) -> Result<Option<String>>
     {
+        // Read the configured URL
         let output =
             self.output(repo, ["config", "--get", "remote.origin.url"])?;
 
+        // Exit code 1 means the key is unset
         match output.status.code()
         {
             Some(0) => Ok(Some(
