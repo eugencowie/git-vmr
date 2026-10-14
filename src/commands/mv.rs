@@ -486,7 +486,7 @@ mod tests
             ""
         ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let outcomes = mv(&workspace, &MvArgs {
@@ -524,7 +524,7 @@ mod tests
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
         fs::create_dir(tmp.path().join("backend/docs")).unwrap();
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let outcomes = mv(&workspace, &MvArgs {
@@ -564,7 +564,7 @@ mod tests
             .on(["add", "--", "settings.toml"], 0, "", "");
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "config.toml"));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let outcomes = mv(&workspace, &MvArgs {
@@ -604,7 +604,7 @@ mod tests
         let fake = Arc::new(tracked_file(&tmp, fake, "frontend", "notes.md"));
         fs::create_dir(tmp.path().join("backend/docs")).unwrap();
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = mv(&workspace, &MvArgs {
@@ -631,7 +631,7 @@ mod tests
         let fake = tracked_file(&tmp, fake, "backend", "a.txt");
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = mv(&workspace, &MvArgs {
@@ -665,7 +665,7 @@ mod tests
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "b.txt"));
         fs::create_dir(tmp.path().join("frontend/docs")).unwrap();
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let outcomes = mv(&workspace, &MvArgs {
@@ -711,7 +711,7 @@ mod tests
             );
         let fake = Arc::new(tracked_file(&tmp, fake, "backend", "config.toml"));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let outcomes = mv(&workspace, &MvArgs {

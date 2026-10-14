@@ -1,6 +1,6 @@
 mod common;
 
-use common::git_vmr;
+use common::{git_vmr, init_vmr, shown_dir};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -27,25 +27,10 @@ fn child_lines(lines: &[&str]) -> String
     format!("{}{}", lines.join(CHILD_NEWLINE), CHILD_NEWLINE)
 }
 
-#[cfg(unix)]
-fn expected_current_dir(path: &Path) -> std::path::PathBuf
-{
-    path.canonicalize().unwrap()
-}
-
-#[cfg(windows)]
-fn expected_current_dir(path: &Path) -> std::path::PathBuf
-{
-    // `CliContext` gets the process working directory from GetCurrentDirectory,
-    // which preserves the non-verbatim spelling passed to `current_dir`.
-    path.to_path_buf()
-}
-
-fn create_vmr() -> tempfile::TempDir
+fn create_vmr(repos: &[&str]) -> tempfile::TempDir
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), repos);
     tmp
 }
 
@@ -59,7 +44,7 @@ fn create_child_repo(vmr: &Path, name: &str)
 #[test]
 fn foreach_runs_command_across_child_repos_and_skips_non_git_children()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend", "frontend"]);
     create_child_repo(tmp.path(), "backend");
     create_child_repo(tmp.path(), "frontend");
     fs::create_dir(tmp.path().join("docs"))
@@ -81,7 +66,7 @@ fn foreach_runs_command_across_child_repos_and_skips_non_git_children()
 #[test]
 fn foreach_succeeds_without_output_when_no_child_repos_exist()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&[]);
     fs::create_dir(tmp.path().join("docs"))
         .expect("failed to create non-git child");
 
@@ -113,7 +98,7 @@ fn foreach_errors_outside_a_vmr()
 #[test]
 fn foreach_renders_parallel_results_in_repository_order()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["alpha", "zeta"]);
     create_child_repo(tmp.path(), "alpha");
     create_child_repo(tmp.path(), "zeta");
 
@@ -136,7 +121,7 @@ fn foreach_renders_parallel_results_in_repository_order()
 #[test]
 fn foreach_replays_stdout_stderr_and_default_headers()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend"]);
     create_child_repo(tmp.path(), "backend");
 
     git_vmr()
@@ -154,7 +139,7 @@ fn foreach_replays_stdout_stderr_and_default_headers()
 #[test]
 fn foreach_quiet_suppresses_headers_only()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend"]);
     create_child_repo(tmp.path(), "backend");
 
     git_vmr()
@@ -169,7 +154,7 @@ fn foreach_quiet_suppresses_headers_only()
 #[test]
 fn foreach_reports_single_child_failure()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend"]);
     create_child_repo(tmp.path(), "backend");
 
     git_vmr()
@@ -189,7 +174,7 @@ fn foreach_reports_single_child_failure()
 #[test]
 fn foreach_reports_multiple_failures_in_repository_order()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["alpha", "zeta"]);
     create_child_repo(tmp.path(), "alpha");
     create_child_repo(tmp.path(), "zeta");
 
@@ -214,7 +199,7 @@ fn foreach_reports_multiple_failures_in_repository_order()
 #[test]
 fn foreach_does_not_report_successful_repositories_as_failures()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend", "frontend"]);
     create_child_repo(tmp.path(), "backend");
     create_child_repo(tmp.path(), "frontend");
 
@@ -239,7 +224,7 @@ fn foreach_does_not_report_successful_repositories_as_failures()
 #[test]
 fn foreach_sets_vmr_environment_variables_without_sha1()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend"]);
     create_child_repo(tmp.path(), "backend");
 
     git_vmr()
@@ -256,7 +241,7 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
         .success()
         .stdout(format!(
             "backend;backend;backend;{};unset{}",
-            expected_current_dir(tmp.path()).display(),
+            shown_dir(tmp.path()).display(),
             CHILD_NEWLINE
         ))
         .stderr(predicate::str::is_empty());
@@ -265,7 +250,7 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
 #[test]
 fn foreach_displaypath_respects_effective_working_directory()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend", "frontend"]);
     create_child_repo(tmp.path(), "backend");
     create_child_repo(tmp.path(), "frontend");
 
@@ -298,7 +283,7 @@ fn foreach_displaypath_respects_effective_working_directory()
 #[test]
 fn foreach_closes_child_stdin()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend"]);
     create_child_repo(tmp.path(), "backend");
 
     git_vmr()
@@ -313,7 +298,7 @@ fn foreach_closes_child_stdin()
 #[test]
 fn foreach_discovers_vmr_from_nested_working_directory_and_global_c()
 {
-    let tmp = create_vmr();
+    let tmp = create_vmr(&["backend", "frontend"]);
     create_child_repo(tmp.path(), "backend");
     create_child_repo(tmp.path(), "frontend");
     fs::create_dir_all(tmp.path().join("frontend/src"))

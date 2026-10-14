@@ -2,11 +2,11 @@
 //! pinned open-source repositories.
 //!
 //! The first run clones each repository into the fixture directory
-//! (`DEFAULT_FIXTURE_DIR`, or `GITVMR_BENCH_FIXTURE_DIR` if set) and creates
-//! the `.gitvmr/` marker. Later runs reuse existing repository directories
-//! without fetching or pulling, so setup time is not part of the measured
-//! warm-cache wall time. Run with `mise run bench`; remove the fixture with
-//! `mise run bench:clean`.
+//! (`DEFAULT_FIXTURE_DIR`, or `GITVMR_BENCH_FIXTURE_DIR` if set) and makes
+//! the fixture a root repo whose `.gitvmr` manifest declares them. Later runs
+//! reuse existing repository directories without fetching or pulling, so setup
+//! time is not part of the measured warm-cache wall time. Run with `mise run
+//! bench`; remove the fixture with `mise run bench:clean`.
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::path::{Path, PathBuf};
@@ -387,12 +387,7 @@ fn prepare_fixture(fixture_root: &Path) -> Result<(), String>
             fixture_root.display()
         )
     })?;
-    fs::create_dir_all(fixture_root.join(".gitvmr")).map_err(|err| {
-        format!(
-            "failed to create fixture marker '{}': {err}",
-            fixture_root.join(".gitvmr").display()
-        )
-    })?;
+    prepare_root_repo(fixture_root)?;
 
     for repo in REPOS
     {
@@ -408,6 +403,70 @@ fn prepare_fixture(fixture_root: &Path) -> Result<(), String>
     }
 
     dirty_fixture(fixture_root)?;
+
+    Ok(())
+}
+
+/// Makes the fixture root a root repo declaring every benchmark repository,
+/// converting a fixture prepared with the old `.gitvmr/` marker directory.
+fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
+{
+    // Remove a legacy marker directory
+    let manifest_path = fixture_root.join(".gitvmr");
+    if manifest_path.is_dir()
+    {
+        fs::remove_dir_all(&manifest_path).map_err(|err| {
+            format!(
+                "failed to remove old fixture marker '{}': {err}",
+                manifest_path.display()
+            )
+        })?;
+    }
+
+    // Make the fixture root a Git repository
+    if !fixture_root.join(".git").exists()
+    {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(fixture_root)
+            .args(["init", "--quiet"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|err| format!("failed to start git init: {err}"))?;
+        if !output.status.success()
+        {
+            return Err(format!(
+                "failed to initialize fixture root repo '{}': {}: {}",
+                fixture_root.display(),
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+
+    // Declare and ignore every benchmark repository
+    let manifest = REPOS
+        .iter()
+        .map(|repo| {
+            format!(
+                "[repo.{0}]\npath = \"{0}\"\nurl = \"{1}\"\n",
+                repo.name, repo.url
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let gitignore = REPOS
+        .iter()
+        .map(|repo| format!("/{}/\n", repo.name))
+        .collect::<String>();
+    for (file, contents) in [(".gitvmr", manifest), (".gitignore", gitignore)]
+    {
+        let path = fixture_root.join(file);
+        fs::write(&path, contents).map_err(|err| {
+            format!("failed to write '{}': {err}", path.display())
+        })?;
+    }
 
     Ok(())
 }
@@ -705,11 +764,11 @@ fn run_git(
 
 fn validate_fixture(fixture_root: &Path) -> Result<(), String>
 {
-    let marker = fixture_root.join(".gitvmr");
-    if !marker.is_dir()
+    if !fixture_root.join(".gitvmr").is_file()
+        || !fixture_root.join(".git").exists()
     {
         return Err(format!(
-            "fixture root '{}' is missing .gitvmr/",
+            "fixture root '{}' is not a root repo with a .gitvmr manifest",
             fixture_root.display()
         ));
     }

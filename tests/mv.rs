@@ -45,7 +45,7 @@ fn mv_requires_at_least_source_and_destination_operands_and_rejects_options()
 fn mv_moves_tracked_file_and_directory_within_one_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/old.rs");
@@ -83,7 +83,7 @@ fn mv_moves_tracked_file_and_directory_within_one_repo()
 fn mv_moves_tracked_file_and_directory_between_repos()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -133,7 +133,7 @@ fn mv_moves_tracked_file_and_directory_between_repos()
 fn mv_uses_child_working_dir_and_working_dir_argument()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -170,7 +170,7 @@ fn mv_uses_child_working_dir_and_working_dir_argument()
 fn mv_supports_destination_directory_semantics()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -199,7 +199,7 @@ fn mv_supports_destination_directory_semantics()
 fn mv_moves_multiple_files_within_one_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/a.rs");
@@ -233,7 +233,7 @@ fn mv_moves_multiple_files_within_one_repo()
 fn mv_moves_multiple_files_from_one_repo_into_another_repo_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -276,7 +276,7 @@ fn mv_moves_multiple_files_from_one_repo_into_another_repo_root()
 fn mv_moves_multiple_files_from_multiple_repos_into_one_directory()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -309,7 +309,7 @@ fn mv_moves_multiple_files_from_multiple_repos_into_one_directory()
 fn mv_multi_source_uses_child_working_dir_and_working_dir_argument()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -357,7 +357,7 @@ fn mv_multi_source_uses_child_working_dir_and_working_dir_argument()
 fn mv_rejects_invalid_ownership_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     fs::write(tmp.path().join("README.md"), "vmr\n")
         .expect("failed to write root file");
@@ -390,7 +390,7 @@ fn mv_rejects_invalid_ownership_before_moving()
 fn mv_rejects_cross_repo_untracked_source_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -422,7 +422,7 @@ fn mv_rejects_cross_repo_destination_conflicts_and_missing_parents_before_moving
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -464,7 +464,7 @@ fn mv_rejects_cross_repo_destination_conflicts_and_missing_parents_before_moving
 fn mv_rejects_multi_source_preflight_failures_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -552,7 +552,7 @@ fn mv_rejects_multi_source_preflight_failures_before_moving()
 fn mv_same_repo_git_failure_reports_repo_context()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "tracked.rs");
