@@ -1,4 +1,5 @@
 use super::{Declaration, Manifest, Repo};
+use crate::git::git_style_path;
 use anyhow::{Context, Result, bail};
 use std::path::{Component, Path, PathBuf};
 use std::{fs, iter};
@@ -200,8 +201,8 @@ impl Membership
             bail!(
                 "error: '{}' is inside nested Git repository '{}', which is \
                  not a member repo",
-                path.display(),
-                nested.display()
+                git_style_path(path),
+                git_style_path(nested)
             );
         }
 
