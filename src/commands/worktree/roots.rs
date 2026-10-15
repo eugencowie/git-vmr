@@ -69,7 +69,11 @@ impl<'a> WorktreeRoots<'a>
     /// The scope of a root operation: one child worktree per child repo.
     fn scope(&self) -> Vec<String>
     {
-        self.workspace.repos().iter().map(|repo| repo.label.clone()).collect()
+        self.workspace
+            .children()
+            .iter()
+            .map(|repo| repo.label.clone())
+            .collect()
     }
 
     /// Materializes the root at `target`, then adds one child worktree per
@@ -124,10 +128,11 @@ impl<'a> WorktreeRoots<'a>
         force_delete: bool
     ) -> Result<RootOutcomes>
     {
-        let removals = self.workspace.map(|git, repo| {
-            // Wrap per-repo errors so map attempts every repository.
-            Ok(remove_child(git, repo, target, force, delete, force_delete))
-        })?;
+        let removals =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                // Wrap per-repo errors so map attempts every repository.
+                Ok(remove_child(git, repo, target, force, delete, force_delete))
+            })?;
 
         let mut all_child_removals_succeeded = true;
         let mut outcomes = Vec::new();
@@ -195,14 +200,15 @@ impl<'a> WorktreeRoots<'a>
     {
         Vmr::create_worktree_root(destination)?;
 
-        let outcomes = self.workspace.map(|git, repo| {
-            Ok(git.worktree_move(
-                repo,
-                &source.join(&repo.label),
-                &destination.join(&repo.label),
-                force
-            ))
-        })?;
+        let outcomes =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                Ok(git.worktree_move(
+                    repo,
+                    &source.join(&repo.label),
+                    &destination.join(&repo.label),
+                    force
+                ))
+            })?;
 
         let all_child_moves_succeeded = outcomes
             .iter()
@@ -224,9 +230,11 @@ impl<'a> WorktreeRoots<'a>
     /// the worktree root (or main VMR root) it belongs to.
     pub fn list(&self) -> Result<BTreeMap<PathBuf, Vec<WorktreeRootEntry>>>
     {
-        let results = self.workspace.map(|git, repo| {
-            git.worktree_list(repo).map(|entries| (repo.label.clone(), entries))
-        })?;
+        let results =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                git.worktree_list(repo)
+                    .map(|entries| (repo.label.clone(), entries))
+            })?;
 
         let mut groups: BTreeMap<PathBuf, Vec<WorktreeRootEntry>> =
             BTreeMap::new();

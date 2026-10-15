@@ -64,21 +64,27 @@ impl<'a> Workspace<'a>
         self.git
     }
 
-    /// The snapshotted child repos, sorted by path.
-    pub fn repos(&self) -> &[Repo]
+    /// The snapshotted member repos, in order.
+    pub fn members(&self) -> &[Repo]
     {
-        self.membership.cloned()
+        self.membership.members()
     }
 
-    /// Runs a git operation in every child repo in parallel, then renders
+    /// The snapshotted child repos, sorted by path.
+    pub fn children(&self) -> &[Repo]
+    {
+        self.membership.children()
+    }
+
+    /// Runs a git operation in every member repo in parallel, then renders
     /// the aggregated outcomes.
     pub fn run<F>(&self, op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
-        self.run_in(self.membership.cloned(), op)
+        self.run_in(self.membership.members(), op)
     }
 
-    /// Runs a git operation in an explicit subset of child repos in
+    /// Runs a git operation in an explicit subset of member repos in
     /// parallel, then renders the aggregated outcomes.
     pub fn run_in<F>(&self, repos: &[Repo], op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
@@ -106,18 +112,24 @@ impl<'a> Workspace<'a>
         )
     }
 
-    /// Gathers a value from every child repo in parallel, in repo order,
+    /// Gathers a value from every member repo in parallel, in repo order,
     /// without reporting.
     pub fn map<T, F>(&self, op: F) -> Result<Vec<T>>
     where
         F: Fn(&Git, &Repo) -> Result<T> + Sync,
         T: Send
     {
-        self.membership
-            .cloned()
-            .par_iter()
-            .map(|repo| op(self.git, repo))
-            .collect()
+        self.map_in(self.membership.members(), op)
+    }
+
+    /// Gathers a value from an explicit subset of member repos in parallel,
+    /// in the subset's order, without reporting.
+    pub fn map_in<T, F>(&self, repos: &[Repo], op: F) -> Result<Vec<T>>
+    where
+        F: Fn(&Git, &Repo) -> Result<T> + Sync,
+        T: Send
+    {
+        repos.par_iter().map(|repo| op(self.git, repo)).collect()
     }
 
     /// Routes the scope to its owning child repos and gathers a value from
@@ -165,7 +177,7 @@ impl<'a> Workspace<'a>
 
     fn router(&self) -> Router<'_>
     {
-        Router::new(&self.vmr.path, &self.membership, &self.working_dir)
+        Router::new(&self.membership, &self.working_dir)
     }
 }
 
@@ -310,7 +322,7 @@ mod tests
         // Assert
         assert_eq!(
             workspace
-                .repos()
+                .children()
                 .iter()
                 .map(|repo| repo.label.as_str())
                 .collect::<Vec<_>>(),
@@ -425,7 +437,7 @@ mod tests
         assert!(workspace.warnings().is_empty());
         assert_eq!(
             workspace
-                .repos()
+                .children()
                 .iter()
                 .map(|repo| repo.label.as_str())
                 .collect::<Vec<_>>(),
@@ -495,7 +507,7 @@ mod tests
         ));
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
-        let subset = vec![workspace.repos()[0].clone()];
+        let subset = vec![workspace.members()[0].clone()];
 
         // Act
         workspace

@@ -16,7 +16,7 @@ pub fn run(
 
     render::outcomes(
         results.into_iter().flatten().collect(),
-        workspace.repos().iter().map(|repo| repo.label.as_str())
+        workspace.members().iter().map(|repo| repo.label.as_str())
     )
 }
 

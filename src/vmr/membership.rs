@@ -1,30 +1,37 @@
 use super::{Declaration, Manifest, Repo};
-use anyhow::{Context, Result};
-use std::ffi::OsStr;
-use std::fs;
-use std::path::Path;
+use anyhow::{Context, Result, bail};
+use std::path::{Component, Path, PathBuf};
+use std::{fs, iter};
 
-/// A VMR root's membership as far as child repos go: the cloned child
-/// repos are member repos; missing child repos (declared, not on disk) and
-/// undeclared repos (first-level Git repositories the manifest does not
-/// declare) are not. Also holds the root repo, for routing. The only place
-/// that decides which Git repositories sit at a VMR root.
+/// A VMR root's membership: the root repo and the cloned child repos are
+/// member repos; missing child repos (declared, not on disk) and undeclared
+/// repos (first-level Git repositories the manifest does not declare) are
+/// not. The only place that decides which Git repositories sit at a VMR
+/// root, and which of them owns a path within it.
 #[derive(Debug)]
 pub struct Membership
 {
-    root: Repo,
-    cloned: Vec<Repo>,
+    /// The root repo, then the cloned child repos sorted by path.
+    repos: Vec<Repo>,
     missing: Vec<Declaration>,
     undeclared: Vec<String>
 }
 
-/// The repo a first-level entry of the VMR root belongs to.
-#[derive(Debug, Eq, PartialEq)]
-pub enum Owner<'a>
+/// What owns a path within the VMR root.
+#[derive(Debug, PartialEq)]
+pub enum Classification<'a>
 {
-    Cloned(&'a Repo),
-    Missing(&'a Declaration),
-    Undeclared(&'a str)
+    /// Inside a member repo — a cloned child repo, otherwise the root repo —
+    /// with the path relative to it.
+    Member(&'a Repo, PathBuf),
+    /// A cloned child repo's root directory.
+    ChildRoot(&'a Repo),
+    /// Inside a first-level Git repository the manifest does not declare,
+    /// with the path relative to it.
+    Undeclared
+    {
+        name: &'a str, path: PathBuf
+    }
 }
 
 impl Membership
@@ -73,12 +80,14 @@ impl Membership
                 declared.iter().any(|name| declares(declaration, name))
             });
 
-        // Hold the root repo and the cloned child repos
+        // Hold the root repo, then the cloned child repos
         Membership {
-            root: Repo::root(root),
-            cloned: cloned
-                .into_iter()
-                .map(|declaration| Repo::child(root, declaration))
+            repos: iter::once(Repo::root(root))
+                .chain(
+                    cloned
+                        .into_iter()
+                        .map(|declaration| Repo::child(root, declaration))
+                )
                 .collect(),
             missing: missing.into_iter().cloned().collect(),
             undeclared
@@ -88,13 +97,20 @@ impl Membership
     /// The root repo, which owns every path outside the child repos.
     pub fn root(&self) -> &Repo
     {
-        &self.root
+        &self.repos[0]
+    }
+
+    /// The member repos a VMR operation runs across, in order. The root
+    /// repo does not take part yet, so these are the cloned child repos.
+    pub fn members(&self) -> &[Repo]
+    {
+        self.children()
     }
 
     /// The declared child repos that are cloned, sorted by path.
-    pub fn cloned(&self) -> &[Repo]
+    pub fn children(&self) -> &[Repo]
     {
-        &self.cloned
+        &self.repos[1..]
     }
 
     /// The declared child repos that are not cloned, sorted by path.
@@ -110,26 +126,62 @@ impl Membership
         &self.undeclared
     }
 
-    /// The repo that the first-level entry `name` belongs to, if any.
-    pub fn owner(&self, name: &OsStr) -> Option<Owner<'_>>
+    /// Classifies `path`, relative to the VMR root, by what owns it: a
+    /// member repo, or an undeclared repo, with the path relative to it, or
+    /// a child root itself. Fails for a path inside a missing child repo.
+    pub fn classify(&self, path: &Path) -> Result<Classification<'_>>
     {
+        // Take the first path component as the first-level entry; the VMR
+        // root itself belongs to the root repo
+        let mut components = path.components();
+        let Some(Component::Normal(entry)) = components.next()
+        else
+        {
+            return Ok(Classification::Member(self.root(), PathBuf::from(".")));
+        };
+        let rest = components.as_path();
+
         // Names that are not valid UTF-8 belong to no repo
-        let name = name.to_str()?;
+        let Some(entry) = entry.to_str()
+        else
+        {
+            return Ok(Classification::Member(self.root(), path.to_path_buf()));
+        };
 
         // Look for a cloned repo, then a missing one, then an undeclared one
-        if let Some(repo) = self.cloned.iter().find(|repo| repo.label == name)
+        if let Some(repo) =
+            self.children().iter().find(|repo| repo.label == entry)
         {
-            return Some(Owner::Cloned(repo));
+            return Ok(
+                if rest.as_os_str().is_empty()
+                {
+                    Classification::ChildRoot(repo)
+                }
+                else
+                {
+                    Classification::Member(repo, rest.to_path_buf())
+                }
+            );
         }
         if let Some(declaration) =
-            self.missing.iter().find(|declaration| declares(declaration, name))
+            self.missing.iter().find(|declaration| declares(declaration, entry))
         {
-            return Some(Owner::Missing(declaration));
+            bail!(
+                "error: '{}' is not cloned; run 'git vmr clone' to clone it",
+                declaration.path
+            );
         }
-        self.undeclared
-            .iter()
-            .find(|undeclared| *undeclared == name)
-            .map(|undeclared| Owner::Undeclared(undeclared))
+        if let Some(name) =
+            self.undeclared.iter().find(|undeclared| *undeclared == entry)
+        {
+            return Ok(Classification::Undeclared {
+                name,
+                path: dot_if_empty(rest)
+            });
+        }
+
+        // Anything else belongs to the root repo
+        Ok(Classification::Member(self.root(), path.to_path_buf()))
     }
 }
 
@@ -137,6 +189,19 @@ impl Membership
 fn declares(declaration: &Declaration, name: &str) -> bool
 {
     declaration.path.as_str() == name
+}
+
+/// `path`, or `.` when it is empty.
+fn dot_if_empty(path: &Path) -> PathBuf
+{
+    if path.as_os_str().is_empty()
+    {
+        PathBuf::from(".")
+    }
+    else
+    {
+        path.to_path_buf()
+    }
 }
 
 #[cfg(test)]
@@ -178,7 +243,7 @@ mod tests
         );
 
         // Assert
-        assert_eq!(membership.cloned(), [
+        assert_eq!(membership.children(), [
             repo("backend", root.join("backend")),
             repo("frontend", root.join("frontend"))
         ]);
@@ -201,31 +266,114 @@ mod tests
             Membership::new(Path::new("/vmr"), &manifest, on_disk(&["b", "a"]));
 
         // Assert
-        assert_eq!(labels(membership.cloned()), ["a", "b"]);
+        assert_eq!(labels(membership.children()), ["a", "b"]);
+    }
+
+    fn membership() -> Membership
+    {
+        Membership::new(
+            Path::new("/vmr"),
+            &manifest(&["api", "backend", "frontend"]),
+            on_disk(&["backend", "frontend", "scratch"])
+        )
     }
 
     #[test]
-    fn finds_the_owner_of_a_first_level_entry()
+    fn classifies_a_path_inside_a_child_repo_relative_to_it()
     {
         // Arrange
-        let manifest = manifest(&["api", "backend"]);
-        let membership = Membership::new(
-            Path::new("/vmr"),
-            &manifest,
-            on_disk(&["backend", "scratch"])
-        );
+        let membership = membership();
 
         // Act
-        let owners = ["backend", "api", "scratch", "docs"]
-            .map(|name| membership.owner(OsStr::new(name)));
+        let class = membership.classify(Path::new("backend/src/main.rs"));
 
         // Assert
-        assert_eq!(owners, [
-            Some(Owner::Cloned(&membership.cloned()[0])),
-            Some(Owner::Missing(&membership.missing()[0])),
-            Some(Owner::Undeclared("scratch")),
-            None
-        ]);
+        assert_eq!(
+            class.unwrap(),
+            Classification::Member(
+                &repo("backend", "/vmr/backend"),
+                PathBuf::from("src/main.rs")
+            )
+        );
+    }
+
+    #[test]
+    fn classifies_a_child_root()
+    {
+        // Arrange
+        let membership = membership();
+
+        // Act
+        let class = membership.classify(Path::new("backend"));
+
+        // Assert
+        assert_eq!(
+            class.unwrap(),
+            Classification::ChildRoot(&repo("backend", "/vmr/backend"))
+        );
+    }
+
+    #[test]
+    fn classifies_paths_outside_every_child_repo_as_the_root_repo()
+    {
+        // Arrange: docs is not a repo, README.md is a root file
+        let membership = membership();
+
+        for (path, root_path) in [
+            ("", "."),
+            ("README.md", "README.md"),
+            ("docs/guide.md", "docs/guide.md"),
+            (".gitvmr", ".gitvmr")
+        ]
+        {
+            // Act
+            let class = membership.classify(Path::new(path));
+
+            // Assert
+            assert_eq!(
+                class.unwrap(),
+                Classification::Member(
+                    &Repo::root(Path::new("/vmr")),
+                    PathBuf::from(root_path)
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn classifies_a_path_inside_an_undeclared_repo_relative_to_it()
+    {
+        // Arrange
+        let membership = membership();
+
+        for (path, repo_path) in
+            [("scratch/notes.md", "notes.md"), ("scratch", ".")]
+        {
+            // Act
+            let class = membership.classify(Path::new(path));
+
+            // Assert
+            assert_eq!(class.unwrap(), Classification::Undeclared {
+                name: "scratch",
+                path: PathBuf::from(repo_path)
+            });
+        }
+    }
+
+    #[test]
+    fn classifying_a_path_inside_a_missing_child_repo_fails()
+    {
+        // Arrange
+        let membership = membership();
+
+        // Act
+        let err = membership.classify(Path::new("api/src")).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "error: 'api' is not cloned; run 'git vmr clone' to clone it"
+        );
     }
 
     #[test]

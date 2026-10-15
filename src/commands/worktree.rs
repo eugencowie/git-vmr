@@ -96,7 +96,7 @@ pub fn run(
 fn list(workspace: &Workspace) -> Result<Rendered>
 {
     let repo_names = workspace
-        .repos()
+        .children()
         .iter()
         .map(|repo| repo.label.clone())
         .collect::<Vec<_>>();
