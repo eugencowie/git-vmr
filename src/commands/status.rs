@@ -58,7 +58,7 @@ impl Git
     fn status(&self, repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
     {
         let status_output = self
-            .stdout(&repo.path, [
+            .stdout(&repo.absolute_path, [
                 "status",
                 "--porcelain=v1",
                 "-z",
@@ -68,7 +68,7 @@ impl Git
             .with_context(|| {
                 format!(
                     "fatal: failed to read git status for '{}'",
-                    repo.path.display()
+                    repo.absolute_path.display()
                 )
             })?;
         let mut records = status_output
@@ -79,7 +79,7 @@ impl Git
             .next()
             .context("fatal: git status did not return a branch header")?;
         let head = self.head_from_status_header(
-            &repo.path,
+            &repo.absolute_path,
             "failed to read git status",
             branch_header
         )?;
@@ -350,8 +350,9 @@ fn render_paths(
     let mut rendered: Vec<(String, FileChange)> = Vec::new();
     for (repo, status) in context.repos
     {
-        let repo_prefix = pathdiff::diff_paths(&repo.path, context.working_dir)
-            .unwrap_or(repo.path.clone());
+        let repo_prefix =
+            pathdiff::diff_paths(&repo.absolute_path, context.working_dir)
+                .unwrap_or(repo.absolute_path.clone());
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);

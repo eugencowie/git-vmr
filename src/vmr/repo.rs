@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Repo
 {
-    pub path: PathBuf,
+    pub absolute_path: PathBuf,
     pub label: String,
     pub kind: RepoKind
 }
@@ -31,7 +31,7 @@ impl Repo
     pub fn root(root: &Path) -> Repo
     {
         Repo {
-            path: root.to_path_buf(),
+            absolute_path: root.to_path_buf(),
             label: ".".to_owned(),
             kind: RepoKind::Root
         }
@@ -41,7 +41,7 @@ impl Repo
     pub fn child(root: &Path, declaration: &Declaration) -> Repo
     {
         Repo {
-            path: root.join(declaration.path.as_str()),
+            absolute_path: root.join(declaration.path.as_str()),
             label: declaration.path.to_string(),
             kind: RepoKind::Child { name: declaration.name.clone() }
         }
@@ -58,7 +58,7 @@ impl Ord for Repo
         let is_child = |repo: &Repo| repo.kind != RepoKind::Root;
         is_child(self)
             .cmp(&is_child(other))
-            .then_with(|| self.path.cmp(&other.path))
+            .then_with(|| self.absolute_path.cmp(&other.absolute_path))
             // Break remaining ties on every field, so ordering agrees with
             // equality
             .then_with(|| self.label.cmp(&other.label))

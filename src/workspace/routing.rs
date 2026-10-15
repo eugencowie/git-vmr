@@ -47,7 +47,7 @@ impl<'a> Router<'a>
     /// The VMR root directory.
     fn root(&self) -> &'a Path
     {
-        &self.membership.root().path
+        &self.membership.root().absolute_path
     }
 
     /// Resolves a user-supplied path against the working dir and

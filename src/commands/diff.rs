@@ -111,7 +111,7 @@ impl Git
         args.push(OsString::from("--binary"));
         args.push(OsString::from("--"));
 
-        let output = match self.path_output(&repo.path, args, paths)
+        let output = match self.path_output(&repo.absolute_path, args, paths)
         {
             Ok(output) => output,
             Err(error) => return (String::new(), Err(error))
@@ -127,7 +127,7 @@ impl Git
                         String::new(),
                         Err(anyhow::anyhow!(
                             "git diff produced non-UTF-8 output for '{}': {error}",
-                            repo.path.display()
+                            repo.absolute_path.display()
                         ))
                     ),
             };

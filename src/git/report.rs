@@ -245,7 +245,10 @@ pub(crate) fn command_result(
     }
     else
     {
-        Ok(failure_message(&repo.label, failure.message(&repo.path, output)))
+        Ok(failure_message(
+            &repo.label,
+            failure.message(&repo.absolute_path, output)
+        ))
     }
 }
 

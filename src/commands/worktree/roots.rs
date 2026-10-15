@@ -332,7 +332,7 @@ fn add_child(
             (Some(branch.as_str()), commit_ish.as_deref()),
         AddMode::CommitIsh(commit_ish) => (None, Some(commit_ish.as_str())),
         AddMode::InferredBranch(branch)
-            if git.branch_exists(&repo.path, branch)? =>
+            if git.branch_exists(&repo.absolute_path, branch)? =>
             (None, Some(branch.as_str())),
         AddMode::InferredBranch(branch) => (Some(branch.as_str()), None)
     };
@@ -422,7 +422,7 @@ impl Git
             args.push(OsString::from(commit_ish));
         }
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -452,7 +452,7 @@ impl Git
 
         args.push(git_path_arg(target));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -483,7 +483,7 @@ impl Git
         args.push(git_path_arg(source));
         args.push(git_path_arg(destination));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -498,7 +498,7 @@ impl Git
 
     fn worktree_list(&self, repo: &Repo) -> Result<Vec<ChildWorktree>>
     {
-        let output = self.output(&repo.path, [
+        let output = self.output(&repo.absolute_path, [
             OsString::from("worktree"),
             OsString::from("list"),
             OsString::from("--porcelain"),

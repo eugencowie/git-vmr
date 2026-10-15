@@ -455,8 +455,9 @@ mod tests
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace
-            .run(|git, repo| outcome(repo, git.output(&repo.path, ["fetch"])?));
+        let result = workspace.run(|git, repo| {
+            outcome(repo, git.output(&repo.absolute_path, ["fetch"])?)
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -485,7 +486,10 @@ mod tests
         // Act
         let err = workspace
             .run(|git, repo| {
-                outcome(repo, git.output(&repo.path, ["merge", "topic"])?)
+                outcome(
+                    repo,
+                    git.output(&repo.absolute_path, ["merge", "topic"])?
+                )
             })
             .unwrap_err();
 
@@ -512,7 +516,10 @@ mod tests
         // Act
         workspace
             .run_in(&subset, |git, repo| {
-                outcome(repo, git.output(&repo.path, ["commit", "-m", "msg"])?)
+                outcome(
+                    repo,
+                    git.output(&repo.absolute_path, ["commit", "-m", "msg"])?
+                )
             })
             .unwrap();
 
@@ -545,7 +552,11 @@ mod tests
             .run_routed(Scope::EntireVmr, |git, repo, paths| {
                 outcome(
                     repo,
-                    git.path_output(&repo.path, ["add", "--all", "--"], paths)?
+                    git.path_output(
+                        &repo.absolute_path,
+                        ["add", "--all", "--"],
+                        paths
+                    )?
                 )
             })
             .unwrap();
@@ -586,7 +597,7 @@ mod tests
             .run_routed(scope, |git, repo, paths| {
                 outcome(
                     repo,
-                    git.path_output(&repo.path, ["add", "--"], paths)?
+                    git.path_output(&repo.absolute_path, ["add", "--"], paths)?
                 )
             })
             .unwrap();

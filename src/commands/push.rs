@@ -189,7 +189,7 @@ impl Git
         args: &PushArgs
     ) -> Vec<GitCommandResult>
     {
-        let plan = match self.plan_push(&repo.path, args)
+        let plan = match self.plan_push(&repo.absolute_path, args)
         {
             Ok(plan) => plan,
             Err(error) => return vec![Err(error)]
@@ -603,7 +603,7 @@ impl Git
 
         args.extend(refspecs.iter().map(OsString::from));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,

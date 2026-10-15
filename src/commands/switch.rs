@@ -69,7 +69,7 @@ impl Git
 
         invocation.push(&args.branch_name);
 
-        let output = self.output(&repo.path, invocation)?;
+        let output = self.output(&repo.absolute_path, invocation)?;
         let (success, failure) = report_policy();
 
         command_result(repo, &output, success, failure)

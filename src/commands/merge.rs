@@ -32,8 +32,8 @@ impl Git
 {
     fn merge(&self, repo: &Repo, args: &MergeArgs) -> GitCommandResult
     {
-        let output =
-            self.output(&repo.path, ["merge", args.commit_ish.as_str()])?;
+        let output = self
+            .output(&repo.absolute_path, ["merge", args.commit_ish.as_str()])?;
 
         command_result(
             repo,

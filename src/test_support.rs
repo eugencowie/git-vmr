@@ -15,7 +15,7 @@ use tempfile::TempDir;
 pub(crate) fn repo(label: &str, path: impl Into<PathBuf>) -> Repo
 {
     Repo {
-        path: path.into(),
+        absolute_path: path.into(),
         label: label.to_owned(),
         kind: RepoKind::Child { name: label.to_owned() }
     }

@@ -174,10 +174,11 @@ fn run_child(
     command: &str
 ) -> Result<ChildResult>
 {
-    let environment = child_environment(&repo.path, vmr_root, working_dir);
+    let environment =
+        child_environment(&repo.absolute_path, vmr_root, working_dir);
 
     let output = shell_command(command)
-        .current_dir(&repo.path)
+        .current_dir(&repo.absolute_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
