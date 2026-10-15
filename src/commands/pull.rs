@@ -9,7 +9,7 @@ pub fn run(
     args: &PullArgs
 ) -> Result<Rendered>
 {
-    // Pull in each child repository
+    // Pull in each member repo
     workspace.run(|git, repo| git.pull(repo, args))
 }
 
@@ -38,6 +38,13 @@ impl Git
 {
     fn pull(&self, repo: &Repo, pull: &PullArgs) -> GitCommandResult
     {
+        // Skip a repo with no remote configured
+        if let Some(skip) = self.skip_without_remote(repo)?
+        {
+            return Ok(skip);
+        }
+
+        // Run git pull
         let mut args = vec![OsString::from("pull")];
 
         if let Some(repository) = &pull.repository
@@ -66,15 +73,40 @@ mod tests
     use crate::test_support::repo;
 
     #[test]
+    fn skips_a_repo_with_no_remote_without_pulling()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(["remote"], 0, "", ""));
+
+        // Act
+        let outcome = git
+            .pull(&repo("backend", "/vmr/backend"), &PullArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Skipped(message) = outcome
+        else
+        {
+            panic!("expected a skip");
+        };
+        assert_eq!(message.message, "no remote");
+    }
+
+    #[test]
     fn pull_success_reports_stdout_before_stderr()
     {
         // Arrange
-        let git = Git::with(ScriptedFake::new().on(
-            ["pull"],
-            0,
-            "Already up to date.\n",
-            "stderr chatter\n"
-        ));
+        let git = Git::with(
+            ScriptedFake::new().on(["remote"], 0, "origin\n", "").on(
+                ["pull"],
+                0,
+                "Already up to date.\n",
+                "stderr chatter\n"
+            )
+        );
 
         // Act
         let outcome = git

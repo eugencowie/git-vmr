@@ -99,7 +99,7 @@ fn branch_groups_unborn_and_born_branches_together()
 }
 
 #[test]
-fn branch_skips_non_git_children_and_empty_vmr_outputs_nothing()
+fn branch_skips_non_git_children_and_empty_vmr_lists_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
@@ -110,7 +110,7 @@ fn branch_skips_non_git_children_and_empty_vmr_outputs_nothing()
         .arg("branch")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::diff("* master\n"))
         .stderr(predicate::str::is_empty());
 
     let backend = tmp.path().join("backend");
@@ -189,10 +189,9 @@ fn branch_reports_detached_head_repositories()
         .arg("branch")
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains(format!("* (HEAD detached at {hash})"))
-                .and(predicate::str::contains("(frontend)").not())
-        )
+        .stdout(predicate::str::contains(format!(
+            "* (HEAD detached at {hash}) (frontend)"
+        )))
         .stderr(predicate::str::is_empty());
 }
 
@@ -299,6 +298,7 @@ fn branch_create_omits_repository_suffix_when_every_repo_fails()
     init_repo(&backend);
     commit_file(&backend, "README.md");
     git(&backend, ["branch", "feature/auth"]);
+    git(tmp.path(), ["branch", "feature/auth"]);
 
     git_vmr()
         .current_dir(tmp.path())
@@ -357,6 +357,7 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
     init_repo(&frontend);
     commit_file(&backend, "README.md");
     commit_file(&frontend, "README.md");
+    git(tmp.path(), ["branch", "feature/auth"]);
     git(&backend, ["branch", "feature/auth"]);
     git(&frontend, ["branch", "feature/auth"]);
 
@@ -372,6 +373,7 @@ fn branch_delete_safely_deletes_branch_in_every_child_repository()
         )
         .stderr(predicate::str::is_empty());
 
+    assert!(!branch_exists(tmp.path(), "feature/auth"));
     assert!(!branch_exists(&backend, "feature/auth"));
     assert!(!branch_exists(&frontend, "feature/auth"));
 }
@@ -384,6 +386,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
+    create_unmerged_branch(tmp.path(), "feature/auth");
     create_unmerged_branch(&backend, "feature/auth");
 
     git_vmr()
@@ -407,6 +410,7 @@ fn branch_force_delete_deletes_branch_that_safe_delete_rejects()
         )
         .stderr(predicate::str::is_empty());
 
+    assert!(!branch_exists(tmp.path(), "feature/auth"));
     assert!(!branch_exists(&backend, "feature/auth"));
 }
 
@@ -419,6 +423,7 @@ fn branch_delete_skips_non_git_child_directories()
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
+    git(tmp.path(), ["branch", "feature/auth"]);
     git(&backend, ["branch", "feature/auth"]);
 
     git_vmr()
@@ -496,7 +501,7 @@ fn branch_delete_reports_missing_and_checked_out_branch_failures_concisely()
         .stdout(predicate::str::is_empty())
         .stderr(
             predicate::str::contains(
-                "error: branch 'feature/auth' not found (backend)"
+                "error: branch 'feature/auth' not found (., backend)"
             )
             .and(predicate::str::contains(
                 "error: cannot delete branch 'feature/auth' used by worktree at"
@@ -527,6 +532,6 @@ fn branch_delete_reports_multiple_failures_in_repository_name_order()
         .assert()
         .failure()
         .stderr(predicate::str::starts_with(
-            "error: branch 'feature/auth' not found (alpha, zeta)\n"
+            "error: branch 'feature/auth' not found (., alpha, zeta)\n"
         ));
 }

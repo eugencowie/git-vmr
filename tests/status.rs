@@ -202,7 +202,7 @@ fn status_keeps_initial_repo_separate_from_committed_repo_on_same_branch()
         .success()
         .stdout(
             predicate::str::contains(
-                "On branch master (committed)\n\n\
+                "On branch master (., committed)\n\n\
                  nothing to commit, working tree clean\n\n"
             )
             .and(predicate::str::contains(
@@ -243,7 +243,7 @@ fn status_uses_nested_working_dir_for_discovery_and_relative_paths()
 }
 
 #[test]
-fn status_with_no_child_repos_succeeds_with_no_output()
+fn status_with_no_child_repos_reports_only_the_root_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
@@ -255,7 +255,41 @@ fn status_with_no_child_repos_succeeds_with_no_output()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout("On branch master\n\nnothing to commit, working tree clean\n")
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
+fn status_reports_root_repo_changes_relative_to_the_working_dir()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path(), &["backend"]);
+    let repo = tmp.path().join("backend");
+    init_repo(&repo);
+    commit_file(&repo, "README.md");
+    fs::write(tmp.path().join(".gitignore"), "/backend/\n/target/\n")
+        .expect("failed to write file");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create dir");
+    fs::write(tmp.path().join("docs/new.md"), "content\n")
+        .expect("failed to write file");
+
+    git_vmr()
+        .current_dir(&repo)
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(
+            "On branch master\n\
+             \n\
+             Changes not staged for commit:\n  \
+             (use \"git vmr add <file>...\" to update what will be committed)\n  \
+             (use \"git vmr restore <file>...\" to discard changes in working directory)\n\
+             \tmodified:   ../.gitignore\n\
+             \n\
+             Untracked files:\n  \
+             (use \"git vmr add <file>...\" to include in what will be committed)\n\
+             \tnew file:   ../docs/\n"
+        )
         .stderr(predicate::str::is_empty());
 }
 

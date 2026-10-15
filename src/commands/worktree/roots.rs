@@ -104,9 +104,10 @@ impl<'a> WorktreeRoots<'a>
 
         Vmr::create_worktree_root(target)?;
 
-        let outcomes = self
-            .workspace
-            .map(|git, repo| Ok(add_child(git, repo, target, &mode)))?;
+        let outcomes =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                Ok(add_child(git, repo, target, &mode))
+            })?;
 
         Ok(RootOutcomes { outcomes, dissolved: Ok(()), scope: self.scope() })
     }

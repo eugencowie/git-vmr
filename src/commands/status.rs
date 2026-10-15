@@ -10,7 +10,7 @@ pub fn run(workspace: &Workspace, context: &CliContext) -> Result<Rendered>
     let display_name = &context.display_name;
     let working_dir = &context.working_dir;
 
-    // Collect status information from child repositories, in repo order
+    // Collect status information from member repos, in repo order
     let statuses = workspace
         .map(|git, repo| git.status(repo))?
         .into_iter()

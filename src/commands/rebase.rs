@@ -9,7 +9,7 @@ pub fn run(
     args: &RebaseArgs
 ) -> Result<Rendered>
 {
-    // Rebase in each child repository
+    // Rebase in each member repo
     workspace.run(|git, repo| git.rebase(repo, args))
 }
 

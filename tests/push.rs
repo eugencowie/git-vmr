@@ -90,7 +90,10 @@ fn push_forwards_repository_and_refspec_arguments()
         .args(["push", "origin", "release:refs/heads/release"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)").not())
+        .stdout(
+            predicate::str::contains("(backend)")
+                .and(predicate::str::contains("no remote (.)"))
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&remote, "release"), head(&backend, "release"));
@@ -113,7 +116,10 @@ fn push_treats_single_positional_argument_as_repository()
         .args(["push", "main"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("(backend)").not())
+        .stdout(
+            predicate::str::contains("(backend)")
+                .and(predicate::str::contains("no remote (.)"))
+        )
         .stderr(predicate::str::is_empty());
 
     assert_eq!(head(&remote, "master"), head(&backend, "master"));
@@ -121,7 +127,7 @@ fn push_treats_single_positional_argument_as_repository()
 }
 
 #[test]
-fn push_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+fn push_skips_non_git_children_and_empty_vmrs_succeed()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
@@ -132,7 +138,7 @@ fn push_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .arg("push")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout("no remote\n")
         .stderr(predicate::str::is_empty());
 }
 
@@ -147,7 +153,7 @@ fn push_failure_does_not_stop_successful_repositories()
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (frontend_remote, frontend) =
         setup_remote_and_clone(tmp.path(), "frontend", "README.md");
-    git(&backend, ["remote", "remove", "origin"]);
+    git(&backend, ["remote", "rename", "origin", "upstream"]);
     write_commit(&backend, "README.md", "backend\n", "backend update");
     write_commit(&frontend, "README.md", "frontend\n", "frontend update");
 
@@ -177,8 +183,8 @@ fn push_reports_success_failure_and_failure_order_with_repository_suffixes()
         setup_remote_and_clone(tmp.path(), "backend", "README.md");
     let (_zeta_remote, zeta) =
         setup_remote_and_clone(tmp.path(), "zeta", "README.md");
-    git(&alpha, ["remote", "remove", "origin"]);
-    git(&zeta, ["remote", "remove", "origin"]);
+    git(&alpha, ["remote", "rename", "origin", "upstream"]);
+    git(&zeta, ["remote", "rename", "origin", "upstream"]);
     write_commit(&alpha, "README.md", "alpha\n", "alpha update");
     write_commit(&backend, "README.md", "backend\n", "backend update");
     write_commit(&zeta, "README.md", "zeta\n", "zeta update");
@@ -213,10 +219,10 @@ fn push_delegates_missing_upstream_and_rejected_pushes_to_git_without_rollback()
         .arg("push")
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
+        .stdout("no remote (.)\n")
         .stderr(
             predicate::str::contains("upstream")
-                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(backend)"))
         );
 
     let (frontend_remote, frontend) =

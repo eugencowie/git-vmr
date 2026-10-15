@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 
-/// One child repo's captured command output, ready for rendering.
+/// One member repo's captured command output, ready for rendering.
 struct ChildOutput<'a>
 {
     repo: &'a str,
@@ -131,40 +131,38 @@ pub fn run(
     Ok(rendered)
 }
 
-/// The child environment's computed variables: where the repo sits inside
-/// the VMR, and the repo's path relative to the working dir.
-struct ChildEnvironment
+/// The member environment's per-repo variables: the repo's manifest name
+/// and path from the VMR root (`.` for both, for the root repo), and its
+/// path relative to the working dir.
+struct MemberEnvironment<'a>
 {
-    sm_path: PathBuf,
+    name: &'a str,
+    sm_path: &'a str,
     displaypath: PathBuf
 }
 
-fn child_environment(
-    repo_path: &Path,
-    vmr_root: &Path,
+fn member_environment<'a>(
+    repo: &'a Repo,
     working_dir: &Path
-) -> ChildEnvironment
+) -> MemberEnvironment<'a>
 {
-    let sm_path =
-        repo_path.strip_prefix(vmr_root).unwrap_or(repo_path).to_path_buf();
-    let mut displaypath = pathdiff::diff_paths(repo_path, working_dir)
-        .unwrap_or_else(|| repo_path.to_path_buf());
+    // Name the repo as the manifest does, and the root repo `.`
+    let name = match &repo.kind
+    {
+        RepoKind::Root => ".",
+        RepoKind::Child { name } => name
+    };
+
+    // Show the repo relative to the working dir
+    let mut displaypath =
+        pathdiff::diff_paths(&repo.absolute_path, working_dir)
+            .unwrap_or_else(|| repo.absolute_path.clone());
     if displaypath.as_os_str().is_empty()
     {
         displaypath.push(".");
     }
 
-    ChildEnvironment { sm_path, displaypath }
-}
-
-/// The repo's `$name`: its manifest name, or `.` for the root repo.
-fn name(repo: &Repo) -> &str
-{
-    match &repo.kind
-    {
-        RepoKind::Root => ".",
-        RepoKind::Child { name } => name
-    }
+    MemberEnvironment { name, sm_path: &repo.path, displaypath }
 }
 
 fn run_child(
@@ -174,15 +172,14 @@ fn run_child(
     command: &str
 ) -> Result<ChildResult>
 {
-    let environment =
-        child_environment(&repo.absolute_path, vmr_root, working_dir);
+    let environment = member_environment(repo, working_dir);
 
     let output = shell_command(command)
         .current_dir(&repo.absolute_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("name", name(repo))
+        .env("name", environment.name)
         .env("sm_path", environment.sm_path)
         .env("displaypath", environment.displaypath)
         .env("toplevel", vmr_root)
@@ -238,39 +235,50 @@ fn shell_command(command: &str) -> Command
 }
 
 #[cfg(test)]
-mod child_environment_tests
+mod member_environment_tests
 {
     use super::*;
+    use crate::test_support::repo;
 
-    fn environment(
-        repo_path: &str,
-        vmr_root: &str,
-        working_dir: &str
-    ) -> ChildEnvironment
+    #[test]
+    fn working_dir_at_the_vmr_root_yields_the_repo_path()
     {
-        child_environment(
-            Path::new(repo_path),
-            Path::new(vmr_root),
-            Path::new(working_dir)
-        )
+        // Arrange
+        let backend = repo("backend", "/vmr/backend");
+
+        // Act
+        let environment = member_environment(&backend, Path::new("/vmr"));
+
+        // Assert
+        assert_eq!(environment.name, "backend");
+        assert_eq!(environment.sm_path, "backend");
+        assert_eq!(environment.displaypath, Path::new("backend"));
     }
 
     #[test]
-    fn working_dir_at_the_vmr_root_yields_the_repo_name()
+    fn the_root_repo_is_named_and_placed_at_dot()
     {
+        // Arrange
+        let root = Repo::root(Path::new("/vmr"));
+
         // Act
-        let environment = environment("/vmr/backend", "/vmr", "/vmr");
+        let environment = member_environment(&root, Path::new("/vmr"));
 
         // Assert
-        assert_eq!(environment.sm_path, Path::new("backend"));
-        assert_eq!(environment.displaypath, Path::new("backend"));
+        assert_eq!(environment.name, ".");
+        assert_eq!(environment.sm_path, ".");
+        assert_eq!(environment.displaypath, Path::new("."));
     }
 
     #[test]
     fn working_dir_inside_a_sibling_child_traverses_up()
     {
+        // Arrange
+        let backend = repo("backend", "/vmr/backend");
+
         // Act
-        let environment = environment("/vmr/backend", "/vmr", "/vmr/frontend");
+        let environment =
+            member_environment(&backend, Path::new("/vmr/frontend"));
 
         // Assert
         assert_eq!(environment.displaypath, Path::new("../backend"));
@@ -279,8 +287,12 @@ mod child_environment_tests
     #[test]
     fn working_dir_equal_to_the_repo_yields_dot()
     {
+        // Arrange
+        let backend = repo("backend", "/vmr/backend");
+
         // Act
-        let environment = environment("/vmr/backend", "/vmr", "/vmr/backend");
+        let environment =
+            member_environment(&backend, Path::new("/vmr/backend"));
 
         // Assert
         assert_eq!(environment.displaypath, Path::new("."));
@@ -289,36 +301,31 @@ mod child_environment_tests
     #[test]
     fn working_dir_nested_inside_the_repo_traverses_up()
     {
+        // Arrange
+        let backend = repo("backend", "/vmr/backend");
+
         // Act
         let environment =
-            environment("/vmr/backend", "/vmr", "/vmr/backend/src");
+            member_environment(&backend, Path::new("/vmr/backend/src"));
 
         // Assert
         assert_eq!(environment.displaypath, Path::new(".."));
     }
 
     #[test]
-    fn repo_outside_the_vmr_root_keeps_its_full_path_as_sm_path()
-    {
-        // Act
-        let environment = environment("/elsewhere/backend", "/vmr", "/vmr");
-
-        // Assert
-        assert_eq!(environment.sm_path, Path::new("/elsewhere/backend"));
-    }
-
-    #[test]
     fn displaypath_without_a_relative_route_falls_back_to_the_repo_path()
     {
+        // Arrange: the repo and working dir have no relative route
         #[cfg(unix)]
-        let (repo, root, expected) =
+        let (repo_path, working_dir, expected) =
             ("rel/backend", "/vmr", Path::new("rel/backend"));
         #[cfg(windows)]
-        let (repo, root, expected) =
+        let (repo_path, working_dir, expected) =
             (r"D:\rel\backend", r"C:\vmr", Path::new(r"D:\rel\backend"));
+        let backend = repo("backend", repo_path);
 
-        // Act: the repo and working dir have no relative route
-        let environment = environment(repo, root, root);
+        // Act
+        let environment = member_environment(&backend, Path::new(working_dir));
 
         // Assert
         assert_eq!(environment.displaypath, expected);

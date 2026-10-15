@@ -58,7 +58,7 @@ pub enum Command
 }
 
 // A workspace command runs inside an opened workspace: the VMR is discovered
-// and its child repos snapshotted before the command sees anything. Not a doc
+// and its member repos snapshotted before the command sees anything. Not a doc
 // comment — clap would surface it as the application's help text.
 #[derive(Subcommand)]
 pub enum WorkspaceCommand

@@ -22,7 +22,6 @@ fn successful_subcommand_triggers_due_update_check()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
     let state = fs::read_to_string(state_file)
@@ -54,7 +53,6 @@ fn configured_never_through_global_config_skips_update_check()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
     let state = fs::read_to_string(state_file)
@@ -84,7 +82,6 @@ fn invalid_update_state_warns_and_uses_defaults()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("warning: failed to parse"))
         .stderr(predicate::str::contains("using defaults"));
 
@@ -208,6 +205,5 @@ fn missing_receipt_update_failure_does_not_fail_successful_command()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 }

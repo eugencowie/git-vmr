@@ -121,20 +121,21 @@ fn diff_aggregate_path_expands_to_all_child_repos()
 }
 
 #[test]
-fn diff_errors_on_a_path_owned_by_no_child_repo()
+fn diff_errors_on_a_path_inside_an_undeclared_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     write_commit(&backend, "src.rs", "old\n", "initial");
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create dir");
-    fs::write(tmp.path().join("docs/readme.md"), "text\n")
-        .expect("failed to write file");
+    let scratch = tmp.path().join("scratch");
+    init_repo(&scratch);
+    write_commit(&scratch, "notes.md", "old\n", "initial");
+    fs::write(scratch.join("notes.md"), "new\n").expect("failed to write file");
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["diff", "docs/readme.md"])
+        .args(["diff", "scratch/notes.md"])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())

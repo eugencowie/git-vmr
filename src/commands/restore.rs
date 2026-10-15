@@ -15,7 +15,7 @@ pub fn run(
         aggregate: AggregatePolicy::Allow
     };
 
-    // Restore routed paths in each owning child repository
+    // Restore routed paths in each owning member repo
     workspace.run_routed(scope, |git, repo, repo_paths| {
         git.restore(repo, repo_paths, &args.options)
     })

@@ -9,7 +9,7 @@ pub fn run(
     args: &PushArgs
 ) -> Result<Rendered>
 {
-    // Push, in each child repository, only the useful subset of the push:
+    // Push, in each member repo, only the useful subset of the push:
     // a repo may report per-refspec skips alongside its push result.
     let results =
         workspace.map(|git, repo| Ok(git.classified_push(repo, args)))?;
@@ -189,12 +189,22 @@ impl Git
         args: &PushArgs
     ) -> Vec<GitCommandResult>
     {
+        // Skip a repo with no remote configured
+        match self.skip_without_remote(repo)
+        {
+            Ok(Some(skip)) => return vec![Ok(skip)],
+            Ok(None) => (),
+            Err(error) => return vec![Err(error)]
+        }
+
+        // Plan the push
         let plan = match self.plan_push(&repo.absolute_path, args)
         {
             Ok(plan) => plan,
             Err(error) => return vec![Err(error)]
         };
 
+        // Report the skipped refspecs, then push the useful subset
         let mut results = plan
             .skips
             .into_iter()
@@ -620,6 +630,27 @@ mod tests
     use super::*;
     use crate::git::{RepoOutcome, ScriptedFake};
     use crate::test_support::repo;
+
+    #[test]
+    fn skips_a_repo_with_no_remote_without_planning_a_push()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(["remote"], 0, "", ""));
+        let args = PushArgs { repository: None, refspecs: vec![] };
+
+        // Act
+        let mut outcomes =
+            git.classified_push(&repo("backend", "/vmr/backend"), &args);
+
+        // Assert
+        assert_eq!(outcomes.len(), 1);
+        let RepoOutcome::Skipped(message) = outcomes.remove(0).unwrap()
+        else
+        {
+            panic!("expected a skip");
+        };
+        assert_eq!(message.message, "no remote");
+    }
 
     #[test]
     fn push_success_reports_stderr_before_stdout()

@@ -9,7 +9,7 @@ pub fn run(
     args: &CommitArgs
 ) -> Result<Rendered>
 {
-    // Filter child repositories without staged changes
+    // Filter member repos without staged changes
     let dirty_repos = workspace
         .map(|git, repo| {
             Ok(git.is_dirty(&repo.absolute_path)?.then(|| repo.clone()))
@@ -119,7 +119,7 @@ mod tests
     }
 
     #[test]
-    fn commits_in_dirty_child_repos()
+    fn commits_in_dirty_member_repos()
     {
         // Arrange
         let tmp = vmr_fixture();
@@ -148,6 +148,7 @@ mod tests
             .collect::<Vec<_>>();
         commits.sort();
         assert_eq!(commits, vec![
+            tmp.path().to_path_buf(),
             tmp.path().join("backend"),
             tmp.path().join("frontend")
         ]);

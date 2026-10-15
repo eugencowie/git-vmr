@@ -100,11 +100,11 @@ impl Membership
         &self.repos[0]
     }
 
-    /// The member repos a VMR operation runs across, in order. The root
-    /// repo does not take part yet, so these are the cloned child repos.
+    /// The member repos a VMR operation runs across: the root repo, then
+    /// the cloned child repos sorted by path.
     pub fn members(&self) -> &[Repo]
     {
-        self.children()
+        &self.repos
     }
 
     /// The declared child repos that are cloned, sorted by path.
@@ -128,7 +128,8 @@ impl Membership
 
     /// Classifies `path`, relative to the VMR root, by what owns it: a
     /// member repo, or an undeclared repo, with the path relative to it, or
-    /// a child root itself. Fails for a path inside a missing child repo.
+    /// a child root itself. Fails for a path inside a missing child repo or
+    /// a Git repository nested below the first level.
     pub fn classify(&self, path: &Path) -> Result<Classification<'_>>
     {
         // Take the first path component as the first-level entry; the VMR
@@ -145,7 +146,7 @@ impl Membership
         let Some(entry) = entry.to_str()
         else
         {
-            return Ok(Classification::Member(self.root(), path.to_path_buf()));
+            return self.classify_root_path(path);
         };
 
         // Look for a cloned repo, then a missing one, then an undeclared one
@@ -181,6 +182,30 @@ impl Membership
         }
 
         // Anything else belongs to the root repo
+        self.classify_root_path(path)
+    }
+
+    /// Classifies `path` as the root repo's, unless it lies inside a Git
+    /// repository nested below the first level, which the root repo must
+    /// not silently embed.
+    fn classify_root_path(&self, path: &Path) -> Result<Classification<'_>>
+    {
+        // Look for a nested repo, outermost first, skipping the VMR root
+        // and the first level, whose repos were listed when reading
+        let ancestors = path.ancestors().collect::<Vec<_>>();
+        if let Some(nested) = ancestors.iter().rev().skip(2).find(|ancestor| {
+            self.root().absolute_path.join(ancestor).join(".git").exists()
+        })
+        {
+            bail!(
+                "error: '{}' is inside nested Git repository '{}', which is \
+                 not a member repo",
+                path.display(),
+                nested.display()
+            );
+        }
+
+        // Otherwise the path is the root repo's
         Ok(Classification::Member(self.root(), path.to_path_buf()))
     }
 }
@@ -249,6 +274,25 @@ mod tests
         ]);
         assert_eq!(paths(membership.missing()), ["api"]);
         assert_eq!(membership.undeclared(), ["scratch"]);
+    }
+
+    #[test]
+    fn makes_the_root_repo_and_the_cloned_children_members()
+    {
+        // Arrange
+        let manifest = manifest(&["api", "backend", "frontend"]);
+
+        // Act
+        let membership = Membership::new(
+            Path::new("/vmr"),
+            &manifest,
+            on_disk(&["scratch", "frontend", "backend"])
+        );
+
+        // Assert
+        assert_eq!(repo_paths(membership.members()), [
+            ".", "backend", "frontend"
+        ]);
     }
 
     #[test]
@@ -373,6 +417,53 @@ mod tests
         assert_eq!(
             err.to_string(),
             "error: 'api' is not cloned; run 'git vmr clone' to clone it"
+        );
+    }
+
+    #[test]
+    fn classifying_a_root_path_inside_a_nested_repo_fails()
+    {
+        // Arrange: vendor/lib is a Git repository below the first level
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("vendor/lib/.git")).unwrap();
+        let membership =
+            Membership::new(tmp.path(), &Manifest::default(), on_disk(&[]));
+
+        for path in ["vendor/lib", "vendor/lib/src/a.rs"]
+        {
+            // Act
+            let err = membership.classify(Path::new(path)).unwrap_err();
+
+            // Assert
+            assert_eq!(
+                err.to_string(),
+                format!(
+                    "error: '{path}' is inside nested Git repository \
+                     'vendor/lib', which is not a member repo"
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn classifies_a_root_path_beside_a_nested_repo_as_the_root_repo()
+    {
+        // Arrange
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("vendor/lib/.git")).unwrap();
+        let membership =
+            Membership::new(tmp.path(), &Manifest::default(), on_disk(&[]));
+
+        // Act
+        let class = membership.classify(Path::new("vendor/README.md"));
+
+        // Assert
+        assert_eq!(
+            class.unwrap(),
+            Classification::Member(
+                &Repo::root(tmp.path()),
+                PathBuf::from("vendor/README.md")
+            )
         );
     }
 

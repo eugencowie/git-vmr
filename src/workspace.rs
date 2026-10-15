@@ -10,10 +10,10 @@ use routing::Router;
 pub use routing::{AggregatePolicy, Scope};
 use std::path::{Path, PathBuf};
 
-/// A VMR opened by one command: the working dir it was opened from and
-/// the child repos its manifest declares at that moment, held fixed for
-/// the duration of the command, plus the means to run git across them. The
-/// disk can change mid-command; the workspace cannot.
+/// A VMR opened by one command: the working dir it was opened from and its
+/// member repos at that moment, held fixed for the duration of the command,
+/// plus the means to run git across them. The disk can change mid-command;
+/// the workspace cannot.
 pub struct Workspace<'a>
 {
     git: &'a Git,
@@ -25,8 +25,8 @@ pub struct Workspace<'a>
 
 impl<'a> Workspace<'a>
 {
-    /// Opens the VMR that owns `working_dir`, snapshotting the child repos
-    /// its manifest declares and noting load warnings.
+    /// Opens the VMR that owns `working_dir`, snapshotting its member repos
+    /// and noting load warnings.
     pub fn open(git: &'a Git, working_dir: &Path) -> Result<Workspace<'a>>
     {
         // Discover VMR and read its manifest
@@ -95,7 +95,7 @@ impl<'a> Workspace<'a>
         )
     }
 
-    /// Routes the scope to its owning child repos, runs a git operation in
+    /// Routes the scope to its owning member repos, runs a git operation in
     /// each in parallel, then renders the aggregated outcomes.
     pub fn run_routed<F>(&self, scope: Scope, op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo, &[PathBuf]) -> GitCommandResult + Sync
@@ -132,7 +132,7 @@ impl<'a> Workspace<'a>
         repos.par_iter().map(|repo| op(self.git, repo)).collect()
     }
 
-    /// Routes the scope to its owning child repos and gathers a value from
+    /// Routes the scope to its owning member repos and gathers a value from
     /// each in parallel, in repo order, without reporting — for commands
     /// that assemble their own output from per-repo results.
     pub fn map_routed<T, F>(
@@ -156,9 +156,9 @@ impl<'a> Workspace<'a>
             .collect())
     }
 
-    /// Routes a single operand to its owning child repo. Single-operand
+    /// Routes a single operand to its owning member repo. Single-operand
     /// routing always denies the aggregate path: one operand cannot expand
-    /// to many child repos.
+    /// to many member repos.
     ///
     /// A deliberate pass-through, like `target`: slices must not construct
     /// a `Router` or know it exists.
@@ -446,7 +446,7 @@ mod tests
     }
 
     #[test]
-    fn run_invokes_operation_in_every_child_repo()
+    fn run_invokes_operation_in_every_member_repo()
     {
         // Arrange
         let tmp = vmr_fixture();
@@ -468,6 +468,7 @@ mod tests
             .collect::<Vec<_>>();
         paths.sort();
         assert_eq!(paths, vec![
+            tmp.path().to_path_buf(),
             tmp.path().join("backend"),
             tmp.path().join("frontend")
         ]);
@@ -511,7 +512,7 @@ mod tests
         ));
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
-        let subset = vec![workspace.members()[0].clone()];
+        let subset = vec![workspace.members()[1].clone()];
 
         // Act
         workspace
@@ -534,7 +535,7 @@ mod tests
     }
 
     #[test]
-    fn run_routed_expands_entire_vmr_scope_to_every_child_repo()
+    fn run_routed_expands_entire_vmr_scope_to_every_member_repo()
     {
         // Arrange
         let tmp = vmr_fixture();
@@ -569,13 +570,14 @@ mod tests
             .collect::<Vec<_>>();
         paths.sort();
         assert_eq!(paths, vec![
+            tmp.path().to_path_buf(),
             tmp.path().join("backend"),
             tmp.path().join("frontend")
         ]);
     }
 
     #[test]
-    fn run_routed_only_touches_owning_child_repos()
+    fn run_routed_only_touches_owning_member_repos()
     {
         // Arrange
         let tmp = vmr_fixture();
@@ -624,6 +626,6 @@ mod tests
         let paths = workspace.map(|_git, repo| Ok(repo.path.clone())).unwrap();
 
         // Assert
-        assert_eq!(paths, vec!["backend", "frontend"]);
+        assert_eq!(paths, vec![".", "backend", "frontend"]);
     }
 }

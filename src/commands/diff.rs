@@ -77,7 +77,7 @@ pub fn run(
 
 use crate::git::report::{FailureReport, SuccessReport, command_result};
 use crate::git::{Git, GitCommandResult};
-use crate::vmr::Repo;
+use crate::vmr::{Repo, RepoKind};
 use clap::ValueEnum;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -101,10 +101,16 @@ impl Git
             args.push(OsString::from("--staged"));
         }
 
-        // Trailing slashes are mandatory: git concatenates the prefix and
-        // the repo-relative path verbatim
-        args.push(OsString::from(format!("--src-prefix=a/{}/", repo.path)));
-        args.push(OsString::from(format!("--dst-prefix=b/{}/", repo.path)));
+        // Prefix paths with the repo's path from the VMR root, which the
+        // root repo's paths already are. Trailing slashes are mandatory:
+        // git concatenates the prefix and the repo-relative path verbatim
+        let prefix = match repo.kind
+        {
+            RepoKind::Root => String::new(),
+            RepoKind::Child { .. } => format!("{}/", repo.path)
+        };
+        args.push(OsString::from(format!("--src-prefix=a/{prefix}")));
+        args.push(OsString::from(format!("--dst-prefix=b/{prefix}")));
         args.push(OsString::from(format!("--color={color}")));
         args.push(OsString::from("--no-ext-diff"));
         args.push(OsString::from("--no-textconv"));
@@ -131,7 +137,7 @@ impl Git
                         ))
                     ),
             };
-            rewrite_rename_headers(stdout, &repo.path)
+            rewrite_rename_headers(stdout, &prefix)
         }
         else
         {
@@ -151,9 +157,9 @@ impl Git
 
 /// Git never prefixes `rename from`/`rename to`/`copy from`/`copy to`
 /// lines (`--src-prefix`/`--dst-prefix` do not apply to them), so this
-/// pure transform prepends `<repo>/` — no `a/`/`b/` — to the path on
-/// those lines. Without it `git apply -p1` from the VMR root rejects
-/// rename patches.
+/// pure transform prepends `prefix` — `<repo>/` for a child repo, nothing
+/// for the root repo, and never `a/`/`b/` — to the path on those lines.
+/// Without it `git apply -p1` from the VMR root rejects rename patches.
 ///
 /// Only lines inside a file block's extended headers are rewritten: from
 /// a `diff --git` line to the first `@@`, or to the next `diff --git` /
@@ -162,7 +168,7 @@ impl Git
 /// after the opening `"`, and is escaped using Git's C-style convention;
 /// the quoted path bytes are otherwise kept verbatim. SGR colour codes wrap
 /// header lines outside the text and are skipped, not touched.
-fn rewrite_rename_headers(diff: &str, repo: &str) -> String
+fn rewrite_rename_headers(diff: &str, prefix: &str) -> String
 {
     const KEYWORDS: [&str; 4] =
         ["rename from ", "rename to ", "copy from ", "copy to "];
@@ -198,13 +204,12 @@ fn rewrite_rename_headers(diff: &str, repo: &str) -> String
             out.push_str(&line[..path_start]);
             if quoted
             {
-                push_git_quoted_path_fragment(&mut out, repo);
+                push_git_quoted_path_fragment(&mut out, prefix);
             }
             else
             {
-                out.push_str(repo);
+                out.push_str(prefix);
             }
-            out.push('/');
             out.push_str(&line[path_start..]);
             continue;
         }
@@ -530,7 +535,7 @@ mod rewrite_tests
                         @@ -1 +1 @@\n\
                         -old\n\
                         +new\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 
     #[test]
@@ -544,7 +549,7 @@ mod rewrite_tests
                         similarity index 100%\n\
                         rename from backend/old.rs\n\
                         rename to backend/new.rs\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 
     #[test]
@@ -558,7 +563,7 @@ mod rewrite_tests
                         similarity index 100%\n\
                         copy from backend/src.txt\n\
                         copy to backend/dest.txt\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 
     #[test]
@@ -571,7 +576,7 @@ mod rewrite_tests
                      @@ -1 +1,2 @@\n\
                      rename from old.rs\n\
                      +rename to new.rs\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), input);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), input);
     }
 
     #[test]
@@ -587,7 +592,7 @@ mod rewrite_tests
                         \x1b[1msimilarity index 100%\x1b[m\n\
                         \x1b[1mrename from backend/old.rs\x1b[m\n\
                         \x1b[1mrename to backend/new.rs\x1b[m\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 
     #[test]
@@ -629,7 +634,7 @@ mod rewrite_tests
                         @@ -1 +1 @@\n\
                         -baz\n\
                         +qux\n";
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 
     // Bytes lifted verbatim from research/quoted-paths.md (git 2.53,
@@ -659,7 +664,7 @@ mod rewrite_tests
             r#"rename to "backend/newquote\"file.txt""#,
             "\n"
         );
-        assert_eq!(rewrite_rename_headers(input, "backend"), expected);
+        assert_eq!(rewrite_rename_headers(input, "backend/"), expected);
     }
 }
 
@@ -681,6 +686,14 @@ mod combined_tests
                                 -old\n\
                                 +new\n";
 
+    const ROOT_DIFF: &str = "diff --git a/README.md b/README.md\n\
+                             index 5555555..6666666 100644\n\
+                             --- a/README.md\n\
+                             +++ b/README.md\n\
+                             @@ -1 +1 @@\n\
+                             -hi\n\
+                             +hello\n";
+
     const FRONTEND_DIFF: &str = "diff --git a/frontend/app.rs \
                                  b/frontend/app.rs\n\
                                  index 3333333..4444444 100644\n\
@@ -700,15 +713,18 @@ mod combined_tests
         }
     }
 
-    /// The full scripted invocation for one child repo, in the spec's
-    /// argument order.
-    fn child_args(repo: &str, options: &[&str], paths: &[&str])
+    /// The full scripted invocation for one member repo, in the spec's
+    /// argument order: a child repo's paths are prefixed with its path, the
+    /// root repo's with nothing.
+    fn repo_args(repo: &str, options: &[&str], paths: &[&str])
     -> Vec<OsString>
     {
+        let prefix =
+            if repo == "." { String::new() } else { format!("{repo}/") };
         let mut args = vec![OsString::from("diff")];
         args.extend(options.iter().map(OsString::from));
-        args.push(OsString::from(format!("--src-prefix=a/{repo}/")));
-        args.push(OsString::from(format!("--dst-prefix=b/{repo}/")));
+        args.push(OsString::from(format!("--src-prefix=a/{prefix}")));
+        args.push(OsString::from(format!("--dst-prefix=b/{prefix}")));
         args.push(OsString::from("--color=never"));
         args.push(OsString::from("--no-ext-diff"));
         args.push(OsString::from("--no-textconv"));
@@ -726,19 +742,19 @@ mod combined_tests
     }
 
     #[test]
-    fn combined_diff_concatenates_child_diffs_in_repo_order()
+    fn combined_diff_concatenates_member_diffs_in_repo_order()
     {
         // Arrange
         let tmp = vmr_fixture();
-        let backend = child_args("backend", &[], &["."]);
-        let frontend = child_args("frontend", &[], &["."]);
-        let fake =
-            Arc::new(ScriptedFake::new().on(&backend, 0, BACKEND_DIFF, "").on(
-                &frontend,
-                0,
-                FRONTEND_DIFF,
-                ""
-            ));
+        let root = repo_args(".", &[], &["."]);
+        let backend = repo_args("backend", &[], &["."]);
+        let frontend = repo_args("frontend", &[], &["."]);
+        let fake = Arc::new(
+            ScriptedFake::new()
+                .on(&root, 0, ROOT_DIFF, "")
+                .on(&backend, 0, BACKEND_DIFF, "")
+                .on(&frontend, 0, FRONTEND_DIFF, "")
+        );
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -747,16 +763,21 @@ mod combined_tests
             run(&workspace, &cli_context(tmp.path()), &diff_args(&[])).unwrap();
 
         // Assert: byte-faithful concatenation, no separators
-        assert_eq!(rendered.stdout, format!("{BACKEND_DIFF}{FRONTEND_DIFF}"));
+        assert_eq!(
+            rendered.stdout,
+            format!("{ROOT_DIFF}{BACKEND_DIFF}{FRONTEND_DIFF}")
+        );
         assert!(rendered.stderr.is_empty());
 
-        // Both children were invoked with exactly the spec'd args
+        // Every member repo was invoked with exactly the spec'd args
         let calls = sorted_calls(&fake);
-        assert_eq!(calls.len(), 2);
-        assert_eq!(calls[0].path, tmp.path().join("backend"));
-        assert_eq!(calls[0].args, backend);
-        assert_eq!(calls[1].path, tmp.path().join("frontend"));
-        assert_eq!(calls[1].args, frontend);
+        assert_eq!(calls.len(), 3);
+        assert_eq!(calls[0].path, tmp.path());
+        assert_eq!(calls[0].args, root);
+        assert_eq!(calls[1].path, tmp.path().join("backend"));
+        assert_eq!(calls[1].args, backend);
+        assert_eq!(calls[2].path, tmp.path().join("frontend"));
+        assert_eq!(calls[2].args, frontend);
     }
 
     #[test]
@@ -765,7 +786,7 @@ mod combined_tests
         // Arrange: a TTY resolves `auto` to `always`
         let tmp = vmr_fixture();
         let with_color = |repo: &str| {
-            child_args(repo, &["--staged"], &["."])
+            repo_args(repo, &["--staged"], &["."])
                 .into_iter()
                 .map(|arg| {
                     if arg == "--color=never"
@@ -781,6 +802,7 @@ mod combined_tests
         };
         let fake = Arc::new(
             ScriptedFake::new()
+                .on(with_color("."), 0, "", "")
                 .on(with_color("backend"), 0, "", "")
                 .on(with_color("frontend"), 0, "", "")
                 .on(["var", "GIT_PAGER"], 0, "cat\n", "")
@@ -795,12 +817,22 @@ mod combined_tests
         // Act
         run(&workspace, &context, &args).unwrap();
 
-        // Assert: the pager lookup runs at the VMR root, the children get
-        // the resolved flags
+        // Assert: the pager lookup runs at the VMR root, the member repos
+        // get the resolved flags
         let calls = sorted_calls(&fake);
-        assert_eq!(calls[0].path, tmp.path());
-        assert_eq!(calls[1].args, with_color("backend"));
-        assert_eq!(calls[2].args, with_color("frontend"));
+        assert!(calls.iter().any(|call| {
+            call.path == tmp.path() && call.args == ["var", "GIT_PAGER"]
+        }));
+        let diffs = calls
+            .into_iter()
+            .filter(|call| call.args[0] == "diff")
+            .map(|call| call.args)
+            .collect::<Vec<_>>();
+        assert_eq!(diffs, [
+            with_color("."),
+            with_color("backend"),
+            with_color("frontend")
+        ]);
     }
 
     #[test]
@@ -808,7 +840,7 @@ mod combined_tests
     {
         // Arrange
         let tmp = vmr_fixture();
-        let backend = child_args("backend", &[], &["src/main.rs"]);
+        let backend = repo_args("backend", &[], &["src/main.rs"]);
         let fake =
             Arc::new(ScriptedFake::new().on(&backend, 0, BACKEND_DIFF, ""));
         let git = Git::with(Arc::clone(&fake));
@@ -836,8 +868,9 @@ mod combined_tests
         // Arrange
         let tmp = vmr_fixture();
         let fake = ScriptedFake::new()
-            .on(child_args("backend", &[], &["."]), 0, "", "")
-            .on(child_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
+            .on(repo_args(".", &[], &["."]), 0, "", "")
+            .on(repo_args("backend", &[], &["."]), 0, "", "")
+            .on(repo_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
         let git = Git::with(fake);
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -853,7 +886,7 @@ mod combined_tests
     fn non_utf8_diff_output_is_rejected_without_lossy_substitution()
     {
         let tmp = vmr_fixture();
-        let backend = child_args("backend", &[], &["src/main.rs"]);
+        let backend = repo_args("backend", &[], &["src/main.rs"]);
         let fake = ScriptedFake::new().on_bytes(
             &backend,
             0,
@@ -883,8 +916,9 @@ mod combined_tests
         // Arrange
         let tmp = vmr_fixture();
         let fake = ScriptedFake::new()
-            .on(child_args("backend", &[], &["."]), 1, "", "fatal: bad\n")
-            .on(child_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
+            .on(repo_args(".", &[], &["."]), 0, "", "")
+            .on(repo_args("backend", &[], &["."]), 1, "", "fatal: bad\n")
+            .on(repo_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
         let git = Git::with(fake);
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -901,10 +935,11 @@ mod combined_tests
     }
 
     #[test]
-    fn unowned_paths_error_like_other_path_taking_commands()
+    fn undeclared_repo_paths_error_like_other_path_taking_commands()
     {
         // Arrange
         let tmp = vmr_fixture();
+        std::fs::create_dir_all(tmp.path().join("scratch/.git")).unwrap();
         let git = Git::with(ScriptedFake::new());
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -912,7 +947,7 @@ mod combined_tests
         let err = run(
             &workspace,
             &cli_context(tmp.path()),
-            &diff_args(&["docs/readme.md"])
+            &diff_args(&["scratch/notes.md"])
         )
         .unwrap_err();
 
@@ -931,11 +966,11 @@ mod pager_tests
 
     fn empty_diffs() -> ScriptedFake
     {
-        let child = |repo: &str| {
+        let member = |prefix: &str| {
             [
                 "diff".to_owned(),
-                format!("--src-prefix=a/{repo}/"),
-                format!("--dst-prefix=b/{repo}/"),
+                format!("--src-prefix=a/{prefix}"),
+                format!("--dst-prefix=b/{prefix}"),
                 "--color=always".to_owned(),
                 "--no-ext-diff".to_owned(),
                 "--no-textconv".to_owned(),
@@ -944,12 +979,10 @@ mod pager_tests
                 ".".to_owned()
             ]
         };
-        ScriptedFake::new().on(child("backend"), 0, "", "").on(
-            child("frontend"),
-            0,
-            "",
-            ""
-        )
+        ScriptedFake::new()
+            .on(member(""), 0, "", "")
+            .on(member("backend/"), 0, "", "")
+            .on(member("frontend/"), 0, "", "")
     }
 
     fn run_with_tty(fake: ScriptedFake, no_pager: bool) -> Rendered
@@ -1042,11 +1075,11 @@ mod pager_tests
     fn piped_stdout_skips_resolution_entirely()
     {
         let tmp = vmr_fixture();
-        let child = |repo: &str| {
+        let member = |prefix: &str| {
             [
                 "diff".to_owned(),
-                format!("--src-prefix=a/{repo}/"),
-                format!("--dst-prefix=b/{repo}/"),
+                format!("--src-prefix=a/{prefix}"),
+                format!("--dst-prefix=b/{prefix}"),
                 "--color=never".to_owned(),
                 "--no-ext-diff".to_owned(),
                 "--no-textconv".to_owned(),
@@ -1055,13 +1088,12 @@ mod pager_tests
                 ".".to_owned()
             ]
         };
-        let git =
-            Git::with(ScriptedFake::new().on(child("backend"), 0, "", "").on(
-                child("frontend"),
-                0,
-                "",
-                ""
-            ));
+        let git = Git::with(
+            ScriptedFake::new()
+                .on(member(""), 0, "", "")
+                .on(member("backend/"), 0, "", "")
+                .on(member("frontend/"), 0, "", "")
+        );
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let args = DiffArgs {
             staged: false,
