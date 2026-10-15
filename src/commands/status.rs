@@ -216,7 +216,7 @@ fn render(
     {
         let repo_names = repos
             .iter()
-            .map(|(repo, _)| repo.label.as_str())
+            .map(|(repo, _)| repo.path.as_str())
             .collect::<Vec<_>>();
         output.push_str(&format!(
             "On branch {}{}\n",
@@ -238,7 +238,7 @@ fn render(
             "HEAD detached at {}{}\n",
             hash,
             repo_list_suffix(
-                &[repo.label.as_str()],
+                &[repo.path.as_str()],
                 statuses.len(),
                 SuffixPolicy::Truncated
             )

@@ -98,7 +98,7 @@ fn list(workspace: &Workspace) -> Result<Rendered>
     let repo_names = workspace
         .children()
         .iter()
-        .map(|repo| repo.label.clone())
+        .map(|repo| repo.path.clone())
         .collect::<Vec<_>>();
 
     let groups = WorktreeRoots::new(workspace).list()?;

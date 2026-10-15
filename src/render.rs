@@ -171,7 +171,7 @@ pub(crate) enum SuffixPolicy
 
 const SUFFIX_NAME_LIMIT: usize = 3;
 
-/// The repo-list suffix: the parenthesised list of member repo labels
+/// The repo-list suffix: the parenthesised list of member repo paths
 /// appended, with its leading space, to a line that does not apply to every
 /// member repo in scope. Empty when the group covers all `total` repos — no
 /// suffix means "everyone".

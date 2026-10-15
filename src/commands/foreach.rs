@@ -103,7 +103,7 @@ pub fn run(
         &results
             .iter()
             .map(|result| ChildOutput {
-                repo: &result.repo.label,
+                repo: &result.repo.path,
                 stdout: &result.stdout,
                 stderr: &result.stderr
             })
@@ -117,7 +117,7 @@ pub fn run(
         .map(|result| {
             format!(
                 "fatal: command failed in '{}' with {}",
-                result.repo.label,
+                result.repo.path,
                 result.status.describe()
             )
         })

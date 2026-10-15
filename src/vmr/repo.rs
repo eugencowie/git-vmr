@@ -2,14 +2,14 @@ use super::Declaration;
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
-/// A member repo: where it lives on disk, the label output is keyed by
-/// (`.` for the root repo, the manifest path for a child repo), and which
-/// kind of member it is.
+/// A member repo: where it lives on disk, its path from the VMR root, which
+/// output is keyed by (`.` for the root repo, the manifest path for a child
+/// repo), and which kind of member it is.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Repo
 {
     pub absolute_path: PathBuf,
-    pub label: String,
+    pub path: String,
     pub kind: RepoKind
 }
 
@@ -32,7 +32,7 @@ impl Repo
     {
         Repo {
             absolute_path: root.to_path_buf(),
-            label: ".".to_owned(),
+            path: ".".to_owned(),
             kind: RepoKind::Root
         }
     }
@@ -42,26 +42,27 @@ impl Repo
     {
         Repo {
             absolute_path: root.join(declaration.path.as_str()),
-            label: declaration.path.to_string(),
+            path: declaration.path.to_string(),
             kind: RepoKind::Child { name: declaration.name.clone() }
         }
     }
 }
 
-/// The root repo first, then child repos by path. Sorting by label would
-/// not do: `.` does not reliably sort first, as `-` and `!` precede it.
+/// The root repo first, then child repos by path. Sorting by path alone
+/// would not do: `.` does not reliably sort first, as `-` and `!` precede
+/// it.
 impl Ord for Repo
 {
     fn cmp(&self, other: &Repo) -> Ordering
     {
-        // Put the root repo first, then sort by path
+        // Put the root repo first, then sort by absolute path
         let is_child = |repo: &Repo| repo.kind != RepoKind::Root;
         is_child(self)
             .cmp(&is_child(other))
             .then_with(|| self.absolute_path.cmp(&other.absolute_path))
             // Break remaining ties on every field, so ordering agrees with
             // equality
-            .then_with(|| self.label.cmp(&other.label))
+            .then_with(|| self.path.cmp(&other.path))
             .then_with(|| self.kind.cmp(&other.kind))
     }
 }
@@ -99,7 +100,7 @@ mod tests
 
         // Assert
         assert_eq!(
-            repos.iter().map(|repo| repo.label.as_str()).collect::<Vec<_>>(),
+            repos.iter().map(|repo| repo.path.as_str()).collect::<Vec<_>>(),
             [".", "!bang", "-dash", "backend", "frontend"]
         );
     }

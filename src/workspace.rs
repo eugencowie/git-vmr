@@ -91,7 +91,7 @@ impl<'a> Workspace<'a>
     {
         render::outcomes(
             repos.par_iter().map(|repo| op(self.git, repo)).collect::<Vec<_>>(),
-            repos.iter().map(|repo| repo.label.as_str())
+            repos.iter().map(|repo| repo.path.as_str())
         )
     }
 
@@ -108,7 +108,7 @@ impl<'a> Workspace<'a>
                 .par_iter()
                 .map(|(repo, repo_paths)| op(self.git, repo, repo_paths))
                 .collect::<Vec<_>>(),
-            routed.iter().map(|(repo, _)| repo.label.as_str())
+            routed.iter().map(|(repo, _)| repo.path.as_str())
         )
     }
 
@@ -300,7 +300,7 @@ mod tests
             }
             else
             {
-                failure_message(&repo.label, stderr(&output))
+                failure_message(&repo.path, stderr(&output))
             }
         )
     }
@@ -324,7 +324,7 @@ mod tests
             workspace
                 .children()
                 .iter()
-                .map(|repo| repo.label.as_str())
+                .map(|repo| repo.path.as_str())
                 .collect::<Vec<_>>(),
             ["backend"]
         );
@@ -439,7 +439,7 @@ mod tests
             workspace
                 .children()
                 .iter()
-                .map(|repo| repo.label.as_str())
+                .map(|repo| repo.path.as_str())
                 .collect::<Vec<_>>(),
             vec!["backend", "frontend"]
         );
@@ -621,10 +621,9 @@ mod tests
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
-        let labels =
-            workspace.map(|_git, repo| Ok(repo.label.clone())).unwrap();
+        let paths = workspace.map(|_git, repo| Ok(repo.path.clone())).unwrap();
 
         // Assert
-        assert_eq!(labels, vec!["backend", "frontend"]);
+        assert_eq!(paths, vec!["backend", "frontend"]);
     }
 }

@@ -150,7 +150,7 @@ impl Membership
 
         // Look for a cloned repo, then a missing one, then an undeclared one
         if let Some(repo) =
-            self.children().iter().find(|repo| repo.label == entry)
+            self.children().iter().find(|repo| repo.path == entry)
         {
             return Ok(
                 if rest.as_os_str().is_empty()
@@ -210,9 +210,9 @@ mod tests
     use super::*;
     use crate::test_support::{manifest, repo};
 
-    fn labels(repos: &[Repo]) -> Vec<&str>
+    fn repo_paths(repos: &[Repo]) -> Vec<&str>
     {
-        repos.iter().map(|repo| repo.label.as_str()).collect()
+        repos.iter().map(|repo| repo.path.as_str()).collect()
     }
 
     fn paths(declarations: &[Declaration]) -> Vec<&str>
@@ -252,7 +252,7 @@ mod tests
     }
 
     #[test]
-    fn labels_cloned_repos_by_manifest_path_sorted_by_path()
+    fn gives_cloned_repos_their_manifest_path_sorted_by_path()
     {
         // Arrange: names sort the other way round from paths
         let manifest = Manifest::parse(
@@ -266,7 +266,7 @@ mod tests
             Membership::new(Path::new("/vmr"), &manifest, on_disk(&["b", "a"]));
 
         // Assert
-        assert_eq!(labels(membership.children()), ["a", "b"]);
+        assert_eq!(repo_paths(membership.children()), ["a", "b"]);
     }
 
     fn membership() -> Membership

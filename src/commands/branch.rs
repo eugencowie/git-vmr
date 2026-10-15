@@ -156,7 +156,7 @@ impl Git
             )
         })?;
 
-        Ok(Some((repo.label.clone(), RepoBranches { branches, head })))
+        Ok(Some((repo.path.clone(), RepoBranches { branches, head })))
     }
 }
 

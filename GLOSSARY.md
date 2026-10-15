@@ -151,7 +151,7 @@ Turning per-repo data and outcomes into styled terminal text. Rendering is pure;
 _Avoid_: formatting, displaying, output (for the act of rendering)
 
 **Repo-list suffix**:
-The gray parenthesised list of member repo labels — "(., backend)" — appended to a line that does not apply to every member repo in scope, and omitted when it does: no suffix means everyone. Truncated to three names plus a count ("(a, b, c, +2)") except on failures, which name every repo.
+The gray parenthesised list of member repo paths — "(., backend)" — appended to a line that does not apply to every member repo in scope, and omitted when it does: no suffix means everyone. Truncated to three names plus a count ("(a, b, c, +2)") except on failures, which name every repo.
 _Avoid_: repo annotation, repo tag
 
 ### Invocation

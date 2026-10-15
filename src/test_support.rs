@@ -10,14 +10,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// A child repo value, labelled and named `label`, for exercising git ops
+/// A child repo value at `path`, named `path` too, for exercising git ops
 /// directly.
-pub(crate) fn repo(label: &str, path: impl Into<PathBuf>) -> Repo
+pub(crate) fn repo(path: &str, absolute_path: impl Into<PathBuf>) -> Repo
 {
     Repo {
-        absolute_path: path.into(),
-        label: label.to_owned(),
-        kind: RepoKind::Child { name: label.to_owned() }
+        absolute_path: absolute_path.into(),
+        path: path.to_owned(),
+        kind: RepoKind::Child { name: path.to_owned() }
     }
 }
 

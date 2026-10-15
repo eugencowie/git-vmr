@@ -66,8 +66,8 @@ fn mv(workspace: &Workspace, args: &MvArgs) -> Result<MoveOutcomes>
     let destination = workspace.route_single(&args.destination)?;
     let scope_repos = sources
         .iter()
-        .map(|(repo, _)| repo.label.clone())
-        .chain(std::iter::once(destination.0.label.clone()))
+        .map(|(repo, _)| repo.path.clone())
+        .chain(std::iter::once(destination.0.path.clone()))
         .collect::<Vec<_>>();
 
     if sources.len() == 1 && sources[0].0 == destination.0
@@ -238,7 +238,7 @@ fn in_repo_outcome(repo: &Repo, result: Result<()>) -> GitCommandResult
     Ok(match result
     {
         Ok(()) => quiet_success(),
-        Err(error) => failure_message(&repo.label, format!("{error:#}"))
+        Err(error) => failure_message(&repo.path, format!("{error:#}"))
     })
 }
 
@@ -255,7 +255,7 @@ fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
     if let Err(error) = fs::rename(&source_path, &destination_path)
     {
         return Ok(failure_message(
-            &entry.source_repo.label,
+            &entry.source_repo.path,
             format!(
                 "fatal: failed to move '{}' to '{}': {error}",
                 source_path.display(),
@@ -269,7 +269,7 @@ fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
         git.add_path(&entry.source_repo.absolute_path, &entry.source_relative)
     {
         return Ok(failure_message(
-            &entry.source_repo.label,
+            &entry.source_repo.path,
             format!(
                 "fatal: failed to stage source deletion in '{}': {error:#}",
                 entry.source_repo.absolute_path.display()
@@ -283,7 +283,7 @@ fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
     )
     {
         return Ok(failure_message(
-            &entry.destination_repo.label,
+            &entry.destination_repo.path,
             format!(
                 "fatal: failed to stage destination addition in '{}': {error:#}",
                 entry.destination_repo.absolute_path.display()

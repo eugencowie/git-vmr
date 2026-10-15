@@ -16,7 +16,7 @@ pub fn run(
 
     render::outcomes(
         results.into_iter().flatten().collect(),
-        workspace.members().iter().map(|repo| repo.label.as_str())
+        workspace.members().iter().map(|repo| repo.path.as_str())
     )
 }
 
@@ -198,7 +198,7 @@ impl Git
         let mut results = plan
             .skips
             .into_iter()
-            .map(|reason| Ok(skip_message(&repo.label, reason)))
+            .map(|reason| Ok(skip_message(&repo.path, reason)))
             .collect::<Vec<_>>();
 
         if let Some(refspecs) = plan.attempt
