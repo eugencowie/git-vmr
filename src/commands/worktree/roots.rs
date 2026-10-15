@@ -69,7 +69,7 @@ impl<'a> WorktreeRoots<'a>
     /// The scope of a root operation: one child worktree per child repo.
     fn scope(&self) -> Vec<String>
     {
-        self.workspace.repos().iter().map(|repo| repo.name.clone()).collect()
+        self.workspace.repos().iter().map(|repo| repo.label.clone()).collect()
     }
 
     /// Materializes the root at `target`, then adds one child worktree per
@@ -198,8 +198,8 @@ impl<'a> WorktreeRoots<'a>
         let outcomes = self.workspace.map(|git, repo| {
             Ok(git.worktree_move(
                 repo,
-                &source.join(&repo.name),
-                &destination.join(&repo.name),
+                &source.join(&repo.label),
+                &destination.join(&repo.label),
                 force
             ))
         })?;
@@ -225,7 +225,7 @@ impl<'a> WorktreeRoots<'a>
     pub fn list(&self) -> Result<BTreeMap<PathBuf, Vec<WorktreeRootEntry>>>
     {
         let results = self.workspace.map(|git, repo| {
-            git.worktree_list(repo).map(|entries| (repo.name.clone(), entries))
+            git.worktree_list(repo).map(|entries| (repo.label.clone(), entries))
         })?;
 
         let mut groups: BTreeMap<PathBuf, Vec<WorktreeRootEntry>> =
@@ -265,7 +265,7 @@ fn remove_child(
     force_delete: bool
 ) -> Result<ChildRemoval>
 {
-    let child_target = target.join(&repo.name).clean();
+    let child_target = target.join(&repo.label).clean();
     let branch = if delete || force_delete
     {
         child_worktree_branch(git, repo, &child_target)?
@@ -329,7 +329,7 @@ fn add_child(
         AddMode::InferredBranch(branch) => (Some(branch.as_str()), None)
     };
 
-    git.worktree_add(repo, &target.join(&repo.name), branch, commit_ish)
+    git.worktree_add(repo, &target.join(&repo.label), branch, commit_ish)
 }
 
 /// The reverse of the layout convention: the root a child worktree belongs
@@ -501,13 +501,13 @@ impl Git
         {
             bail!(
                 "fatal: failed to list worktrees for '{}': {}",
-                repo.name,
+                repo.label,
                 Streams::StderrThenStdout
                     .first_line(&output, "git worktree list failed")
             );
         }
 
-        parse_worktree_list(&repo.name, &output.stdout)
+        parse_worktree_list(&repo.label, &output.stdout)
     }
 }
 

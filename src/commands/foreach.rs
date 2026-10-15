@@ -1,6 +1,6 @@
 use crate::cli::CliContext;
 use crate::render::{Rendered, fail};
-use crate::workspace::{Repo, Workspace};
+use crate::workspace::{Repo, RepoKind, Workspace};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -103,7 +103,7 @@ pub fn run(
         &results
             .iter()
             .map(|result| ChildOutput {
-                repo: &result.repo.name,
+                repo: &result.repo.label,
                 stdout: &result.stdout,
                 stderr: &result.stderr
             })
@@ -117,7 +117,7 @@ pub fn run(
         .map(|result| {
             format!(
                 "fatal: command failed in '{}' with {}",
-                result.repo.name,
+                result.repo.label,
                 result.status.describe()
             )
         })
@@ -157,6 +157,16 @@ fn child_environment(
     ChildEnvironment { sm_path, displaypath }
 }
 
+/// The repo's `$name`: its manifest name, or `.` for the root repo.
+fn name(repo: &Repo) -> &str
+{
+    match &repo.kind
+    {
+        RepoKind::Root => ".",
+        RepoKind::Child { name } => name
+    }
+}
+
 fn run_child(
     repo: &Repo,
     vmr_root: &Path,
@@ -171,7 +181,7 @@ fn run_child(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("name", &repo.name)
+        .env("name", name(repo))
         .env("sm_path", environment.sm_path)
         .env("displaypath", environment.displaypath)
         .env("toplevel", vmr_root)

@@ -1,4 +1,4 @@
-use crate::vmr::{MANIFEST, Membership, Owner, Repo};
+use crate::vmr::{MANIFEST, Membership, Owner, Repo, RepoKind};
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use std::collections::BTreeMap;
@@ -155,6 +155,34 @@ impl<'a> Router<'a>
                 .collect());
         }
 
+        // Route only into cloned child repositories
+        match self.classify(target)?
+        {
+            Classification::Member(repo, path)
+                if repo.kind == RepoKind::Root
+                    && path.starts_with(MANIFEST) =>
+                bail!(
+                    "error: cannot route virtual monorepo metadata path '{}'",
+                    target.display()
+                ),
+            Classification::Member(repo, path)
+                if repo.kind != RepoKind::Root =>
+                Ok(vec![(repo.clone(), path)]),
+            Classification::ChildRoot(repo) =>
+                Ok(vec![(repo.clone(), PathBuf::from("."))]),
+            Classification::Member(..) | Classification::Undeclared { .. } =>
+                bail!(
+                    "error: '{}' is not owned by a child Git repository",
+                    target.display()
+                ),
+        }
+    }
+
+    /// Classifies a target by what owns it: a member repo, or an undeclared
+    /// repo, with the path relative to it, or a child root itself. Fails
+    /// for a target outside the VMR or inside a missing child repo.
+    pub fn classify(&self, target: &Path) -> Result<Classification<'a>>
+    {
         // Ensure path stays inside the VMR root
         let relative = target.strip_prefix(self.root).with_context(|| {
             format!(
@@ -164,51 +192,67 @@ impl<'a> Router<'a>
             )
         })?;
 
-        // Use first path component as owning child repository
+        // Take the first path component as the first-level entry; the VMR
+        // root itself belongs to the root repo
         let mut components = relative.components();
-        let repo_name = match components.next()
+        let Some(Component::Normal(entry)) = components.next()
+        else
         {
-            Some(Component::Normal(name)) => name,
-            _ =>
-            {
-                bail!(
-                    "error: '{}' is not owned by a child repository",
-                    target.display()
-                );
-            }
+            return Ok(Classification::Member(
+                self.membership.root(),
+                PathBuf::from(".")
+            ));
         };
+        let rest = components.as_path();
 
-        // Reject VMR metadata paths
-        if repo_name == MANIFEST
+        // Classify by the repo that owns the entry, if any
+        Ok(match self.membership.owner(entry)
         {
-            bail!(
-                "error: cannot route virtual monorepo metadata path '{}'",
-                target.display()
-            );
-        }
-
-        // Require explicit paths to be owned by cloned child repositories
-        let repo = match self.membership.owner(repo_name)
-        {
-            Some(Owner::Cloned(repo)) => repo.clone(),
+            Some(Owner::Cloned(repo)) if rest.as_os_str().is_empty() =>
+                Classification::ChildRoot(repo),
+            Some(Owner::Cloned(repo)) =>
+                Classification::Member(repo, rest.to_path_buf()),
             Some(Owner::Missing(declaration)) => bail!(
                 "error: '{}' is not cloned; run 'git vmr clone' to clone it",
                 declaration.path
             ),
-            Some(Owner::Undeclared) | None => bail!(
-                "error: '{}' is not owned by a child Git repository",
-                target.display()
+            Some(Owner::Undeclared(name)) =>
+                Classification::Undeclared { name, path: dot_if_empty(rest) },
+            None => Classification::Member(
+                self.membership.root(),
+                relative.to_path_buf()
             )
-        };
+        })
+    }
+}
 
-        // Build path relative to owning repository
-        let mut repo_relative_path = components.as_path().to_path_buf();
-        if repo_relative_path.as_os_str().is_empty()
-        {
-            repo_relative_path.push(".");
-        }
+/// What owns a target, as the router classifies it.
+#[derive(Debug, PartialEq)]
+pub enum Classification<'a>
+{
+    /// Inside a member repo — a cloned child repo, otherwise the root repo —
+    /// with the path relative to it.
+    Member(&'a Repo, PathBuf),
+    /// A cloned child repo's root directory.
+    ChildRoot(&'a Repo),
+    /// Inside a first-level Git repository the manifest does not declare,
+    /// with the path relative to it.
+    Undeclared
+    {
+        name: &'a str, path: PathBuf
+    }
+}
 
-        Ok(vec![(repo, repo_relative_path)])
+/// `path`, or `.` when it is empty.
+fn dot_if_empty(path: &Path) -> PathBuf
+{
+    if path.as_os_str().is_empty()
+    {
+        PathBuf::from(".")
+    }
+    else
+    {
+        path.to_path_buf()
     }
 }
 
@@ -222,16 +266,141 @@ mod tests
     // filesystem or git involved.
     fn repo(root: &Path, name: &str) -> Repo
     {
-        Repo { name: name.to_owned(), path: root.join(name) }
+        crate::test_support::repo(name, root.join(name))
     }
 
     fn membership(root: &Path) -> Membership
     {
         Membership::new(
             root,
-            &manifest(&["backend", "frontend"]),
+            &manifest(&["api", "backend", "frontend"]),
             ["backend", "frontend", "scratch"].map(str::to_owned)
         )
+    }
+
+    #[test]
+    fn classifies_a_path_inside_a_child_repo_relative_to_it()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        // Act
+        let class = router.classify(Path::new("/vmr/backend/src/main.rs"));
+
+        // Assert
+        assert_eq!(
+            class.unwrap(),
+            Classification::Member(
+                &repo(root, "backend"),
+                PathBuf::from("src/main.rs")
+            )
+        );
+    }
+
+    #[test]
+    fn classifies_a_child_root()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        // Act
+        let class = router.classify(Path::new("/vmr/backend"));
+
+        // Assert
+        assert_eq!(
+            class.unwrap(),
+            Classification::ChildRoot(&repo(root, "backend"))
+        );
+    }
+
+    #[test]
+    fn classifies_paths_outside_every_child_repo_as_the_root_repo()
+    {
+        // Arrange: docs is not a repo, README.md is a root file
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        for (target, root_path) in [
+            ("/vmr/README.md", "README.md"),
+            ("/vmr/docs/guide.md", "docs/guide.md"),
+            ("/vmr/.gitvmr", ".gitvmr")
+        ]
+        {
+            // Act
+            let class = router.classify(Path::new(target));
+
+            // Assert
+            assert_eq!(
+                class.unwrap(),
+                Classification::Member(
+                    &Repo::root(root),
+                    PathBuf::from(root_path)
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn classifies_a_path_inside_an_undeclared_repo_relative_to_it()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        for (target, path) in
+            [("/vmr/scratch/notes.md", "notes.md"), ("/vmr/scratch", ".")]
+        {
+            // Act
+            let class = router.classify(Path::new(target));
+
+            // Assert
+            assert_eq!(class.unwrap(), Classification::Undeclared {
+                name: "scratch",
+                path: PathBuf::from(path)
+            });
+        }
+    }
+
+    #[test]
+    fn classifying_a_path_inside_a_missing_child_repo_fails()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        // Act
+        let err = router.classify(Path::new("/vmr/api/src")).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "error: 'api' is not cloned; run 'git vmr clone' to clone it"
+        );
+    }
+
+    #[test]
+    fn classifying_a_path_outside_the_vmr_fails()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(root, &membership, root);
+
+        // Act
+        let err = router.classify(Path::new("/elsewhere/a.rs")).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "error: '/elsewhere/a.rs' is outside virtual monorepo '/vmr'"
+        );
     }
 
     #[test]

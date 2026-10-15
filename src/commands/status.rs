@@ -216,7 +216,7 @@ fn render(
     {
         let repo_names = repos
             .iter()
-            .map(|(repo, _)| repo.name.as_str())
+            .map(|(repo, _)| repo.label.as_str())
             .collect::<Vec<_>>();
         output.push_str(&format!(
             "On branch {}{}\n",
@@ -238,7 +238,7 @@ fn render(
             "HEAD detached at {}{}\n",
             hash,
             repo_list_suffix(
-                &[repo.name.as_str()],
+                &[repo.label.as_str()],
                 statuses.len(),
                 SuffixPolicy::Truncated
             )
@@ -404,7 +404,7 @@ mod tests
 
     fn repo() -> Repo
     {
-        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
+        crate::test_support::repo("backend", "/vmr/backend")
     }
 
     #[test]
@@ -774,7 +774,7 @@ mod render_tests
 
     fn repo(root: &Path, name: &str) -> Repo
     {
-        Repo { name: name.to_owned(), path: root.join(name) }
+        crate::test_support::repo(name, root.join(name))
     }
 
     fn repo_status(branch: &str) -> RepoStatus

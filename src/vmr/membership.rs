@@ -7,11 +7,12 @@ use std::path::Path;
 /// A VMR root's membership as far as child repos go: the cloned child
 /// repos are member repos; missing child repos (declared, not on disk) and
 /// undeclared repos (first-level Git repositories the manifest does not
-/// declare) are not. The only place that decides which Git repositories
-/// sit at a VMR root.
+/// declare) are not. Also holds the root repo, for routing. The only place
+/// that decides which Git repositories sit at a VMR root.
 #[derive(Debug)]
 pub struct Membership
 {
+    root: Repo,
     cloned: Vec<Repo>,
     missing: Vec<Declaration>,
     undeclared: Vec<String>
@@ -23,7 +24,7 @@ pub enum Owner<'a>
 {
     Cloned(&'a Repo),
     Missing(&'a Declaration),
-    Undeclared
+    Undeclared(&'a str)
 }
 
 impl Membership
@@ -72,18 +73,22 @@ impl Membership
                 declared.iter().any(|name| declares(declaration, name))
             });
 
-        // Label cloned repos by manifest path
+        // Hold the root repo and the cloned child repos
         Membership {
+            root: Repo::root(root),
             cloned: cloned
                 .into_iter()
-                .map(|declaration| Repo {
-                    name: declaration.path.to_string(),
-                    path: root.join(declaration.path.as_str())
-                })
+                .map(|declaration| Repo::child(root, declaration))
                 .collect(),
             missing: missing.into_iter().cloned().collect(),
             undeclared
         }
+    }
+
+    /// The root repo, which owns every path outside the child repos.
+    pub fn root(&self) -> &Repo
+    {
+        &self.root
     }
 
     /// The declared child repos that are cloned, sorted by path.
@@ -112,7 +117,7 @@ impl Membership
         let name = name.to_str()?;
 
         // Look for a cloned repo, then a missing one, then an undeclared one
-        if let Some(repo) = self.cloned.iter().find(|repo| repo.name == name)
+        if let Some(repo) = self.cloned.iter().find(|repo| repo.label == name)
         {
             return Some(Owner::Cloned(repo));
         }
@@ -123,8 +128,8 @@ impl Membership
         }
         self.undeclared
             .iter()
-            .any(|undeclared| undeclared == name)
-            .then_some(Owner::Undeclared)
+            .find(|undeclared| *undeclared == name)
+            .map(|undeclared| Owner::Undeclared(undeclared))
     }
 }
 
@@ -138,11 +143,11 @@ fn declares(declaration: &Declaration, name: &str) -> bool
 mod tests
 {
     use super::*;
-    use crate::test_support::manifest;
+    use crate::test_support::{manifest, repo};
 
-    fn names(repos: &[Repo]) -> Vec<&str>
+    fn labels(repos: &[Repo]) -> Vec<&str>
     {
-        repos.iter().map(|repo| repo.name.as_str()).collect()
+        repos.iter().map(|repo| repo.label.as_str()).collect()
     }
 
     fn paths(declarations: &[Declaration]) -> Vec<&str>
@@ -174,8 +179,8 @@ mod tests
 
         // Assert
         assert_eq!(membership.cloned(), [
-            Repo { name: "backend".to_owned(), path: root.join("backend") },
-            Repo { name: "frontend".to_owned(), path: root.join("frontend") }
+            repo("backend", root.join("backend")),
+            repo("frontend", root.join("frontend"))
         ]);
         assert_eq!(paths(membership.missing()), ["api"]);
         assert_eq!(membership.undeclared(), ["scratch"]);
@@ -196,7 +201,7 @@ mod tests
             Membership::new(Path::new("/vmr"), &manifest, on_disk(&["b", "a"]));
 
         // Assert
-        assert_eq!(names(membership.cloned()), ["a", "b"]);
+        assert_eq!(labels(membership.cloned()), ["a", "b"]);
     }
 
     #[test]
@@ -218,7 +223,7 @@ mod tests
         assert_eq!(owners, [
             Some(Owner::Cloned(&membership.cloned()[0])),
             Some(Owner::Missing(&membership.missing()[0])),
-            Some(Owner::Undeclared),
+            Some(Owner::Undeclared("scratch")),
             None
         ]);
     }

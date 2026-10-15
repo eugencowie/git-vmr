@@ -47,7 +47,7 @@ pub fn run(
     // Concatenate in repo order, no separators: repos with an empty diff
     // contribute nothing
     let names =
-        diffs.iter().map(|(repo, _)| repo.name.clone()).collect::<Vec<_>>();
+        diffs.iter().map(|(repo, _)| repo.label.clone()).collect::<Vec<_>>();
     let mut combined = String::new();
     let mut results = Vec::new();
     for (_, (diff, result)) in diffs
@@ -103,8 +103,8 @@ impl Git
 
         // Trailing slashes are mandatory: git concatenates the prefix and
         // the repo-relative path verbatim
-        args.push(OsString::from(format!("--src-prefix=a/{}/", repo.name)));
-        args.push(OsString::from(format!("--dst-prefix=b/{}/", repo.name)));
+        args.push(OsString::from(format!("--src-prefix=a/{}/", repo.label)));
+        args.push(OsString::from(format!("--dst-prefix=b/{}/", repo.label)));
         args.push(OsString::from(format!("--color={color}")));
         args.push(OsString::from("--no-ext-diff"));
         args.push(OsString::from("--no-textconv"));
@@ -131,7 +131,7 @@ impl Git
                         ))
                     ),
             };
-            rewrite_rename_headers(stdout, &repo.name)
+            rewrite_rename_headers(stdout, &repo.label)
         }
         else
         {

@@ -8,7 +8,7 @@ pub use gitignore::Gitignore;
 pub use manifest::{Declaration, Manifest, ManifestEditor, RepoPath, RepoUrl};
 pub use membership::{Membership, Owner};
 use path_clean::PathClean;
-pub use repo::Repo;
+pub use repo::{Repo, RepoKind};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};

@@ -155,7 +155,7 @@ impl Git
             )
         })?;
 
-        Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
+        Ok(Some((repo.label.clone(), RepoBranches { branches, head })))
     }
 }
 
@@ -247,11 +247,10 @@ mod tests
 {
     use super::*;
     use crate::git::{Head, ScriptedFake};
-    use std::path::PathBuf;
 
     fn repo() -> Repo
     {
-        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
+        crate::test_support::repo("backend", "/vmr/backend")
     }
 
     #[test]

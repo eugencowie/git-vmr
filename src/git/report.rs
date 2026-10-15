@@ -240,12 +240,12 @@ pub(crate) fn command_result(
         Ok(match success.message(output)
         {
             None => quiet_success(),
-            Some(message) => success_message(&repo.name, message)
+            Some(message) => success_message(&repo.label, message)
         })
     }
     else
     {
-        Ok(failure_message(&repo.name, failure.message(&repo.path, output)))
+        Ok(failure_message(&repo.label, failure.message(&repo.path, output)))
     }
 }
 

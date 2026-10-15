@@ -2,8 +2,8 @@ mod routing;
 
 use crate::git::{Git, GitCommandResult, stderr};
 use crate::render::{self, Rendered};
-pub use crate::vmr::Repo;
 use crate::vmr::{Gitignore, Manifest, Membership, Vmr};
+pub use crate::vmr::{Repo, RepoKind};
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use routing::Router;
@@ -64,7 +64,7 @@ impl<'a> Workspace<'a>
         self.git
     }
 
-    /// The snapshotted child repos, sorted by name.
+    /// The snapshotted child repos, sorted by path.
     pub fn repos(&self) -> &[Repo]
     {
         self.membership.cloned()
@@ -85,7 +85,7 @@ impl<'a> Workspace<'a>
     {
         render::outcomes(
             repos.par_iter().map(|repo| op(self.git, repo)).collect::<Vec<_>>(),
-            repos.iter().map(|repo| repo.name.as_str())
+            repos.iter().map(|repo| repo.label.as_str())
         )
     }
 
@@ -102,7 +102,7 @@ impl<'a> Workspace<'a>
                 .par_iter()
                 .map(|(repo, repo_paths)| op(self.git, repo, repo_paths))
                 .collect::<Vec<_>>(),
-            routed.iter().map(|(repo, _)| repo.name.as_str())
+            routed.iter().map(|(repo, _)| repo.label.as_str())
         )
     }
 
@@ -288,7 +288,7 @@ mod tests
             }
             else
             {
-                failure_message(&repo.name, stderr(&output))
+                failure_message(&repo.label, stderr(&output))
             }
         )
     }
@@ -312,7 +312,7 @@ mod tests
             workspace
                 .repos()
                 .iter()
-                .map(|repo| repo.name.as_str())
+                .map(|repo| repo.label.as_str())
                 .collect::<Vec<_>>(),
             ["backend"]
         );
@@ -427,7 +427,7 @@ mod tests
             workspace
                 .repos()
                 .iter()
-                .map(|repo| repo.name.as_str())
+                .map(|repo| repo.label.as_str())
                 .collect::<Vec<_>>(),
             vec!["backend", "frontend"]
         );
@@ -598,9 +598,10 @@ mod tests
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
-        let names = workspace.map(|_git, repo| Ok(repo.name.clone())).unwrap();
+        let labels =
+            workspace.map(|_git, repo| Ok(repo.label.clone())).unwrap();
 
         // Assert
-        assert_eq!(names, vec!["backend", "frontend"]);
+        assert_eq!(labels, vec!["backend", "frontend"]);
     }
 }

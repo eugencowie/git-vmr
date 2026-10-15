@@ -99,7 +99,7 @@ impl Git
             .map(str::to_owned)
             .collect::<Vec<_>>();
 
-        Ok(Some((repo.name.clone(), tags)))
+        Ok(Some((repo.label.clone(), tags)))
     }
 
     fn tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult

@@ -209,23 +209,20 @@ pub(crate) fn quiet_success() -> RepoOutcome
     RepoOutcome::Success(None)
 }
 
-pub(crate) fn success_message(repo_name: &str, message: String) -> RepoOutcome
+pub(crate) fn success_message(label: &str, message: String) -> RepoOutcome
 {
-    RepoOutcome::Success(Some(RepoMessage {
-        repo: repo_name.to_owned(),
-        message
-    }))
+    RepoOutcome::Success(Some(RepoMessage { repo: label.to_owned(), message }))
 }
 
-pub(crate) fn failure_message(repo_name: &str, message: String) -> RepoOutcome
+pub(crate) fn failure_message(label: &str, message: String) -> RepoOutcome
 {
-    RepoOutcome::Failure(RepoMessage { repo: repo_name.to_owned(), message })
+    RepoOutcome::Failure(RepoMessage { repo: label.to_owned(), message })
 }
 
-pub(crate) fn skip_message(repo_name: &str, reason: String) -> RepoOutcome
+pub(crate) fn skip_message(label: &str, reason: String) -> RepoOutcome
 {
     RepoOutcome::Skipped(RepoMessage {
-        repo: repo_name.to_owned(),
+        repo: label.to_owned(),
         message: reason
     })
 }
