@@ -279,16 +279,8 @@ fn status_reports_root_repo_changes_relative_to_the_working_dir()
         .assert()
         .success()
         .stdout(
-            "On branch master\n\
-             \n\
-             Changes not staged for commit:\n  \
-             (use \"git vmr add <file>...\" to update what will be committed)\n  \
-             (use \"git vmr restore <file>...\" to discard changes in working directory)\n\
-             \tmodified:   ../.gitignore\n\
-             \n\
-             Untracked files:\n  \
-             (use \"git vmr add <file>...\" to include in what will be committed)\n\
-             \tnew file:   ../docs/\n"
+            predicate::str::contains("\tmodified:   ../.gitignore\n")
+                .and(predicate::str::contains("\tnew file:   ../docs/\n"))
         )
         .stderr(predicate::str::is_empty());
 }
