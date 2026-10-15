@@ -2,8 +2,8 @@ mod routing;
 
 use crate::git::{Git, GitCommandResult, stderr};
 use crate::render::{self, Rendered};
-pub use crate::vmr::Repo;
 use crate::vmr::{Gitignore, Manifest, Membership, Vmr};
+pub use crate::vmr::{Repo, RepoKind};
 use anyhow::{Result, bail};
 use rayon::prelude::*;
 use routing::Router;
@@ -64,28 +64,34 @@ impl<'a> Workspace<'a>
         self.git
     }
 
-    /// The snapshotted child repos, sorted by name.
-    pub fn repos(&self) -> &[Repo]
+    /// The snapshotted member repos, in order.
+    pub fn members(&self) -> &[Repo]
     {
-        self.membership.cloned()
+        self.membership.members()
     }
 
-    /// Runs a git operation in every child repo in parallel, then renders
+    /// The snapshotted child repos, sorted by path.
+    pub fn children(&self) -> &[Repo]
+    {
+        self.membership.children()
+    }
+
+    /// Runs a git operation in every member repo in parallel, then renders
     /// the aggregated outcomes.
     pub fn run<F>(&self, op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
-        self.run_in(self.membership.cloned(), op)
+        self.run_in(self.membership.members(), op)
     }
 
-    /// Runs a git operation in an explicit subset of child repos in
+    /// Runs a git operation in an explicit subset of member repos in
     /// parallel, then renders the aggregated outcomes.
     pub fn run_in<F>(&self, repos: &[Repo], op: F) -> Result<Rendered>
     where F: Fn(&Git, &Repo) -> GitCommandResult + Sync
     {
         render::outcomes(
             repos.par_iter().map(|repo| op(self.git, repo)).collect::<Vec<_>>(),
-            repos.iter().map(|repo| repo.name.as_str())
+            repos.iter().map(|repo| repo.path.as_str())
         )
     }
 
@@ -102,22 +108,28 @@ impl<'a> Workspace<'a>
                 .par_iter()
                 .map(|(repo, repo_paths)| op(self.git, repo, repo_paths))
                 .collect::<Vec<_>>(),
-            routed.iter().map(|(repo, _)| repo.name.as_str())
+            routed.iter().map(|(repo, _)| repo.path.as_str())
         )
     }
 
-    /// Gathers a value from every child repo in parallel, in repo order,
+    /// Gathers a value from every member repo in parallel, in repo order,
     /// without reporting.
     pub fn map<T, F>(&self, op: F) -> Result<Vec<T>>
     where
         F: Fn(&Git, &Repo) -> Result<T> + Sync,
         T: Send
     {
-        self.membership
-            .cloned()
-            .par_iter()
-            .map(|repo| op(self.git, repo))
-            .collect()
+        self.map_in(self.membership.members(), op)
+    }
+
+    /// Gathers a value from an explicit subset of member repos in parallel,
+    /// in the subset's order, without reporting.
+    pub fn map_in<T, F>(&self, repos: &[Repo], op: F) -> Result<Vec<T>>
+    where
+        F: Fn(&Git, &Repo) -> Result<T> + Sync,
+        T: Send
+    {
+        repos.par_iter().map(|repo| op(self.git, repo)).collect()
     }
 
     /// Routes the scope to its owning child repos and gathers a value from
@@ -165,7 +177,7 @@ impl<'a> Workspace<'a>
 
     fn router(&self) -> Router<'_>
     {
-        Router::new(&self.vmr.path, &self.membership, &self.working_dir)
+        Router::new(&self.membership, &self.working_dir)
     }
 }
 
@@ -288,7 +300,7 @@ mod tests
             }
             else
             {
-                failure_message(&repo.name, stderr(&output))
+                failure_message(&repo.path, stderr(&output))
             }
         )
     }
@@ -310,9 +322,9 @@ mod tests
         // Assert
         assert_eq!(
             workspace
-                .repos()
+                .children()
                 .iter()
-                .map(|repo| repo.name.as_str())
+                .map(|repo| repo.path.as_str())
                 .collect::<Vec<_>>(),
             ["backend"]
         );
@@ -425,9 +437,9 @@ mod tests
         assert!(workspace.warnings().is_empty());
         assert_eq!(
             workspace
-                .repos()
+                .children()
                 .iter()
-                .map(|repo| repo.name.as_str())
+                .map(|repo| repo.path.as_str())
                 .collect::<Vec<_>>(),
             vec!["backend", "frontend"]
         );
@@ -443,8 +455,9 @@ mod tests
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
-        let result = workspace
-            .run(|git, repo| outcome(repo, git.output(&repo.path, ["fetch"])?));
+        let result = workspace.run(|git, repo| {
+            outcome(repo, git.output(&repo.absolute_path, ["fetch"])?)
+        });
 
         // Assert
         assert!(result.is_ok());
@@ -473,7 +486,10 @@ mod tests
         // Act
         let err = workspace
             .run(|git, repo| {
-                outcome(repo, git.output(&repo.path, ["merge", "topic"])?)
+                outcome(
+                    repo,
+                    git.output(&repo.absolute_path, ["merge", "topic"])?
+                )
             })
             .unwrap_err();
 
@@ -495,12 +511,15 @@ mod tests
         ));
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
-        let subset = vec![workspace.repos()[0].clone()];
+        let subset = vec![workspace.members()[0].clone()];
 
         // Act
         workspace
             .run_in(&subset, |git, repo| {
-                outcome(repo, git.output(&repo.path, ["commit", "-m", "msg"])?)
+                outcome(
+                    repo,
+                    git.output(&repo.absolute_path, ["commit", "-m", "msg"])?
+                )
             })
             .unwrap();
 
@@ -533,7 +552,11 @@ mod tests
             .run_routed(Scope::EntireVmr, |git, repo, paths| {
                 outcome(
                     repo,
-                    git.path_output(&repo.path, ["add", "--all", "--"], paths)?
+                    git.path_output(
+                        &repo.absolute_path,
+                        ["add", "--all", "--"],
+                        paths
+                    )?
                 )
             })
             .unwrap();
@@ -574,7 +597,7 @@ mod tests
             .run_routed(scope, |git, repo, paths| {
                 outcome(
                     repo,
-                    git.path_output(&repo.path, ["add", "--"], paths)?
+                    git.path_output(&repo.absolute_path, ["add", "--"], paths)?
                 )
             })
             .unwrap();
@@ -598,9 +621,9 @@ mod tests
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
-        let names = workspace.map(|_git, repo| Ok(repo.name.clone())).unwrap();
+        let paths = workspace.map(|_git, repo| Ok(repo.path.clone())).unwrap();
 
         // Assert
-        assert_eq!(names, vec!["backend", "frontend"]);
+        assert_eq!(paths, vec!["backend", "frontend"]);
     }
 }

@@ -11,9 +11,9 @@ use std::collections::HashSet;
 /// become the command's error. The suffix is omitted when a group covers
 /// every repo in scope.
 ///
-/// The scope — repo names, duplicates allowed — must be supplied by the
+/// The scope — repo paths, duplicates allowed — must be supplied by the
 /// caller: outcomes cannot self-describe it, because quiet successes and
-/// hard errors carry no repo name, and a repo in scope (a move's
+/// hard errors carry no repo path, and a repo in scope (a move's
 /// destination) may produce no outcome at all. Deriving the scope from the
 /// outcomes would undercount it, and a failure confined to one repo would
 /// lose its suffix and read as applying to every repo.
