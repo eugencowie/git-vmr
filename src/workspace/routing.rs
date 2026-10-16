@@ -210,7 +210,8 @@ mod tests
         Membership::new(
             root,
             &manifest(&["api", "backend", "frontend"]),
-            ["backend", "frontend", "scratch"].map(str::to_owned)
+            ["backend", "frontend", "scratch"].map(str::to_owned),
+            |_| false
         )
     }
 

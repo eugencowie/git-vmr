@@ -2,20 +2,34 @@ use super::{Declaration, Manifest, Repo};
 use crate::git::git_style_path;
 use anyhow::{Context, Result, bail};
 use std::path::{Component, Path, PathBuf};
-use std::{fs, iter};
+use std::{fmt, fs, iter};
 
 /// A VMR root's membership: the root repo and the cloned child repos are
 /// member repos; missing child repos (declared, not on disk) and undeclared
 /// repos (first-level Git repositories the manifest does not declare) are
 /// not. The only place that decides which Git repositories sit at a VMR
 /// root, and which of them owns a path within it.
-#[derive(Debug)]
 pub struct Membership
 {
     /// The root repo, then the cloned child repos sorted by path.
     repos: Vec<Repo>,
     missing: Vec<Declaration>,
-    undeclared: Vec<String>
+    undeclared: Vec<String>,
+    /// Whether a path relative to the VMR root is a Git repository, asked
+    /// when classifying root repo paths, below the first level only.
+    nested: Box<dyn Fn(&Path) -> bool>
+}
+
+impl fmt::Debug for Membership
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        f.debug_struct("Membership")
+            .field("repos", &self.repos)
+            .field("missing", &self.missing)
+            .field("undeclared", &self.undeclared)
+            .finish_non_exhaustive()
+    }
 }
 
 /// What owns a path within the VMR root.
@@ -38,7 +52,8 @@ pub enum Classification<'a>
 impl Membership
 {
     /// Reads `root`'s first level once and sorts the Git repositories
-    /// there against `manifest`.
+    /// there against `manifest`, probing the disk for nested repos as paths
+    /// are classified.
     pub fn read(root: &Path, manifest: &Manifest) -> Result<Membership>
     {
         // List the first-level Git repositories
@@ -53,16 +68,23 @@ impl Membership
             .filter_map(|entry| entry.file_name().into_string().ok())
             .filter(|name| name != ".git");
 
+        // Probe for nested repos below the root
+        let root_path = root.to_path_buf();
+        let nested =
+            move |path: &Path| root_path.join(path).join(".git").exists();
+
         // Sort them against the manifest
-        Ok(Membership::new(root, manifest, on_disk))
+        Ok(Membership::new(root, manifest, on_disk, nested))
     }
 
     /// Sorts `on_disk`, the names of `root`'s first-level Git
-    /// repositories, against `manifest`.
+    /// repositories, against `manifest`. `nested` tells whether a path
+    /// relative to `root` is a Git repository.
     pub fn new(
         root: &Path,
         manifest: &Manifest,
-        on_disk: impl IntoIterator<Item = String>
+        on_disk: impl IntoIterator<Item = String>,
+        nested: impl Fn(&Path) -> bool + 'static
     ) -> Membership
     {
         // Split the repos on disk into declared and undeclared
@@ -91,7 +113,8 @@ impl Membership
                 )
                 .collect(),
             missing: missing.into_iter().cloned().collect(),
-            undeclared
+            undeclared,
+            nested: Box::new(nested)
         }
     }
 
@@ -194,9 +217,11 @@ impl Membership
         // Look for a nested repo, outermost first, skipping the VMR root
         // and the first level, whose repos were listed when reading
         let ancestors = path.ancestors().collect::<Vec<_>>();
-        if let Some(nested) = ancestors.iter().rev().skip(2).find(|ancestor| {
-            self.root().absolute_path.join(ancestor).join(".git").exists()
-        })
+        if let Some(nested) = ancestors
+            .iter()
+            .rev()
+            .skip(2)
+            .find(|ancestor| (self.nested)(ancestor))
         {
             bail!(
                 "error: '{}' is inside nested Git repository '{}', which is \
@@ -254,6 +279,12 @@ mod tests
         names.iter().map(|name| (*name).to_owned()).collect()
     }
 
+    fn nested(paths: &[&str]) -> impl Fn(&Path) -> bool + 'static
+    {
+        let paths = paths.iter().map(PathBuf::from).collect::<Vec<_>>();
+        move |path| paths.iter().any(|nested| nested == path)
+    }
+
     #[test]
     fn sorts_repos_into_cloned_missing_and_undeclared()
     {
@@ -265,7 +296,8 @@ mod tests
         let membership = Membership::new(
             root,
             &manifest,
-            on_disk(&["scratch", "frontend", "backend"])
+            on_disk(&["scratch", "frontend", "backend"]),
+            nested(&[])
         );
 
         // Assert
@@ -287,7 +319,8 @@ mod tests
         let membership = Membership::new(
             Path::new("/vmr"),
             &manifest,
-            on_disk(&["scratch", "frontend", "backend"])
+            on_disk(&["scratch", "frontend", "backend"]),
+            nested(&[])
         );
 
         // Assert
@@ -307,8 +340,12 @@ mod tests
         .unwrap();
 
         // Act
-        let membership =
-            Membership::new(Path::new("/vmr"), &manifest, on_disk(&["b", "a"]));
+        let membership = Membership::new(
+            Path::new("/vmr"),
+            &manifest,
+            on_disk(&["b", "a"]),
+            nested(&[])
+        );
 
         // Assert
         assert_eq!(repo_paths(membership.children()), ["a", "b"]);
@@ -319,7 +356,8 @@ mod tests
         Membership::new(
             Path::new("/vmr"),
             &manifest(&["api", "backend", "frontend"]),
-            on_disk(&["backend", "frontend", "scratch"])
+            on_disk(&["backend", "frontend", "scratch"]),
+            nested(&[])
         )
     }
 
@@ -425,10 +463,12 @@ mod tests
     fn classifying_a_root_path_inside_a_nested_repo_fails()
     {
         // Arrange: vendor/lib is a Git repository below the first level
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir_all(tmp.path().join("vendor/lib/.git")).unwrap();
-        let membership =
-            Membership::new(tmp.path(), &Manifest::default(), on_disk(&[]));
+        let membership = Membership::new(
+            Path::new("/vmr"),
+            &Manifest::default(),
+            on_disk(&[]),
+            nested(&["vendor/lib"])
+        );
 
         for path in ["vendor/lib", "vendor/lib/src/a.rs"]
         {
@@ -450,10 +490,12 @@ mod tests
     fn classifies_a_root_path_beside_a_nested_repo_as_the_root_repo()
     {
         // Arrange
-        let tmp = tempfile::tempdir().unwrap();
-        fs::create_dir_all(tmp.path().join("vendor/lib/.git")).unwrap();
-        let membership =
-            Membership::new(tmp.path(), &Manifest::default(), on_disk(&[]));
+        let membership = Membership::new(
+            Path::new("/vmr"),
+            &Manifest::default(),
+            on_disk(&[]),
+            nested(&["vendor/lib"])
+        );
 
         // Act
         let class = membership.classify(Path::new("vendor/README.md"));
@@ -462,7 +504,7 @@ mod tests
         assert_eq!(
             class.unwrap(),
             Classification::Member(
-                &Repo::root(tmp.path()),
+                &Repo::root(Path::new("/vmr")),
                 PathBuf::from("vendor/README.md")
             )
         );
