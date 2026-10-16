@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -219,6 +219,163 @@ impl RepoUrl
     {
         &self.0
     }
+
+    /// Whether the URL is relative to the root repo's, as a URL starting
+    /// with `./` or `../` is.
+    pub fn is_relative(&self) -> bool
+    {
+        starts_relative(&self.0)
+    }
+
+    /// The URL to clone from: an absolute URL as declared, or a relative one
+    /// resolved against `root_url`, the root repo's `origin` URL, the way
+    /// git resolves a relative submodule URL.
+    pub fn resolve(&self, root_url: Option<&str>) -> Result<String>
+    {
+        // Keep an absolute URL
+        if !self.is_relative()
+        {
+            return Ok(self.0.clone());
+        }
+
+        // Require the root repo's URL, without a trailing separator
+        let Some(root_url) = root_url
+        else
+        {
+            bail!(
+                "cannot resolve relative URL '{}': the root repo has no \
+                 'origin' remote",
+                self.0
+            );
+        };
+        let root_url = root_url.strip_suffix(is_dir_sep).unwrap_or(root_url);
+
+        // Start a relative root URL with `./`, so climbing out of it stays
+        // relative
+        let root_is_relative = is_local(root_url) && !is_absolute(root_url);
+        let mut base = if root_is_relative && !starts_relative(root_url)
+        {
+            format!("./{root_url}")
+        }
+        else
+        {
+            root_url.to_owned()
+        };
+
+        // Drop one component of the base per leading `../`, skipping `./`
+        let mut url = self.0.as_str();
+        let mut colon_separated = false;
+        loop
+        {
+            if let Some(rest) = strip_dots(url, "..")
+            {
+                url = rest;
+                colon_separated |= chop_last_component(
+                    &mut base,
+                    root_is_relative
+                )
+                .with_context(|| {
+                    format!(
+                        "cannot resolve relative URL '{}' against '{root_url}'",
+                        self.0
+                    )
+                })?;
+            }
+            else if let Some(rest) = strip_dots(url, ".")
+            {
+                url = rest;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // Join the rest onto the base, without the rest's trailing slash or
+        // a leading `./`
+        let separator = if colon_separated { ':' } else { '/' };
+        let joined = format!("{base}{separator}{url}");
+        let joined = if url.ends_with('/')
+        {
+            &joined[..joined.len() - 1]
+        }
+        else
+        {
+            &joined
+        };
+        Ok(joined.strip_prefix("./").unwrap_or(joined).to_owned())
+    }
+}
+
+/// Whether `url` starts with `./` or `../`.
+fn starts_relative(url: &str) -> bool
+{
+    strip_dots(url, ".").is_some() || strip_dots(url, "..").is_some()
+}
+
+/// `url` without a leading `dots` and directory separator, if it has them.
+fn strip_dots<'u>(url: &'u str, dots: &str) -> Option<&'u str>
+{
+    url.strip_prefix(dots)?.strip_prefix(is_dir_sep)
+}
+
+/// Removes the last component of `base`, returning whether a colon rather
+/// than a separator delimited it, as in scp-style `host:repo`. `None` when
+/// there is nothing left to remove.
+fn chop_last_component(base: &mut String, is_relative: bool) -> Option<bool>
+{
+    // Cut at the last separator, then at the last colon
+    if let Some(index) = base.rfind(is_dir_sep)
+    {
+        base.truncate(index);
+        return Some(false);
+    }
+    if let Some(index) = base.rfind(':')
+    {
+        base.truncate(index);
+        return Some(true);
+    }
+
+    // A bare absolute name climbs to the current directory, once
+    if is_relative || base == "."
+    {
+        return None;
+    }
+    ".".clone_into(base);
+    Some(false)
+}
+
+/// Whether `url` is a local path rather than a URL or scp-style address:
+/// no colon, or a separator before the first one.
+fn is_local(url: &str) -> bool
+{
+    match url.find(':')
+    {
+        None => true,
+        Some(colon) =>
+            url.find(is_dir_sep).is_some_and(|slash| slash < colon)
+                || has_drive_prefix(url),
+    }
+}
+
+fn is_absolute(path: &str) -> bool
+{
+    path.starts_with(is_dir_sep) || has_drive_prefix(path)
+}
+
+/// Whether `path` starts with a Windows drive letter, as in `C:`.
+fn has_drive_prefix(path: &str) -> bool
+{
+    let mut chars = path.chars();
+    cfg!(windows)
+        && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.next() == Some(':')
+}
+
+/// Git's native directory separators.
+fn is_dir_sep(c: char) -> bool
+{
+    c == '/' || (cfg!(windows) && c == '\\')
 }
 
 impl TryFrom<String> for RepoUrl
@@ -294,6 +451,100 @@ mod tests
         let message = format!("{err:#}");
         assert!(message.contains("line 3"), "{message}");
         assert!(message.contains("url must not be empty"), "{message}");
+    }
+
+    #[test]
+    fn resolves_a_relative_url_against_the_root_repos_url()
+    {
+        for (root_url, url, resolved) in [
+            (
+                "https://host/org/root.git",
+                "../lib.git",
+                "https://host/org/lib.git"
+            ),
+            (
+                "https://host/org/root.git/",
+                "../lib.git",
+                "https://host/org/lib.git"
+            ),
+            (
+                "https://host/org/root.git",
+                "../../lib.git",
+                "https://host/lib.git"
+            ),
+            (
+                "https://host/org/root.git",
+                "./lib.git",
+                "https://host/org/root.git/lib.git"
+            ),
+            ("https://host/org/root.git", "../lib/", "https://host/org/lib"),
+            ("https://host/org/root.git", "../", "https://host/org/"),
+            ("git@host:org/root.git", "../lib.git", "git@host:org/lib.git"),
+            ("git@host:root.git", "../lib.git", "git@host:lib.git"),
+            ("/srv/git/root", "../lib", "/srv/git/lib"),
+            ("../up/root", "../lib", "../up/lib"),
+            ("up/root", "./lib", "up/root/lib"),
+            ("root", "../lib", "lib")
+        ]
+        {
+            // Arrange
+            let url = RepoUrl::parse(url.to_owned()).unwrap();
+
+            // Act
+            let result = url.resolve(Some(root_url)).unwrap();
+
+            // Assert
+            assert_eq!(result, resolved, "{root_url} + {url:?}");
+        }
+    }
+
+    #[test]
+    fn keeps_an_absolute_url_as_declared()
+    {
+        for url in ["git@other:lib.git", "https://host/lib.git", "/srv/lib"]
+        {
+            // Arrange
+            let url = RepoUrl::parse(url.to_owned()).unwrap();
+
+            // Act
+            let result = url.resolve(None).unwrap();
+
+            // Assert
+            assert_eq!(result, url.as_str());
+        }
+    }
+
+    #[test]
+    fn fails_to_resolve_a_relative_url_without_a_root_repo_url()
+    {
+        // Arrange
+        let url = RepoUrl::parse("../lib.git".to_owned()).unwrap();
+
+        // Act
+        let err = url.resolve(None).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            format!("{err:#}"),
+            "cannot resolve relative URL '../lib.git': the root repo has no \
+             'origin' remote"
+        );
+    }
+
+    #[test]
+    fn fails_to_resolve_a_relative_url_that_climbs_too_far()
+    {
+        // Arrange
+        let url = RepoUrl::parse("../../lib".to_owned()).unwrap();
+
+        // Act
+        let err = url.resolve(Some("root")).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            format!("{err:#}"),
+            "cannot resolve relative URL '../../lib' against 'root'"
+        );
     }
 
     #[test]
