@@ -21,7 +21,7 @@ pub fn run(
         )
     };
 
-    // Remove routed paths in each owning child repository
+    // Remove routed paths in each owning member repo
     workspace.run_routed(
         Scope::Paths { paths: args.paths.to_vec(), aggregate },
         |git, repo, repo_paths| git.rm(repo, repo_paths, &args.options)

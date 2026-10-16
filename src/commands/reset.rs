@@ -11,7 +11,7 @@ pub fn run(
 {
     let mode = args.mode();
 
-    // Reset each child repository
+    // Reset each member repo
     workspace.run(|git, repo| git.reset(repo, mode, args.commit.as_deref()))
 }
 

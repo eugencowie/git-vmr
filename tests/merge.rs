@@ -58,6 +58,7 @@ fn merge_clean_branch_across_multiple_child_repositories()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_mergeable_branch(tmp.path(), "feature/auth");
     create_mergeable_branch(&backend, "feature/auth");
     create_mergeable_branch(&frontend, "feature/auth");
 
@@ -68,28 +69,35 @@ fn merge_clean_branch_across_multiple_child_repositories()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(.)"))
+                .and(predicate::str::contains("(backend, frontend)"))
         )
         .stderr(predicate::str::is_empty());
 
+    assert!(branch_contains_head(tmp.path(), "feature/auth"));
     assert!(branch_contains_head(&backend, "feature/auth"));
     assert!(branch_contains_head(&frontend, "feature/auth"));
 }
 
 #[test]
-fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+fn merge_skips_non_git_children_and_empty_vmr_merges_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    create_mergeable_branch(tmp.path(), "feature/auth");
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(
+            predicate::str::starts_with("Updating")
+                .and(predicate::str::contains("(.)").not())
+        )
         .stderr(predicate::str::is_empty());
+    assert!(branch_contains_head(tmp.path(), "feature/auth"));
 
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);
@@ -102,8 +110,9 @@ fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend)").not())
+            predicate::str::contains("Already up to date. (.)")
+                .and(predicate::str::contains("Updating"))
+                .and(predicate::str::contains("(backend)"))
                 .and(predicate::str::contains("docs").not())
         )
         .stderr(predicate::str::is_empty());
@@ -122,6 +131,7 @@ fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
     setup_repo_with_initial_commit(&tools);
+    create_mergeable_branch(tmp.path(), "feature/auth");
     create_mergeable_branch(&backend, "feature/auth");
     create_mergeable_branch(&tools, "feature/auth");
 
@@ -188,7 +198,7 @@ fn merge_successes_are_not_rolled_back_after_later_failure()
         .assert()
         .failure()
         .stdout(predicate::str::contains("(backend)"))
-        .stderr(predicate::str::contains("(frontend)"));
+        .stderr(predicate::str::contains("(., frontend)"));
 
     assert!(branch_contains_head(&backend, "feature/auth"));
 }
@@ -219,7 +229,7 @@ fn merge_reports_colored_repository_suffixes_and_orders_failures_by_repository_n
                 .and(predicate::str::contains("(beta)"))
         )
         .stderr(predicate::str::starts_with(
-            "merge: feature/auth - not something we can merge \x1b[90m(alpha, zeta)\x1b[0m\n"
+            "merge: feature/auth - not something we can merge \x1b[90m(., alpha, zeta)\x1b[0m\n"
         ));
 }
 
@@ -232,6 +242,7 @@ fn merge_uses_nested_working_dir_and_global_c_option_for_discovery()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_mergeable_branch(tmp.path(), "feature/auth");
     create_mergeable_branch(&backend, "feature/auth");
 
     git_vmr()
@@ -252,7 +263,7 @@ fn merge_uses_nested_working_dir_and_global_c_option_for_discovery()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Already up to date. (backend)")
+            predicate::str::contains("Already up to date. (., backend)")
                 .and(predicate::str::contains("(frontend)"))
         )
         .stderr(predicate::str::is_empty());

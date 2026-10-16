@@ -6,7 +6,7 @@ use anstyle::Style;
 use anyhow::Result;
 use std::collections::HashSet;
 
-/// Renders aggregated per-repo outcomes against the child repos in scope:
+/// Renders aggregated per-repo outcomes against the member repos in scope:
 /// identical messages are grouped, successes become stdout, and failures
 /// become the command's error. The suffix is omitted when a group covers
 /// every repo in scope.
