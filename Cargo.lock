@@ -93,9 +93,9 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "aptabase-rs"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a745654fcf697d114e62be7853d5c0cbfbdf027de37c92bb11c9c8ea3da6b6cb"
+checksum = "e384726d4f510a11eb76f2e5414f2b03140a1562d4f2ecef4d5a905ceb64e1f1"
 dependencies = [
  "futures",
  "log",
