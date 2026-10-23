@@ -119,7 +119,8 @@ impl Git
 {
     fn branch(&self, repo: &Repo, branch_name: &str) -> GitCommandResult
     {
-        let output = self.output(&repo.path, ["branch", branch_name])?;
+        let output =
+            self.output(&repo.absolute_path, ["branch", branch_name])?;
 
         command_result(
             repo,
@@ -132,7 +133,7 @@ impl Git
     fn branches(&self, repo: &Repo) -> Result<Option<(String, RepoBranches)>>
     {
         let branches_output = self
-            .stdout(&repo.path, [
+            .stdout(&repo.absolute_path, [
                 "for-each-ref",
                 "--format=%(refname:short)",
                 "refs/heads"
@@ -140,7 +141,7 @@ impl Git
             .with_context(|| {
                 format!(
                     "fatal: failed to read branch information for '{}'",
-                    repo.path.display()
+                    repo.absolute_path.display()
                 )
             })?;
         let branches = String::from_utf8_lossy(&branches_output)
@@ -148,14 +149,14 @@ impl Git
             .map(str::to_owned)
             .collect::<Vec<_>>();
 
-        let head = self.head(&repo.path).with_context(|| {
+        let head = self.head(&repo.absolute_path).with_context(|| {
             format!(
                 "fatal: failed to read branch information for '{}'",
-                repo.path.display()
+                repo.absolute_path.display()
             )
         })?;
 
-        Ok(Some((repo.name.clone(), RepoBranches { branches, head })))
+        Ok(Some((repo.path.clone(), RepoBranches { branches, head })))
     }
 }
 
@@ -247,11 +248,10 @@ mod tests
 {
     use super::*;
     use crate::git::{Head, ScriptedFake};
-    use std::path::PathBuf;
 
     fn repo() -> Repo
     {
-        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
+        crate::test_support::repo("backend", "/vmr/backend")
     }
 
     #[test]

@@ -83,7 +83,7 @@ impl Git
     fn tags(&self, repo: &Repo) -> Result<Option<(String, Vec<String>)>>
     {
         let tags_output = self
-            .stdout(&repo.path, [
+            .stdout(&repo.absolute_path, [
                 "for-each-ref",
                 "--format=%(refname:short)",
                 "refs/tags"
@@ -91,7 +91,7 @@ impl Git
             .with_context(|| {
                 format!(
                     "fatal: failed to read tag information for '{}'",
-                    repo.path.display()
+                    repo.absolute_path.display()
                 )
             })?;
         let tags = String::from_utf8_lossy(&tags_output)
@@ -99,12 +99,12 @@ impl Git
             .map(str::to_owned)
             .collect::<Vec<_>>();
 
-        Ok(Some((repo.name.clone(), tags)))
+        Ok(Some((repo.path.clone(), tags)))
     }
 
     fn tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult
     {
-        let output = self.output(&repo.path, ["tag", tag_name])?;
+        let output = self.output(&repo.absolute_path, ["tag", tag_name])?;
 
         command_result(
             repo,
@@ -116,7 +116,8 @@ impl Git
 
     fn delete_tag(&self, repo: &Repo, tag_name: &str) -> GitCommandResult
     {
-        let output = self.output(&repo.path, ["tag", "-d", tag_name])?;
+        let output =
+            self.output(&repo.absolute_path, ["tag", "-d", tag_name])?;
 
         command_result(
             repo,

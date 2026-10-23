@@ -248,6 +248,40 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
 }
 
 #[test]
+fn foreach_sets_name_to_the_manifest_name_and_sm_path_to_the_path()
+{
+    // Arrange: the manifest names `backend` differently from its path
+    let tmp = create_vmr(&[]);
+    fs::write(
+        tmp.path().join(".gitvmr"),
+        "[repo.api]\npath = \"backend\"\nurl = \"../api.git\"\n"
+    )
+    .expect("failed to write manifest");
+    fs::write(tmp.path().join(".gitignore"), "/backend/\n")
+        .expect("failed to write .gitignore");
+    create_child_repo(tmp.path(), "backend");
+
+    // Act
+    let assert = git_vmr()
+        .current_dir(tmp.path())
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command(
+                "printf '%s;%s\\n' \"$name\" \"$sm_path\"",
+                "echo %name%;%sm_path%"
+            )
+        ])
+        .assert();
+
+    // Assert
+    assert
+        .success()
+        .stdout(child_lines(&["api;backend"]))
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
 fn foreach_displaypath_respects_effective_working_directory()
 {
     let tmp = create_vmr(&["backend", "frontend"]);

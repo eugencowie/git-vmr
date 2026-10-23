@@ -1,8 +1,8 @@
-use crate::vmr::{MANIFEST, Membership, Owner, Repo};
+use crate::vmr::{Classification, MANIFEST, Membership, Repo, RepoKind};
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// The declared per-command rule for what happens when a user-supplied
 /// path resolves to the aggregate path: allowed to expand across the
@@ -26,27 +26,28 @@ pub enum Scope
     EntireVmr
 }
 
-/// The router: a borrowed view over a workspace's fixed snapshot — the
-/// VMR root, its membership, and the working dir the workspace was opened
-/// from — turning a scope into owning child repos with
-/// repo-relative paths. Private to the workspace core; slices reach
-/// routing only through the workspace.
+/// The router: a borrowed view over a workspace's fixed snapshot — its
+/// membership and the working dir the workspace was opened from — turning a
+/// scope into owning member repos with repo-relative paths. Private to the
+/// workspace core; slices reach routing only through the workspace.
 pub struct Router<'a>
 {
-    root: &'a Path,
     membership: &'a Membership,
     working_dir: &'a Path
 }
 
 impl<'a> Router<'a>
 {
-    pub fn new(
-        root: &'a Path,
-        membership: &'a Membership,
-        working_dir: &'a Path
-    ) -> Router<'a>
+    pub fn new(membership: &'a Membership, working_dir: &'a Path)
+    -> Router<'a>
     {
-        Router { root, membership, working_dir }
+        Router { membership, working_dir }
+    }
+
+    /// The VMR root directory.
+    fn root(&self) -> &'a Path
+    {
+        &self.membership.root().absolute_path
     }
 
     /// Resolves a user-supplied path against the working dir and
@@ -74,14 +75,12 @@ impl<'a> Router<'a>
         let (paths, aggregate) = match scope
         {
             Scope::Paths { paths, aggregate } => (paths, aggregate),
-            // The aggregate path expands to every snapshotted child repo
+            // The aggregate path expands to every member repo
             Scope::EntireVmr =>
             {
                 return Ok(self
-                    .membership
-                    .cloned()
-                    .iter()
-                    .map(|repo| (repo.clone(), vec![PathBuf::from(".")]))
+                    .aggregate()
+                    .map(|(repo, path)| (repo, vec![path]))
                     .collect());
             }
         };
@@ -139,76 +138,65 @@ impl<'a> Router<'a>
     /// Whether a target is the aggregate path: the VMR root itself.
     fn is_aggregate(&self, target: &Path) -> bool
     {
-        target == self.root
+        target == self.root()
+    }
+
+    /// What the aggregate path expands to: every member repo, whole.
+    fn aggregate(&self) -> impl Iterator<Item = (Repo, PathBuf)> + 'a
+    {
+        self.membership
+            .members()
+            .iter()
+            .map(|repo| (repo.clone(), PathBuf::from(".")))
     }
 
     fn route_target(&self, target: &Path) -> Result<Vec<(Repo, PathBuf)>>
     {
-        // Expand the aggregate VMR root view across child repositories
+        // Expand the aggregate path across every member repo
         if self.is_aggregate(target)
         {
-            return Ok(self
-                .membership
-                .cloned()
-                .iter()
-                .map(|repo| (repo.clone(), PathBuf::from(".")))
-                .collect());
+            return Ok(self.aggregate().collect());
         }
 
+        // Route only into cloned child repositories
+        match self.classify(target)?
+        {
+            Classification::Member(repo, path)
+                if repo.kind == RepoKind::Root
+                    && path.starts_with(MANIFEST) =>
+                bail!(
+                    "error: cannot route virtual monorepo metadata path '{}'",
+                    target.display()
+                ),
+            Classification::Member(repo, path)
+                if repo.kind != RepoKind::Root =>
+                Ok(vec![(repo.clone(), path)]),
+            Classification::ChildRoot(repo) =>
+                Ok(vec![(repo.clone(), PathBuf::from("."))]),
+            Classification::Member(..) | Classification::Undeclared { .. } =>
+                bail!(
+                    "error: '{}' is not owned by a child Git repository",
+                    target.display()
+                ),
+        }
+    }
+
+    /// Classifies a target by what owns it: a member repo, or an undeclared
+    /// repo, with the path relative to it, or a child root itself. Fails
+    /// for a target outside the VMR or inside a missing child repo.
+    pub fn classify(&self, target: &Path) -> Result<Classification<'a>>
+    {
         // Ensure path stays inside the VMR root
-        let relative = target.strip_prefix(self.root).with_context(|| {
+        let relative = target.strip_prefix(self.root()).with_context(|| {
             format!(
                 "error: '{}' is outside virtual monorepo '{}'",
                 target.display(),
-                self.root.display()
+                self.root().display()
             )
         })?;
 
-        // Use first path component as owning child repository
-        let mut components = relative.components();
-        let repo_name = match components.next()
-        {
-            Some(Component::Normal(name)) => name,
-            _ =>
-            {
-                bail!(
-                    "error: '{}' is not owned by a child repository",
-                    target.display()
-                );
-            }
-        };
-
-        // Reject VMR metadata paths
-        if repo_name == MANIFEST
-        {
-            bail!(
-                "error: cannot route virtual monorepo metadata path '{}'",
-                target.display()
-            );
-        }
-
-        // Require explicit paths to be owned by cloned child repositories
-        let repo = match self.membership.owner(repo_name)
-        {
-            Some(Owner::Cloned(repo)) => repo.clone(),
-            Some(Owner::Missing(declaration)) => bail!(
-                "error: '{}' is not cloned; run 'git vmr clone' to clone it",
-                declaration.path
-            ),
-            Some(Owner::Undeclared) | None => bail!(
-                "error: '{}' is not owned by a child Git repository",
-                target.display()
-            )
-        };
-
-        // Build path relative to owning repository
-        let mut repo_relative_path = components.as_path().to_path_buf();
-        if repo_relative_path.as_os_str().is_empty()
-        {
-            repo_relative_path.push(".");
-        }
-
-        Ok(vec![(repo, repo_relative_path)])
+        // Classify by what owns the path within the VMR
+        self.membership.classify(relative)
     }
 }
 
@@ -222,16 +210,34 @@ mod tests
     // filesystem or git involved.
     fn repo(root: &Path, name: &str) -> Repo
     {
-        Repo { name: name.to_owned(), path: root.join(name) }
+        crate::test_support::repo(name, root.join(name))
     }
 
     fn membership(root: &Path) -> Membership
     {
         Membership::new(
             root,
-            &manifest(&["backend", "frontend"]),
+            &manifest(&["api", "backend", "frontend"]),
             ["backend", "frontend", "scratch"].map(str::to_owned)
         )
+    }
+
+    #[test]
+    fn classifying_a_path_outside_the_vmr_fails()
+    {
+        // Arrange
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(&membership, root);
+
+        // Act
+        let err = router.classify(Path::new("/elsewhere/a.rs")).unwrap_err();
+
+        // Assert
+        assert_eq!(
+            err.to_string(),
+            "error: '/elsewhere/a.rs' is outside virtual monorepo '/vmr'"
+        );
     }
 
     #[test]
@@ -240,7 +246,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed = router.route_single(Path::new("backend")).unwrap();
@@ -255,7 +261,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed =
@@ -274,7 +280,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed = router
@@ -304,7 +310,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed = router.route(Scope::EntireVmr).unwrap();
@@ -322,7 +328,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed = router
@@ -348,7 +354,7 @@ mod tests
         for (working_dir, path) in [(root, "."), (backend.as_path(), "..")]
         {
             // Arrange
-            let router = Router::new(root, &membership, working_dir);
+            let router = Router::new(&membership, working_dir);
 
             // Act
             let err = router
@@ -369,7 +375,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let routed = router
@@ -390,7 +396,7 @@ mod tests
         // Arrange: the unroutable path precedes the denied aggregate path
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let err = router
@@ -410,7 +416,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let err = router
@@ -427,7 +433,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let err = router
@@ -445,7 +451,7 @@ mod tests
         // README.md is a root file
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         for path in ["scratch/notes.md", "docs/readme.md", "README.md"]
         {
@@ -465,7 +471,7 @@ mod tests
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
-        let router = Router::new(root, &membership, root);
+        let router = Router::new(&membership, root);
 
         // Act
         let err = router.route_single(Path::new(".")).unwrap_err();
@@ -481,7 +487,7 @@ mod tests
         let root = Path::new("/vmr");
         let membership = membership(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &membership, &working_dir);
+        let router = Router::new(&membership, &working_dir);
 
         // Act
         let target = router.target(Path::new("../backend/a.rs"));
@@ -497,7 +503,7 @@ mod tests
         let root = Path::new("/vmr");
         let membership = membership(root);
         let working_dir = root.join("frontend");
-        let router = Router::new(root, &membership, &working_dir);
+        let router = Router::new(&membership, &working_dir);
 
         // Act
         let target = router.target(Path::new("/vmr/backend/../backend/a.rs"));

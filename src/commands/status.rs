@@ -58,7 +58,7 @@ impl Git
     fn status(&self, repo: &Repo) -> Result<Option<(Repo, RepoStatus)>>
     {
         let status_output = self
-            .stdout(&repo.path, [
+            .stdout(&repo.absolute_path, [
                 "status",
                 "--porcelain=v1",
                 "-z",
@@ -68,7 +68,7 @@ impl Git
             .with_context(|| {
                 format!(
                     "fatal: failed to read git status for '{}'",
-                    repo.path.display()
+                    repo.absolute_path.display()
                 )
             })?;
         let mut records = status_output
@@ -79,7 +79,7 @@ impl Git
             .next()
             .context("fatal: git status did not return a branch header")?;
         let head = self.head_from_status_header(
-            &repo.path,
+            &repo.absolute_path,
             "failed to read git status",
             branch_header
         )?;
@@ -216,7 +216,7 @@ fn render(
     {
         let repo_names = repos
             .iter()
-            .map(|(repo, _)| repo.name.as_str())
+            .map(|(repo, _)| repo.path.as_str())
             .collect::<Vec<_>>();
         output.push_str(&format!(
             "On branch {}{}\n",
@@ -238,7 +238,7 @@ fn render(
             "HEAD detached at {}{}\n",
             hash,
             repo_list_suffix(
-                &[repo.name.as_str()],
+                &[repo.path.as_str()],
                 statuses.len(),
                 SuffixPolicy::Truncated
             )
@@ -350,8 +350,9 @@ fn render_paths(
     let mut rendered: Vec<(String, FileChange)> = Vec::new();
     for (repo, status) in context.repos
     {
-        let repo_prefix = pathdiff::diff_paths(&repo.path, context.working_dir)
-            .unwrap_or(repo.path.clone());
+        let repo_prefix =
+            pathdiff::diff_paths(&repo.absolute_path, context.working_dir)
+                .unwrap_or(repo.absolute_path.clone());
         for entry in paths(status)
         {
             let rel = repo_prefix.join(&entry.path);
@@ -404,7 +405,7 @@ mod tests
 
     fn repo() -> Repo
     {
-        Repo { name: "backend".to_owned(), path: PathBuf::from("/vmr/backend") }
+        crate::test_support::repo("backend", "/vmr/backend")
     }
 
     #[test]
@@ -774,7 +775,7 @@ mod render_tests
 
     fn repo(root: &Path, name: &str) -> Repo
     {
-        Repo { name: name.to_owned(), path: root.join(name) }
+        crate::test_support::repo(name, root.join(name))
     }
 
     fn repo_status(branch: &str) -> RepoStatus
