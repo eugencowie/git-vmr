@@ -101,7 +101,7 @@ mod tests
         let fake =
             ScriptedFake::new().on(["diff", "--cached", "--quiet"], 0, "", "");
         let git = Git::with(fake);
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let err = run(&workspace, &cli_context(tmp.path()), &CommitArgs {
@@ -127,7 +127,7 @@ mod tests
                 .on(["commit", "-m", "message"], 0, "committed", "")
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let result = run(&workspace, &cli_context(tmp.path()), &CommitArgs {

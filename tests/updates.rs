@@ -10,7 +10,7 @@ fn successful_subcommand_triggers_due_update_check()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let state_file = state_dir.join("git-vmr").join("state.toml");
@@ -37,7 +37,7 @@ fn configured_never_through_global_config_skips_update_check()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let config_file = config_dir.join("git-vmr").join("config.toml");
@@ -68,7 +68,7 @@ fn invalid_update_state_warns_and_uses_defaults()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let config_dir = tmp.path().join("config");
     let state_dir = tmp.path().join("state");
     let state_file = state_dir.join("git-vmr").join("state.toml");
@@ -198,7 +198,7 @@ fn missing_receipt_update_failure_does_not_fail_successful_command()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
 
     git_vmr()
         .current_dir(&vmr)

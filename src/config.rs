@@ -16,14 +16,6 @@ pub struct Core
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Config
-{
-    /// Core configuration
-    pub core: Core
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct GlobalConfig
 {
     /// Core configuration
@@ -56,65 +48,6 @@ impl GlobalConfig
 mod tests
 {
     use super::*;
-
-    mod config
-    {
-        use super::*;
-
-        #[test]
-        fn default_has_default_values()
-        {
-            // Act
-            let config = Config::default();
-
-            // Assert
-            assert_eq!(config.core, Core::default());
-        }
-
-        #[test]
-        fn to_string_serializes_to_toml()
-        {
-            // Arrange
-            let config = Config::default();
-
-            // Act
-            let toml = toml::to_string(&config).unwrap();
-
-            // Assert
-            assert_eq!(toml, "[core]\nversion = 0\n");
-        }
-
-        #[test]
-        fn from_str_deserializes_from_toml()
-        {
-            // Act
-            let config: Config =
-                toml::from_str("[core]\nversion = 42").unwrap();
-
-            // Assert
-            assert_eq!(config.core.version, 42);
-        }
-
-        #[test]
-        fn from_str_defaults_missing_core_version_to_zero()
-        {
-            // Act
-            let config: Config = toml::from_str("[core]\n").unwrap();
-
-            // Assert
-            assert_eq!(config.core.version, 0);
-        }
-
-        #[test]
-        fn from_str_defaults_missing_core_section()
-        {
-            // Act
-            let config: Config = toml::from_str("").unwrap();
-
-            // Assert
-            assert_eq!(config.core, Core::default());
-        }
-    }
 
     mod global_config
     {

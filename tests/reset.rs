@@ -31,7 +31,7 @@ fn status_short(path: &Path) -> String
 fn reset_applies_across_multiple_child_repositories_and_skips_non_git_children()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -59,7 +59,7 @@ fn reset_applies_across_multiple_child_repositories_and_skips_non_git_children()
 fn reset_without_child_repositories_succeeds_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -77,7 +77,7 @@ fn reset_supports_optional_commit_and_each_mode()
     for mode in ["--soft", "--mixed", "--hard", "--merge", "--keep"]
     {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        init_vmr(tmp.path());
+        init_vmr(tmp.path(), &["backend", "frontend"]);
         let backend = tmp.path().join("backend");
         let frontend = tmp.path().join("frontend");
         setup_repo_with_two_commits(&backend);
@@ -101,7 +101,7 @@ fn reset_supports_optional_commit_and_each_mode()
 fn reset_without_commit_lets_git_use_default_target()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_two_commits(&backend);
@@ -130,7 +130,7 @@ fn reset_without_commit_lets_git_use_default_target()
 fn reset_missing_ref_fails_only_affected_repository_and_attempts_others()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -164,7 +164,7 @@ fn reset_missing_ref_fails_only_affected_repository_and_attempts_others()
 fn reset_delegates_rejected_working_tree_state_to_git()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     setup_repo_with_two_commits(&backend);
     fs::write(backend.join("README.md"), "local\n")
@@ -186,7 +186,7 @@ fn reset_delegates_rejected_working_tree_state_to_git()
 fn reset_successes_are_not_rolled_back_after_another_repository_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_two_commits(&backend);
@@ -211,7 +211,7 @@ fn reset_successes_are_not_rolled_back_after_another_repository_fails()
 fn reset_reports_repository_suffixes_and_orders_failures_by_repository_name()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "beta", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let beta = tmp.path().join("beta");
     let zeta = tmp.path().join("zeta");
@@ -235,7 +235,7 @@ fn reset_reports_repository_suffixes_and_orders_failures_by_repository_name()
 fn reset_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_two_commits(&backend);

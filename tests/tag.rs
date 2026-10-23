@@ -1,6 +1,9 @@
 mod common;
 
-use common::{commit_file, git, git_command, git_output, git_vmr, init_repo};
+use common::{
+    commit_file, declare, git, git_command, git_output, git_vmr, init_repo,
+    init_vmr
+};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -20,8 +23,7 @@ fn tag_exists(path: &Path, tag: &str) -> bool
 fn tag_lists_local_tags_across_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -53,8 +55,7 @@ fn tag_lists_local_tags_across_child_repositories()
 fn tag_skips_non_git_children_and_empty_vmr_outputs_nothing()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -70,6 +71,7 @@ fn tag_skips_non_git_children_and_empty_vmr_outputs_nothing()
     commit_file(&backend, "README.md");
     git(&backend, ["tag", "v1.0.0"]);
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .arg("tag")
@@ -86,8 +88,7 @@ fn tag_skips_non_git_children_and_empty_vmr_outputs_nothing()
 fn tag_with_child_repositories_and_no_local_tags_outputs_nothing()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -108,8 +109,7 @@ fn tag_with_child_repositories_and_no_local_tags_outputs_nothing()
 fn tag_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -145,8 +145,7 @@ fn tag_uses_nested_working_dir_and_global_c_option_for_discovery()
 fn tag_fails_on_corrupted_git_dir()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["broken"]);
     let repo = tmp.path().join("broken");
     fs::create_dir(&repo).expect("failed to create repo");
     fs::write(repo.join(".git"), "not a gitfile\n")
@@ -193,8 +192,7 @@ fn tag_rejects_unsupported_arguments()
 fn tag_creates_lightweight_tag_in_every_child_repository_with_no_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -218,8 +216,7 @@ fn tag_creates_lightweight_tag_in_every_child_repository_with_no_output()
 fn tag_create_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     init_repo(&backend);
@@ -240,8 +237,7 @@ fn tag_create_skips_non_git_child_directories()
 fn tag_create_partial_failure_does_not_stop_other_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -271,8 +267,7 @@ fn tag_create_partial_failure_does_not_stop_other_repositories()
 fn tag_create_omits_repository_suffix_when_every_repo_fails()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -295,8 +290,7 @@ fn tag_create_omits_repository_suffix_when_every_repo_fails()
 fn tag_create_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["alpha", "clean", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
@@ -324,8 +318,7 @@ fn tag_create_reports_multiple_failures_in_repository_name_order()
 fn tag_delete_deletes_tag_in_every_child_repository()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -360,8 +353,7 @@ fn tag_delete_deletes_tag_in_every_child_repository()
 fn tag_long_delete_deletes_tag_in_every_child_repository()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -396,8 +388,7 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
 fn tag_delete_skips_non_git_child_directories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     init_repo(&backend);
@@ -423,8 +414,7 @@ fn tag_delete_skips_non_git_child_directories()
 fn tag_delete_partial_failure_does_not_stop_other_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -459,8 +449,7 @@ fn tag_delete_partial_failure_does_not_stop_other_repositories()
 fn tag_delete_reports_failures_with_repository_suffixes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "tagged", "tools"]);
     let backend = tmp.path().join("backend");
     let tagged = tmp.path().join("tagged");
     let tools = tmp.path().join("tools");
@@ -489,8 +478,7 @@ fn tag_delete_reports_failures_with_repository_suffixes()
 fn tag_delete_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["alpha", "tagged", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let tagged = tmp.path().join("tagged");
     let zeta = tmp.path().join("zeta");

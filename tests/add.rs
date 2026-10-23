@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git, git_output, git_vmr, init_repo};
+use common::{commit_file, git, git_output, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -19,8 +19,7 @@ fn staged_status(repo: &Path) -> String
 fn add_stages_file_from_vmr_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -42,8 +41,7 @@ fn add_stages_file_from_vmr_root()
 fn add_stages_paths_across_multiple_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -71,8 +69,7 @@ fn add_stages_paths_across_multiple_repositories()
 fn add_stages_from_child_repo_and_with_working_dir_argument()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -104,8 +101,7 @@ fn add_stages_from_child_repo_and_with_working_dir_argument()
 fn add_dot_stages_all_repos_from_root_and_current_subtree_from_child()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -149,8 +145,7 @@ fn add_dot_stages_all_repos_from_root_and_current_subtree_from_child()
 fn add_stages_untracked_and_deleted_files()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "old.rs");
@@ -173,8 +168,7 @@ fn add_stages_untracked_and_deleted_files()
 fn add_rejects_invalid_paths_before_staging_any_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     fs::write(tmp.path().join("README.md"), "vmr\n")
         .expect("failed to write root file");
@@ -209,8 +203,7 @@ fn add_rejects_invalid_paths_before_staging_any_repo()
 fn assert_add_all_stages_every_repo(flag: &str)
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -258,8 +251,7 @@ fn add_all_long_stages_every_repo_without_pathspecs()
 fn add_all_without_pathspecs_stages_every_repo_from_child()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -280,8 +272,7 @@ fn add_all_without_pathspecs_stages_every_repo_from_child()
 fn add_all_with_pathspecs_preserves_routed_scoping()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -308,8 +299,7 @@ fn add_all_with_pathspecs_preserves_routed_scoping()
 fn assert_force_stages_ignored_file(flag: &str)
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -343,8 +333,7 @@ fn add_force_long_stages_ignored_file()
 fn add_chmod_updates_executable_bit_in_index()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "script.sh");
@@ -375,8 +364,7 @@ fn add_chmod_updates_executable_bit_in_index()
 fn add_flags_reject_invalid_paths_before_staging_any_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     init_repo(&backend);

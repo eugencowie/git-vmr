@@ -1,6 +1,6 @@
 use crate::git::{Git, GitCommandResult, Head, RepoOutcome, git_path_arg};
 use crate::render::{Rendered, fail, outcomes};
-use crate::vmr::Vmr;
+use crate::vmr::{MANIFEST, Vmr};
 use crate::workspace::{Repo, Workspace};
 use anyhow::{Context, Result};
 use path_clean::PathClean;
@@ -356,7 +356,7 @@ fn owning_root(
     }
 
     let root = worktree_path.parent()?.to_owned();
-    if Vmr::is_root(&root) { Some(root) } else { None }
+    if root.join(MANIFEST).exists() { Some(root) } else { None }
 }
 
 /// Git for Windows reports canonical long paths while callers can reach the
@@ -670,7 +670,7 @@ mod tests
                 )
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let added =
@@ -726,7 +726,7 @@ mod tests
                 )
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let added =
@@ -783,7 +783,7 @@ mod tests
                 .on(["branch", "-d", "feature"], 0, "", "")
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let removal = WorktreeRoots::new(&workspace)
@@ -850,7 +850,7 @@ mod tests
                 .on(["branch", "-d", "feature"], 0, "", "")
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let removal = WorktreeRoots::new(&workspace)
@@ -907,7 +907,7 @@ mod tests
                 )
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let removal = WorktreeRoots::new(&workspace)
@@ -954,7 +954,7 @@ mod tests
                 .on(["branch", "-D", "feature"], 0, "", "")
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let removal = WorktreeRoots::new(&workspace)
@@ -1006,7 +1006,7 @@ mod tests
                 )
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let removal = WorktreeRoots::new(&workspace)
@@ -1147,7 +1147,7 @@ mod tests
                 )
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let moved = WorktreeRoots::new(&workspace)
@@ -1198,7 +1198,7 @@ mod tests
             ""
         ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let groups = WorktreeRoots::new(&workspace).list().unwrap();

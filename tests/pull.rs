@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    clone_repo, git, git_output, git_vmr, init_repo, init_vmr, write_commit
+    clone_repo, declare, git, git_output, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -33,7 +34,7 @@ fn pull_updates_working_trees_across_multiple_child_repositories()
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&sources).expect("failed to create sources dir");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
 
     let backend_source =
         setup_remote_repo(&sources.join("backend"), "backend.txt");
@@ -77,7 +78,7 @@ fn pull_forwards_repository_and_refspec_arguments()
     let source = setup_remote_repo(&sources.join("source"), "README.md");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let backend = vmr.join("backend");
     clone_repo(&source, &backend);
 
@@ -108,7 +109,7 @@ fn pull_treats_single_positional_argument_as_repository()
     let source = setup_remote_repo(&sources.join("source"), "README.md");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let backend = vmr.join("backend");
     clone_repo(&source, &backend);
     git(&backend, ["remote", "rename", "origin", "main"]);
@@ -132,7 +133,7 @@ fn pull_treats_single_positional_argument_as_repository()
 fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -149,6 +150,7 @@ fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     let backend = tmp.path().join("backend");
     clone_repo(&source, &backend);
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .arg("pull")
@@ -169,7 +171,7 @@ fn pull_failure_does_not_stop_successful_repositories()
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&sources).expect("failed to create sources dir");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend_source =
         setup_remote_repo(&sources.join("backend"), "README.md");
     let frontend_source =
@@ -201,7 +203,7 @@ fn pull_reports_success_failure_and_failure_order_with_repository_suffixes()
     let source = setup_remote_repo(&tmp.path().join("source"), "README.md");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["alpha", "backend", "zeta"]);
     let alpha = vmr.join("alpha");
     let backend = vmr.join("backend");
     let zeta = vmr.join("zeta");
@@ -230,7 +232,7 @@ fn pull_delegates_missing_upstream_to_git()
     let source = setup_remote_repo(&tmp.path().join("source"), "README.md");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend"]);
     let backend = vmr.join("backend");
     clone_repo(&source, &backend);
     git(&backend, ["branch", "--unset-upstream"]);
@@ -257,7 +259,7 @@ fn conflicted_pull_remains_for_user_resolution_without_rollback()
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&sources).expect("failed to create sources dir");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend_source =
         setup_remote_repo(&sources.join("backend"), "README.md");
     let frontend_source =
@@ -291,7 +293,7 @@ fn pull_uses_nested_working_dir_and_global_c_option_for_discovery()
     let source = setup_remote_repo(&tmp.path().join("source"), "README.md");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     clone_repo(&source, &backend);

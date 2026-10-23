@@ -1,6 +1,7 @@
 //! Run pipeline: the fixed sequence every invocation passes through after
-//! parsing — build context, report load warnings, execute and report the
-//! command, record analytics, check for updates, save state. Notices never
+//! parsing — build context, report load warnings, open the workspace and
+//! report its load warnings (workspace commands only), execute and report
+//! the command, record analytics, check for updates, save state. Notices never
 //! fail the command; the exit code mirrors the command result.
 
 use super::Cli;
@@ -37,7 +38,8 @@ pub fn run(cli: Cli) -> Result<()>
 }
 
 /// Build the context and run the pipeline in order: report load warnings,
-/// execute and report the command, record analytics, check for updates,
+/// open the workspace and report its load warnings, execute and report the
+/// command, record analytics, check for updates,
 /// save state. Notices go to `stderr` and never fail the command; the
 /// returned result mirrors the command's.
 #[expect(
@@ -68,7 +70,7 @@ fn run_with(
 
     // Run command
     let start = Instant::now();
-    let result = command.run(&context);
+    let result = command.run(&context, stderr);
     let result = render::emit(result);
 
     // Record analytics
@@ -107,6 +109,7 @@ mod tests
 {
     use super::*;
     use crate::commands::WorkspaceCommand;
+    use crate::test_support::root_repo;
     use std::cell::RefCell;
     use std::fs;
     use std::path::Path;
@@ -124,7 +127,7 @@ mod tests
     /// without spawning git.
     fn empty_vmr(dir: &Path)
     {
-        fs::create_dir(dir.join(".gitvmr")).unwrap();
+        root_repo(dir, &[], &[]);
     }
 
     /// Run a status command through the pipeline, capturing what reached
@@ -283,5 +286,32 @@ mod tests
         let stderr = String::from_utf8(stderr).unwrap();
         assert!(stderr.contains("using defaults"));
         assert!(stderr.contains("warning: failed to"));
+    }
+
+    #[test]
+    fn workspace_load_warnings_reach_stderr()
+    {
+        // Arrange: a declared, ignored child repo that is not cloned, so
+        // opening warns without spawning git
+        let tmp = tempfile::tempdir().unwrap();
+        root_repo(tmp.path(), &["api"], &["api"]);
+        let mut stderr = Vec::new();
+
+        // Act
+        let result = run_status(
+            tmp.path(),
+            tmp.path().join("state.toml"),
+            &mut stderr,
+            |_, _, _| (),
+            |_, _| None
+        );
+
+        // Assert
+        assert!(result.is_ok());
+        assert_eq!(
+            String::from_utf8(stderr).unwrap(),
+            "warning: 'api' declared in .gitvmr but not cloned; run 'git vmr \
+             clone' to clone them\n"
+        );
     }
 }
