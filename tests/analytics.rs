@@ -74,7 +74,6 @@ fn successful_dispatched_command_records_analytics()
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
     let event = read_event(&log);

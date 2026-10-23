@@ -83,6 +83,7 @@ fn switch_shared_branch_across_multiple_child_repositories()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_branch(tmp.path(), "feature/auth");
     create_branch(&backend, "feature/auth");
     create_branch(&frontend, "feature/auth");
 
@@ -97,6 +98,7 @@ fn switch_shared_branch_across_multiple_child_repositories()
         )
         .stderr(predicate::str::is_empty());
 
+    assert_eq!(current_branch(tmp.path()), "feature/auth");
     assert_eq!(current_branch(&backend), "feature/auth");
     assert_eq!(current_branch(&frontend), "feature/auth");
 }
@@ -120,6 +122,7 @@ fn switch_normalizes_behind_counts_before_grouping_success_output()
         &tmp.path().join("seeds/frontend"),
         6
     );
+    create_branch(tmp.path(), "develop");
 
     let assert = git_vmr()
         .current_dir(tmp.path())
@@ -137,7 +140,10 @@ fn switch_normalizes_behind_counts_before_grouping_success_output()
         ),
         1
     );
-    assert!(!stdout.contains("(backend, frontend)"));
+    assert!(stdout.contains(
+        "Your branch is behind 'origin/develop', and can be fast-forwarded. \
+         (backend, frontend)"
+    ));
     assert!(!stdout.contains("by 20 commits"));
     assert!(!stdout.contains("by 6 commits"));
     assert_eq!(current_branch(&backend), "develop");
@@ -145,25 +151,28 @@ fn switch_normalizes_behind_counts_before_grouping_success_output()
 }
 
 #[test]
-fn switch_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+fn switch_skips_non_git_children_and_empty_vmr_switches_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    create_branch(tmp.path(), "feature/auth");
 
     git_vmr()
         .current_dir(tmp.path())
         .args(["switch", "feature/auth"])
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::diff("Switched to branch 'feature/auth'\n"))
         .stderr(predicate::str::is_empty());
+    git(tmp.path(), ["switch", "master"]);
 
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);
     create_branch(&backend, "feature/auth");
 
     declare(tmp.path(), &["backend"]);
+    git(tmp.path(), ["commit", "--quiet", "--all", "-m", "Declare backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["switch", "feature/auth"])
@@ -190,6 +199,7 @@ fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
     setup_repo_with_initial_commit(&tools);
+    create_branch(tmp.path(), "feature/auth");
     create_branch(&backend, "feature/auth");
     create_branch(&tools, "feature/auth");
 
@@ -232,7 +242,7 @@ fn switch_successes_are_not_rolled_back_after_later_failure()
             "Switched to branch 'feature/auth' (backend)"
         ))
         .stderr(predicate::str::contains(
-            "fatal: invalid reference: feature/auth (frontend)"
+            "fatal: invalid reference: feature/auth (., frontend)"
         ));
 
     assert_eq!(current_branch(&backend), "feature/auth");
@@ -258,7 +268,7 @@ fn switch_reports_multiple_failures_in_repository_name_order()
         .assert()
         .failure()
         .stderr(predicate::str::starts_with(
-            "fatal: invalid reference: feature/auth (alpha, zeta)\n"
+            "fatal: invalid reference: feature/auth (., alpha, zeta)\n"
         ));
 }
 
@@ -297,6 +307,7 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_branch(tmp.path(), "feature/auth");
     create_branch(&backend, "feature/auth");
     create_branch(&frontend, "feature/auth");
 
@@ -311,6 +322,7 @@ fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
         )
         .stderr(predicate::str::is_empty());
 
+    git(tmp.path(), ["switch", "master"]);
     git(&backend, ["switch", "master"]);
     git(&frontend, ["switch", "master"]);
 
@@ -379,7 +391,7 @@ fn switch_create_short_form_creates_and_switches()
 }
 
 #[test]
-fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+fn switch_create_skips_non_git_children_and_empty_vmr_creates_in_root()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
@@ -390,8 +402,12 @@ fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .args(["switch", "--create", "feature/auth"])
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(predicate::str::diff(
+            "Switched to a new branch 'feature/auth'\n"
+        ))
         .stderr(predicate::str::is_empty());
+    git(tmp.path(), ["switch", "master"]);
+    git(tmp.path(), ["branch", "-D", "feature/auth"]);
 
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);

@@ -165,13 +165,37 @@ fn add_stages_untracked_and_deleted_files()
 }
 
 #[test]
+fn add_stages_a_root_file_in_the_root_repo()
+{
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    init_vmr(tmp.path(), &["backend"]);
+    let backend = tmp.path().join("backend");
+    init_repo(&backend);
+    commit_file(&backend, "README.md");
+    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    fs::write(tmp.path().join("docs/guide.md"), "guide\n")
+        .expect("failed to write root file");
+
+    git_vmr()
+        .current_dir(tmp.path().join("backend"))
+        .args(["add", "../docs/guide.md"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::is_empty());
+
+    assert_eq!(staged_names(tmp.path()), "docs/guide.md");
+    assert_eq!(staged_names(&backend), "");
+}
+
+#[test]
 fn add_rejects_invalid_paths_before_staging_any_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
-    fs::write(tmp.path().join("README.md"), "vmr\n")
-        .expect("failed to write root file");
+    init_repo(&tmp.path().join("scratch"));
+    fs::create_dir(tmp.path().join("vendor")).expect("failed to create dir");
+    init_repo(&tmp.path().join("vendor/lib"));
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -180,24 +204,34 @@ fn add_rejects_invalid_paths_before_staging_any_repo()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["add", "backend/src.rs", "docs/readme.md"])
+        .args(["add", "backend/src.rs", "scratch/notes.md"])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("child Git repository"));
     assert_eq!(staged_names(&backend), "");
 
-    for invalid in [".gitvmr/config", "README.md", "../outside.txt"]
-    {
-        git_vmr()
-            .current_dir(tmp.path())
-            .args(["add", invalid])
-            .assert()
-            .failure()
-            .stdout(predicate::str::is_empty());
-    }
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "backend/src.rs", "vendor/lib/lib.rs"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains(
+            "error: 'vendor/lib/lib.rs' is inside nested Git repository \
+             'vendor/lib', which is not a member repo"
+        ));
+    assert_eq!(staged_names(&backend), "");
+
+    git_vmr()
+        .current_dir(tmp.path())
+        .args(["add", "../outside.txt"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::is_empty());
 
     assert_eq!(staged_names(&backend), "");
+    assert_eq!(staged_names(tmp.path()), "");
 }
 
 fn assert_add_all_stages_every_repo(flag: &str)
@@ -365,14 +399,14 @@ fn add_flags_reject_invalid_paths_before_staging_any_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    init_repo(&tmp.path().join("scratch"));
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src.rs");
 
     for args in [
-        vec!["add", "--force", ".gitvmr/config"],
-        vec!["add", "-A", "backend/src.rs", "docs/readme.md"],
+        vec!["add", "--force", "backend/src.rs", "scratch/notes.md"],
+        vec!["add", "-A", "backend/src.rs", "scratch/notes.md"],
         vec!["add", "--chmod=+x", "../outside.sh"]
     ]
     {

@@ -121,16 +121,20 @@ pub fn git_output<const N: usize>(dir: &Path, args: [&str; N]) -> String
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-/// Makes `path` a VMR root: a root repo declaring `repos` (see [`declare`]).
-/// The child repos themselves are created separately, so a declared name
-/// without a matching [`init_repo`] is a child repo that is not cloned.
+/// Makes `path` a VMR root: a root repo with one commit declaring `repos`
+/// (see [`declare`]). The child repos themselves are created separately,
+/// so a declared name without a matching [`init_repo`] is a child repo that
+/// is not cloned.
 pub fn init_vmr(path: &Path, repos: &[&str])
 {
     // Make a root repo
     git(path, ["init", "--quiet", "--initial-branch=master"]);
+    configure_repo(path);
 
-    // Declare child repos
+    // Declare child repos and commit the declarations
     declare(path, repos);
+    git(path, ["add", ".gitvmr", ".gitignore"]);
+    git(path, ["commit", "--quiet", "-m", "Declare child repos"]);
 }
 
 /// Rewrites the VMR root's manifest to declare exactly `repos` (name =
@@ -176,6 +180,12 @@ pub fn init_repo(path: &Path)
 {
     fs::create_dir(path).expect("failed to create repo dir");
     git(path, ["init", "--initial-branch=master"]);
+    configure_repo(path);
+}
+
+/// Gives a repo the fixture identity and line-ending settings.
+fn configure_repo(path: &Path)
+{
     git(path, ["config", "core.autocrlf", "false"]);
     git(path, ["config", "user.email", "test@example.com"]);
     git(path, ["config", "user.name", "Test User"]);
@@ -194,9 +204,7 @@ pub fn clone_repo(source: &Path, destination: &Path)
             .and_then(|name| name.to_str())
             .expect("destination name should be UTF-8")
     ]);
-    git(destination, ["config", "core.autocrlf", "false"]);
-    git(destination, ["config", "user.email", "test@example.com"]);
-    git(destination, ["config", "user.name", "Test User"]);
+    configure_repo(destination);
 }
 
 pub fn write_commit(path: &Path, file: &str, content: &str, message: &str)

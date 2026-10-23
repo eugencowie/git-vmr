@@ -13,7 +13,7 @@ pub struct Repo
     pub kind: RepoKind
 }
 
-/// Which kind of member repo a repo is. Only routing, foreach, and
+/// Which kind of member repo a repo is. Only diff, foreach, and
 /// worktrees branch on it.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RepoKind

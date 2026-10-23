@@ -34,6 +34,10 @@ _Avoid_: VMR (when the fixed, opened view is meant), context, session
 A Git repository declared in the manifest, living directly inside the VMR root, operated on as part of the whole.
 _Avoid_: submodule, subrepo, member (now the root repo or a child repo), project
 
+**Nested repo**:
+A Git repository below the first level of a VMR root, outside every child repo. Never a member repo; a root repo path inside one is rejected rather than routed.
+_Avoid_: embedded repo, sub-repo
+
 **Declare / undeclare**:
 Making a Git repository inside the VMR root a child repo, or ceasing to: declaring writes its manifest entry and ignore line, undeclaring removes both, and either stages the change in the root repo. Declaring happens through `add` — explicitly, or implicitly for undeclared, unignored repos the scope covers; undeclaring only through `rm --cached` on a child root.
 _Avoid_: register, attach, adopt

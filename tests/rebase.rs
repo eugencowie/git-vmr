@@ -60,6 +60,7 @@ fn rebase_clean_histories_across_multiple_child_repositories_succeeds_quietly()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_rebasable_history(tmp.path(), "origin/main");
     create_rebasable_history(&backend, "origin/main");
     create_rebasable_history(&frontend, "origin/main");
 
@@ -71,6 +72,7 @@ fn rebase_clean_histories_across_multiple_child_repositories_succeeds_quietly()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::is_empty());
 
+    assert!(head_contains(tmp.path(), "origin/main"));
     assert!(head_contains(&backend, "origin/main"));
     assert!(head_contains(&frontend, "origin/main"));
 }
@@ -80,6 +82,7 @@ fn rebase_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
+    create_rebasable_history(tmp.path(), "origin/main");
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -95,6 +98,7 @@ fn rebase_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     create_rebasable_history(&backend, "origin/main");
 
     declare(tmp.path(), &["backend"]);
+    git(tmp.path(), ["commit", "--quiet", "-am", "Declare backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["rebase", "origin/main"])
@@ -118,6 +122,7 @@ fn rebase_missing_upstream_fails_only_affected_repository_and_still_attempts_oth
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
     setup_repo_with_initial_commit(&tools);
+    create_rebasable_history(tmp.path(), "origin/main");
     create_rebasable_history(&backend, "origin/main");
     create_rebasable_history(&tools, "origin/main");
 
@@ -166,6 +171,7 @@ fn rebase_successes_are_not_rolled_back_after_another_repository_fails()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_rebasable_history(tmp.path(), "origin/main");
     create_rebasable_history(&backend, "origin/main");
 
     git_vmr()
@@ -199,7 +205,7 @@ fn rebase_reports_repository_suffixes_and_orders_failures_by_repository_name()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(predicate::str::starts_with(
-            "fatal: invalid upstream 'origin/main' (alpha, zeta)\n"
+            "fatal: invalid upstream 'origin/main' (., alpha, zeta)\n"
         ));
 
     assert!(head_contains(&beta, "origin/main"));
@@ -214,6 +220,7 @@ fn rebase_uses_nested_working_dir_and_global_c_option_for_discovery()
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
     setup_repo_with_initial_commit(&frontend);
+    create_rebasable_history(tmp.path(), "origin/main");
     create_rebasable_history(&backend, "origin/main");
 
     git_vmr()

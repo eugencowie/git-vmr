@@ -109,6 +109,7 @@ mod tests
 {
     use super::*;
     use crate::commands::WorkspaceCommand;
+    use crate::git::Git;
     use crate::test_support::root_repo;
     use std::cell::RefCell;
     use std::fs;
@@ -123,11 +124,12 @@ mod tests
         }
     }
 
-    /// A VMR root with no child repos: status runs across zero repos
-    /// without spawning git.
-    fn empty_vmr(dir: &Path)
+    /// A VMR root declaring `declared`, none of them cloned: status runs
+    /// in the root repo alone.
+    fn root_only_vmr(dir: &Path, declared: &[&str])
     {
-        root_repo(dir, &[], &[]);
+        Git::subprocess().stdout(dir, ["init", "--quiet"]).unwrap();
+        root_repo(dir, declared, declared);
     }
 
     /// Run a status command through the pipeline, capturing what reached
@@ -187,7 +189,7 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        empty_vmr(tmp.path());
+        root_only_vmr(tmp.path(), &[]);
         let order = RefCell::new(Vec::new());
         let mut stderr = Vec::new();
 
@@ -217,7 +219,7 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        empty_vmr(tmp.path());
+        root_only_vmr(tmp.path(), &[]);
         let mut stderr = Vec::new();
 
         // Act
@@ -240,7 +242,7 @@ mod tests
     {
         // Arrange
         let tmp = tempfile::tempdir().unwrap();
-        empty_vmr(tmp.path());
+        root_only_vmr(tmp.path(), &[]);
         let state_path = tmp.path().join("state.toml");
         fs::write(&state_path, "not = valid = toml").unwrap();
         let mut stderr = Vec::new();
@@ -267,7 +269,7 @@ mod tests
         // Arrange: a directory at the state path is unreadable (poisoning
         // the store so save always writes) and unwritable (failing it)
         let tmp = tempfile::tempdir().unwrap();
-        empty_vmr(tmp.path());
+        root_only_vmr(tmp.path(), &[]);
         let state_path = tmp.path().join("state.toml");
         fs::create_dir(&state_path).unwrap();
         let mut stderr = Vec::new();
@@ -294,7 +296,7 @@ mod tests
         // Arrange: a declared, ignored child repo that is not cloned, so
         // opening warns without spawning git
         let tmp = tempfile::tempdir().unwrap();
-        root_repo(tmp.path(), &["api"], &["api"]);
+        root_only_vmr(tmp.path(), &["api"]);
         let mut stderr = Vec::new();
 
         // Act

@@ -287,9 +287,9 @@ fn restore_rejects_invalid_paths_before_changing_any_repo()
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
-    fs::write(tmp.path().join("README.md"), "vmr\n")
-        .expect("failed to write root file");
+    init_repo(&tmp.path().join("scratch"));
+    fs::create_dir(tmp.path().join("vendor")).expect("failed to create dir");
+    init_repo(&tmp.path().join("vendor/lib"));
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "tracked.rs");
@@ -299,7 +299,7 @@ fn restore_rejects_invalid_paths_before_changing_any_repo()
     // Act
     git_vmr()
         .current_dir(tmp.path())
-        .args(["restore", "backend/tracked.rs", "docs/readme.md"])
+        .args(["restore", "backend/tracked.rs", "scratch/notes.md"])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
@@ -312,7 +312,7 @@ fn restore_rejects_invalid_paths_before_changing_any_repo()
     );
 
     // Act
-    for invalid in [".gitvmr/config", "README.md", "../outside.txt"]
+    for invalid in ["vendor/lib/lib.rs", "../outside.txt"]
     {
         git_vmr()
             .current_dir(tmp.path())
