@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.12.1
+
+### 📚 Documentation
+
+- Remove specs and prune repo docs ([#129](https://github.com/eugencowie/git-vmr/pull/129))
+
+### 🧪 Testing
+
+- Disable Git auto-maintenance in test fixtures ([#138](https://github.com/eugencowie/git-vmr/pull/138))
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove skills tooling and align repo structure ([#118](https://github.com/eugencowie/git-vmr/pull/118))
+- Run Rust tooling through mise locally and in CI ([#125](https://github.com/eugencowie/git-vmr/pull/125))
+- Pin release-plz and git-cliff to mise.lock versions ([#126](https://github.com/eugencowie/git-vmr/pull/126))
+- Rename default branch to main ([#127](https://github.com/eugencowie/git-vmr/pull/127))
+- Rename release assets workflow ([#131](https://github.com/eugencowie/git-vmr/pull/131))
+- Rename release workflow ([#132](https://github.com/eugencowie/git-vmr/pull/132))
+- Rename and tidy the CI and release workflows ([#133](https://github.com/eugencowie/git-vmr/pull/133))
+- Switch to jactionlint and harden the workflows ([#130](https://github.com/eugencowie/git-vmr/pull/130))
+- Cache builds with mbx ([#139](https://github.com/eugencowie/git-vmr/pull/139))
+- Fix changelog in release PRs ([#140](https://github.com/eugencowie/git-vmr/pull/140))
+- Use nightly rustfmt for cargo fmt ([#142](https://github.com/eugencowie/git-vmr/pull/142))
+- Run cargo tasks through mbx directly ([#143](https://github.com/eugencowie/git-vmr/pull/143))
+
+### 🛡️ Security
+
+- Upgrade rustls to 0.23.45 to fix GHSA-2mjx-qc3c-rqvc ([#128](https://github.com/eugencowie/git-vmr/pull/128))
+
 ## 0.12.0
 
 ### 🚀 Features
