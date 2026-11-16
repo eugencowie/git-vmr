@@ -74,7 +74,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: jdx/mise-action@v5.2.7
+      - uses: jdx/mise-action@v5.2.9
         with:
           install_args: rust mr-boxington github:axodotdev/oranda node
 
