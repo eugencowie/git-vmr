@@ -1,0 +1,33 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:best-practices",
+    "schedule:weekly",
+    "security:minimumReleaseAgeCrate",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(chore)",
+  ],
+  ignorePresets: [":pinDevDependencies"],
+  labels: ["chore"],
+
+  packageRules: [
+    {
+      description: "cargo-dist must match cargo-dist-version in Cargo.toml and the generated release-assets.yml, so only bump it by hand",
+      matchManagers: ["mise"],
+      matchDepNames: ["cargo-dist"],
+      enabled: false,
+    },
+    {
+      description: "dist picks the runners in its generated release-assets.yml (ubuntu-22.04 for an older glibc)",
+      matchFileNames: [".github/workflows/release-assets.yml"],
+      matchDepTypes: ["github-runner"],
+      enabled: false,
+    },
+    {
+      description: "release-plz tags its CLI releases release-plz-vX.Y.Z",
+      matchManagers: ["mise"],
+      matchDepNames: ["release-plz"],
+      extractVersion: "^release-plz-v(?<version>.+)$",
+    },
+  ],
+}

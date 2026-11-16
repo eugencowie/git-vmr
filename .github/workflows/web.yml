@@ -70,11 +70,11 @@ jobs:
     timeout-minutes: 15
     steps:
       # Setup
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - uses: jdx/mise-action@v5.2.7
         with:
           install_args: rust mr-boxington github:axodotdev/oranda node
 
@@ -87,7 +87,7 @@ jobs:
         run: mise run site
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: target/public
 
@@ -114,4 +114,4 @@ jobs:
       # The other defaults work fine.
       - name: Deploy to Github Pages
         id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        uses: actions/deploy-pages@v5.0.1
