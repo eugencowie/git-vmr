@@ -299,51 +299,50 @@ checksum = "sha256:5f87d038c6ec442aa46b9126f8ca170acbd2f3b9b9152ca798cf54596a31e
 url = "https://nodejs.org/dist/v26.4.0/node-v26.4.0-win-x64.zip"
 
 [[tools.pandoc]]
-version = "3.10"
+version = "3.14"
 backend = "github:jgm/pandoc"
 specifiers = ["latest"]
 
 [tools.pandoc."platforms.linux-arm64"]
-checksum = "sha256:55413dfb0c1aec861641fe858f1f73e84848f3db497b1c0c02e62887ea76f4a4"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438408619"
+checksum = "sha256:c692f3d78a415741bbbac4cdbbbe26fa7edca1f43d2301b982fbf4009cc8cf7f"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738063997"
 provenance = "github-attestations"
 
 [tools.pandoc."platforms.linux-arm64-musl"]
-checksum = "sha256:55413dfb0c1aec861641fe858f1f73e84848f3db497b1c0c02e62887ea76f4a4"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438408619"
+checksum = "sha256:c692f3d78a415741bbbac4cdbbbe26fa7edca1f43d2301b982fbf4009cc8cf7f"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738063997"
 provenance = "github-attestations"
 
 [tools.pandoc."platforms.linux-x64"]
-checksum = "sha256:e0f8af62d0f267d22baa5bcefe6d5dda3a097ccc60de794b759fe03159923244"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438406829"
+checksum = "sha256:c5f4720cdefb3f7bdc5d07202ef579feef0d1370773c873804dd8fdaa8c4f1b8"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738063449"
 provenance = "github-attestations"
-provenance_verified = true
 
 [tools.pandoc."platforms.linux-x64-musl"]
-checksum = "sha256:e0f8af62d0f267d22baa5bcefe6d5dda3a097ccc60de794b759fe03159923244"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438406829"
+checksum = "sha256:c5f4720cdefb3f7bdc5d07202ef579feef0d1370773c873804dd8fdaa8c4f1b8"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738063449"
 provenance = "github-attestations"
 
 [tools.pandoc."platforms.macos-arm64"]
-checksum = "sha256:d9cad01d96ae774a0dc8c8c45bb1ad3e4c5ff2cc2e24f45958f5f9b7974aee34"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-arm64-macOS.zip"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438404702"
+checksum = "sha256:58d6593884fec9d4424b641b92503c316d9c36decb2891ff8d73ae74dd3b6304"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-arm64-macOS.zip"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738063061"
 provenance = "github-attestations"
 
 [tools.pandoc."platforms.macos-x64"]
-checksum = "sha256:6334f4d9af7c9e37e761dfad56fa5507685f6d29724ebf31c4be6d5c654a3161"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-x86_64-macOS.zip"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438436357"
+checksum = "sha256:891708579061e7b1c1a6ce0df30ebb3cb2b6d0ca045ed3c8554ab830c1e0c270"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-x86_64-macOS.zip"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738065864"
 provenance = "github-attestations"
 
 [tools.pandoc."platforms.windows-x64"]
-checksum = "sha256:bb808d00fd58762299d64582a9b4c3e4b106cd929e62c5f19bcdcb496f1e54ae"
-url = "https://github.com/jgm/pandoc/releases/download/3.10/pandoc-3.10-windows-x86_64.zip"
-url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438414170"
+checksum = "sha256:0144b96e8c7b023fd382ec5ef5bdc475e873f1019d6fa72502492df2c9a94a3b"
+url = "https://github.com/jgm/pandoc/releases/download/3.14/pandoc-3.14-windows-x86_64.zip"
+url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/738065141"
 provenance = "github-attestations"
 
 [[tools.release-plz]]
