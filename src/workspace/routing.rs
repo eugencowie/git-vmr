@@ -1,4 +1,4 @@
-use crate::vmr::{Classification, MANIFEST, Membership, Repo, RepoKind};
+use crate::vmr::{Classification, Membership, Repo};
 use anyhow::{Context, Result, bail};
 use path_clean::PathClean;
 use std::collections::BTreeMap;
@@ -66,7 +66,7 @@ impl<'a> Router<'a>
         resolved.clean()
     }
 
-    /// Routes the scope to its owning child repos, grouping repo-relative
+    /// Routes the scope to its owning member repos, grouping repo-relative
     /// paths per repo. Paths route one by one so the first problem in
     /// path order wins, enforcing the aggregate policy as each path is
     /// reached.
@@ -110,9 +110,9 @@ impl<'a> Router<'a>
         Ok(grouped)
     }
 
-    /// Routes a single operand to its owning child repo. Single-operand
+    /// Routes a single operand to its owning member repo. Single-operand
     /// routing always denies the aggregate path: one operand cannot
-    /// expand to many child repos.
+    /// expand to many member repos.
     pub fn route_single(&self, path: &Path) -> Result<(Repo, PathBuf)>
     {
         let target = self.target(path);
@@ -125,14 +125,14 @@ impl<'a> Router<'a>
             );
         }
 
-        // Reuse normal child repository ownership checks
+        // Reuse normal member repo ownership checks
         self.route_target(&target)
             .with_context(|| {
                 format!("error: failed to route '{}'", path.display())
             })?
             .into_iter()
             .next()
-            .context("error: path did not route to a child repository")
+            .context("error: path did not route to a member repo")
     }
 
     /// Whether a target is the aggregate path: the VMR root itself.
@@ -158,32 +158,24 @@ impl<'a> Router<'a>
             return Ok(self.aggregate().collect());
         }
 
-        // Route only into cloned child repositories
+        // Route into member repos; a child root is that child, whole
         match self.classify(target)?
         {
-            Classification::Member(repo, path)
-                if repo.kind == RepoKind::Root
-                    && path.starts_with(MANIFEST) =>
-                bail!(
-                    "error: cannot route virtual monorepo metadata path '{}'",
-                    target.display()
-                ),
-            Classification::Member(repo, path)
-                if repo.kind != RepoKind::Root =>
+            Classification::Member(repo, path) =>
                 Ok(vec![(repo.clone(), path)]),
             Classification::ChildRoot(repo) =>
                 Ok(vec![(repo.clone(), PathBuf::from("."))]),
-            Classification::Member(..) | Classification::Undeclared { .. } =>
-                bail!(
-                    "error: '{}' is not owned by a child Git repository",
-                    target.display()
-                ),
+            Classification::Undeclared { .. } => bail!(
+                "error: '{}' is not owned by a child Git repository",
+                target.display()
+            )
         }
     }
 
     /// Classifies a target by what owns it: a member repo, or an undeclared
     /// repo, with the path relative to it, or a child root itself. Fails
-    /// for a target outside the VMR or inside a missing child repo.
+    /// for a target outside the VMR, inside a missing child repo, or inside
+    /// a Git repository nested below the first level.
     pub fn classify(&self, target: &Path) -> Result<Classification<'a>>
     {
         // Ensure path stays inside the VMR root
@@ -218,7 +210,8 @@ mod tests
         Membership::new(
             root,
             &manifest(&["api", "backend", "frontend"]),
-            ["backend", "frontend", "scratch"].map(str::to_owned)
+            ["backend", "frontend", "scratch"].map(str::to_owned),
+            |_| false
         )
     }
 
@@ -305,7 +298,7 @@ mod tests
     }
 
     #[test]
-    fn entire_vmr_scope_expands_to_every_child_repo()
+    fn entire_vmr_scope_expands_to_every_member_repo()
     {
         // Arrange
         let root = Path::new("/vmr");
@@ -317,13 +310,14 @@ mod tests
 
         // Assert
         assert_eq!(routed.into_iter().collect::<Vec<_>>(), vec![
+            (Repo::root(root), vec![PathBuf::from(".")]),
             (repo(root, "backend"), vec![PathBuf::from(".")]),
             (repo(root, "frontend"), vec![PathBuf::from(".")])
         ]);
     }
 
     #[test]
-    fn allow_policy_expands_the_aggregate_path_to_every_child_repo()
+    fn allow_policy_expands_the_aggregate_path_to_every_member_repo()
     {
         // Arrange
         let root = Path::new("/vmr");
@@ -339,7 +333,7 @@ mod tests
             .unwrap();
 
         // Assert
-        assert_eq!(routed.len(), 2);
+        assert_eq!(routed.len(), 3);
     }
 
     #[test]
@@ -401,13 +395,13 @@ mod tests
         // Act
         let err = router
             .route(Scope::Paths {
-                paths: vec![PathBuf::from("nonexistent"), PathBuf::from(".")],
+                paths: vec![PathBuf::from("scratch/a"), PathBuf::from(".")],
                 aggregate: AggregatePolicy::Deny("denied".to_owned())
             })
             .unwrap_err();
 
         // Assert
-        assert!(format!("{err:#}").contains("failed to route 'nonexistent'"));
+        assert!(format!("{err:#}").contains("failed to route 'scratch/a'"));
     }
 
     #[test]
@@ -428,32 +422,32 @@ mod tests
     }
 
     #[test]
-    fn rejects_vmr_metadata_paths()
+    fn routes_paths_outside_every_child_repo_to_the_root_repo()
+    {
+        // Arrange: docs is not a repo, README.md and .gitvmr are root files
+        let root = Path::new("/vmr");
+        let membership = membership(root);
+        let router = Router::new(&membership, root);
+
+        for path in ["README.md", "docs/guide.md", ".gitvmr"]
+        {
+            // Act
+            let routed = router.route_single(Path::new(path)).unwrap();
+
+            // Assert
+            assert_eq!(routed, (Repo::root(root), PathBuf::from(path)));
+        }
+    }
+
+    #[test]
+    fn rejects_paths_inside_an_undeclared_repo()
     {
         // Arrange
         let root = Path::new("/vmr");
         let membership = membership(root);
         let router = Router::new(&membership, root);
 
-        // Act
-        let err = router
-            .route_single(Path::new(".gitvmr/config"))
-            .expect_err("path should fail");
-
-        // Assert
-        assert!(format!("{err:#}").contains("metadata"));
-    }
-
-    #[test]
-    fn rejects_paths_not_owned_by_a_child_repo()
-    {
-        // Arrange: scratch is an undeclared repo, docs is not a repo,
-        // README.md is a root file
-        let root = Path::new("/vmr");
-        let membership = membership(root);
-        let router = Router::new(&membership, root);
-
-        for path in ["scratch/notes.md", "docs/readme.md", "README.md"]
+        for path in ["scratch/notes.md", "scratch"]
         {
             // Act
             let err = router

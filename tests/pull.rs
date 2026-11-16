@@ -92,7 +92,8 @@ fn pull_forwards_repository_and_refspec_arguments()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("no remote (.)"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -122,7 +123,8 @@ fn pull_treats_single_positional_argument_as_repository()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend)").not())
+                .and(predicate::str::contains("(backend)"))
+                .and(predicate::str::contains("no remote (.)"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -130,7 +132,7 @@ fn pull_treats_single_positional_argument_as_repository()
 }
 
 #[test]
-fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
+fn pull_skips_non_git_children_and_empty_vmrs_succeed()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &[]);
@@ -141,7 +143,7 @@ fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .arg("pull")
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout("no remote\n")
         .stderr(predicate::str::is_empty());
 
     let sources = tmp.path().join("sources");
@@ -157,8 +159,8 @@ fn pull_skips_non_git_children_and_empty_vmrs_succeed_quietly()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Already up to date.")
-                .and(predicate::str::contains("(backend)").not())
+            predicate::str::contains("Already up to date. (backend)")
+                .and(predicate::str::contains("no remote (.)"))
         )
         .stderr(predicate::str::is_empty());
 }
@@ -180,7 +182,7 @@ fn pull_failure_does_not_stop_successful_repositories()
     let frontend = vmr.join("frontend");
     clone_repo(&backend_source, &backend);
     clone_repo(&frontend_source, &frontend);
-    git(&backend, ["remote", "remove", "origin"]);
+    git(&backend, ["remote", "rename", "origin", "upstream"]);
     write_commit(&frontend_source, "README.md", "updated\n", "update");
 
     git_vmr()
@@ -210,8 +212,8 @@ fn pull_reports_success_failure_and_failure_order_with_repository_suffixes()
     clone_repo(&source, &alpha);
     clone_repo(&source, &backend);
     clone_repo(&source, &zeta);
-    git(&alpha, ["remote", "remove", "origin"]);
-    git(&zeta, ["remote", "remove", "origin"]);
+    git(&alpha, ["remote", "rename", "origin", "upstream"]);
+    git(&zeta, ["remote", "rename", "origin", "upstream"]);
     write_commit(&source, "README.md", "updated\n", "update");
 
     git_vmr()
@@ -242,13 +244,10 @@ fn pull_delegates_missing_upstream_to_git()
         .arg("pull")
         .assert()
         .failure()
-        .stdout(predicate::str::is_empty())
-        .stderr(
-            predicate::str::contains(
-                "There is no tracking information for the current branch."
-            )
-            .and(predicate::str::contains("(backend)").not())
-        );
+        .stdout("no remote (.)\n")
+        .stderr(predicate::str::contains(
+            "There is no tracking information for the current branch. (backend)"
+        ));
 }
 
 #[test]
@@ -307,7 +306,8 @@ fn pull_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(backend, frontend)"))
+                .and(predicate::str::contains("no remote (.)"))
         )
         .stderr(predicate::str::is_empty());
 
@@ -321,7 +321,8 @@ fn pull_uses_nested_working_dir_and_global_c_option_for_discovery()
         .success()
         .stdout(
             predicate::str::contains("Updating")
-                .and(predicate::str::contains("(backend, frontend)").not())
+                .and(predicate::str::contains("(backend, frontend)"))
+                .and(predicate::str::contains("no remote (.)"))
         )
         .stderr(predicate::str::is_empty());
 

@@ -13,11 +13,11 @@ pub fn run(
     {
         TagAction::List => tags(workspace),
 
-        // Create tag in each child repository
+        // Create tag in each member repo
         TagAction::Create(tag_name) =>
             workspace.run(|git, repo| git.tag(repo, tag_name)),
 
-        // Delete tag in each child repository
+        // Delete tag in each member repo
         TagAction::Delete(tag_name) =>
             workspace.run(|git, repo| git.delete_tag(repo, tag_name)),
     }
@@ -25,7 +25,7 @@ pub fn run(
 
 fn tags(workspace: &Workspace) -> Result<Rendered>
 {
-    // Collect tag information from child repositories, in repo order
+    // Collect tag information from member repos, in repo order
     let tags = workspace
         .map(|git, repo| git.tags(repo))?
         .into_iter()
@@ -133,7 +133,7 @@ impl Git
 
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Renders the tag list grouped across child repos, in tag name order.
+/// Renders the tag list grouped across member repos, in tag name order.
 fn render(repos: &[(String, Vec<String>)]) -> String
 {
     let mut output = String::new();

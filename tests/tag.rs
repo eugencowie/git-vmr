@@ -33,6 +33,7 @@ fn tag_lists_local_tags_across_child_repositories()
     commit_file(&backend, "README.md");
     commit_file(&frontend, "README.md");
     commit_file(&tools, "README.md");
+    git(tmp.path(), ["tag", "v1.0.0"]);
     git(&backend, ["tag", "v1.0.0"]);
     git(&frontend, ["tag", "v1.0.0"]);
     git(&tools, ["tag", "v1.0.0"]);
@@ -272,6 +273,7 @@ fn tag_create_omits_repository_suffix_when_every_repo_fails()
     init_repo(&backend);
     commit_file(&backend, "README.md");
     git(&backend, ["tag", "v1.0.0"]);
+    git(tmp.path(), ["tag", "v1.0.0"]);
 
     git_vmr()
         .current_dir(tmp.path())
@@ -325,6 +327,7 @@ fn tag_delete_deletes_tag_in_every_child_repository()
     init_repo(&frontend);
     commit_file(&backend, "README.md");
     commit_file(&frontend, "README.md");
+    git(tmp.path(), ["tag", "v1.0.0"]);
     git(&backend, ["tag", "v1.0.0"]);
     git(&frontend, ["tag", "v1.0.0"]);
     assert_eq!(
@@ -339,12 +342,15 @@ fn tag_delete_deletes_tag_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::is_match(
-                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \\(\\.\\)\\n\
+                 Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \
+                 \\(backend, frontend\\)\\n$"
             )
             .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
+    assert!(!tag_exists(tmp.path(), "v1.0.0"));
     assert!(!tag_exists(&backend, "v1.0.0"));
     assert!(!tag_exists(&frontend, "v1.0.0"));
 }
@@ -360,6 +366,7 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
     init_repo(&frontend);
     commit_file(&backend, "README.md");
     commit_file(&frontend, "README.md");
+    git(tmp.path(), ["tag", "v1.0.0"]);
     git(&backend, ["tag", "v1.0.0"]);
     git(&frontend, ["tag", "v1.0.0"]);
     assert_eq!(
@@ -374,12 +381,15 @@ fn tag_long_delete_deletes_tag_in_every_child_repository()
         .success()
         .stdout(
             predicate::str::is_match(
-                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\)\\n$"
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \\(\\.\\)\\n\
+                 Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \
+                 \\(backend, frontend\\)\\n$"
             )
             .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
+    assert!(!tag_exists(tmp.path(), "v1.0.0"));
     assert!(!tag_exists(&backend, "v1.0.0"));
     assert!(!tag_exists(&frontend, "v1.0.0"));
 }
@@ -393,6 +403,7 @@ fn tag_delete_skips_non_git_child_directories()
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
+    git(tmp.path(), ["tag", "v1.0.0"]);
     git(&backend, ["tag", "v1.0.0"]);
 
     git_vmr()
@@ -401,9 +412,11 @@ fn tag_delete_skips_non_git_child_directories()
         .assert()
         .success()
         .stdout(
-            predicate::str::contains("Deleted tag 'v1.0.0'")
-                .and(predicate::str::contains("(backend)").not())
-                .and(predicate::str::contains("docs").not())
+            predicate::str::is_match(
+                "^Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \\(\\.\\)\\n\
+                 Deleted tag 'v1\\.0\\.0' \\(was [0-9a-f]+\\) \\(backend\\)\\n$"
+            )
+            .expect("valid regex")
         )
         .stderr(predicate::str::is_empty());
 
@@ -438,7 +451,7 @@ fn tag_delete_partial_failure_does_not_stop_other_repositories()
                 .and(predicate::str::contains("tools"))
         )
         .stderr(predicate::str::contains(
-            "error: tag 'v1.0.0' not found. (backend)"
+            "error: tag 'v1.0.0' not found. (., backend)"
         ));
 
     assert!(!tag_exists(&frontend, "v1.0.0"));
@@ -468,7 +481,7 @@ fn tag_delete_reports_failures_with_repository_suffixes()
         .failure()
         .stderr(
             predicate::str::contains(
-                "error: tag 'v1.0.0' not found. (backend, tools)"
+                "error: tag 'v1.0.0' not found. (., backend, tools)"
             )
             .and(predicate::str::contains("fatal: git tag failed").not())
         );
@@ -496,6 +509,6 @@ fn tag_delete_reports_multiple_failures_in_repository_name_order()
         .assert()
         .failure()
         .stderr(predicate::str::starts_with(
-            "error: tag 'v1.0.0' not found. (alpha, zeta)\n"
+            "error: tag 'v1.0.0' not found. (., alpha, zeta)\n"
         ));
 }

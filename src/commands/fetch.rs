@@ -9,7 +9,7 @@ pub fn run(
     args: &FetchArgs
 ) -> Result<Rendered>
 {
-    // Fetch in each child repository
+    // Fetch in each member repo
     workspace.run(|git, repo| git.fetch(repo, args))
 }
 
@@ -38,6 +38,13 @@ impl Git
 {
     fn fetch(&self, repo: &Repo, fetch: &FetchArgs) -> GitCommandResult
     {
+        // Skip a repo with no remote configured
+        if let Some(skip) = self.skip_without_remote(repo)?
+        {
+            return Ok(skip);
+        }
+
+        // Run git fetch
         let mut args = vec![OsString::from("fetch")];
 
         if let Some(repository) = &fetch.repository
@@ -66,12 +73,31 @@ mod tests
     use crate::test_support::{cli_context, vmr_fixture};
     use std::sync::Arc;
 
+    /// The paths of the repos `fake` ran `git fetch` in, sorted.
+    fn fetched(fake: &ScriptedFake) -> Vec<std::path::PathBuf>
+    {
+        let mut paths = fake
+            .calls()
+            .into_iter()
+            .filter(|invocation| invocation.args[0] == "fetch")
+            .map(|invocation| invocation.path)
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
+    }
+
     #[test]
-    fn fetches_in_every_child_repo()
+    fn fetches_in_every_member_repo()
     {
         // Arrange
         let tmp = vmr_fixture();
-        let fake = Arc::new(ScriptedFake::new().on(["fetch"], 0, "", ""));
+        let fake =
+            Arc::new(ScriptedFake::new().on(["remote"], 0, "origin\n", "").on(
+                ["fetch"],
+                0,
+                "",
+                ""
+            ));
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -83,13 +109,8 @@ mod tests
 
         // Assert
         assert!(result.is_ok());
-        let mut paths = fake
-            .calls()
-            .into_iter()
-            .map(|invocation| invocation.path)
-            .collect::<Vec<_>>();
-        paths.sort();
-        assert_eq!(paths, vec![
+        assert_eq!(fetched(&fake), vec![
+            tmp.path().to_path_buf(),
             tmp.path().join("backend"),
             tmp.path().join("frontend")
         ]);
@@ -100,12 +121,13 @@ mod tests
     {
         // Arrange
         let tmp = vmr_fixture();
-        let fake = Arc::new(ScriptedFake::new().on(
-            ["fetch", "origin", "main"],
-            0,
-            "",
-            ""
-        ));
+        let fake =
+            Arc::new(ScriptedFake::new().on(["remote"], 0, "origin\n", "").on(
+                ["fetch", "origin", "main"],
+                0,
+                "",
+                ""
+            ));
         let git = Git::with(Arc::clone(&fake));
         let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
@@ -117,17 +139,47 @@ mod tests
 
         // Assert
         assert!(result.is_ok());
-        assert_eq!(fake.calls().len(), 2);
+        assert_eq!(fetched(&fake).len(), 3);
     }
 
     use crate::git::RepoOutcome;
     use crate::test_support::repo;
 
     #[test]
+    fn skips_a_repo_with_no_remote_without_fetching()
+    {
+        // Arrange
+        let git = Git::with(ScriptedFake::new().on(["remote"], 0, "", ""));
+
+        // Act
+        let outcome = git
+            .fetch(&repo("backend", "/vmr/backend"), &FetchArgs {
+                repository: None,
+                refspecs: vec![]
+            })
+            .unwrap();
+
+        // Assert
+        let RepoOutcome::Skipped(message) = outcome
+        else
+        {
+            panic!("expected a skip");
+        };
+        assert_eq!(message.message, "no remote");
+    }
+
+    #[test]
     fn fetch_with_no_output_is_a_quiet_success()
     {
         // Arrange
-        let git = Git::with(ScriptedFake::new().on(["fetch"], 0, "", ""));
+        let git = Git::with(
+            ScriptedFake::new().on(["remote"], 0, "origin\n", "").on(
+                ["fetch"],
+                0,
+                "",
+                ""
+            )
+        );
 
         // Act
         let outcome = git
@@ -145,12 +197,14 @@ mod tests
     fn fetch_success_reports_stderr_before_stdout()
     {
         // Arrange
-        let git = Git::with(ScriptedFake::new().on(
-            ["fetch"],
-            0,
-            "stdout chatter\n",
-            "From origin\n"
-        ));
+        let git = Git::with(
+            ScriptedFake::new().on(["remote"], 0, "origin\n", "").on(
+                ["fetch"],
+                0,
+                "stdout chatter\n",
+                "From origin\n"
+            )
+        );
 
         // Act
         let outcome = git

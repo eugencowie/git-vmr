@@ -36,7 +36,7 @@ pub fn run(
 }
 
 /// The result of a move: one outcome per executed move entry, plus the
-/// names of the child repos in the command's routed scope — every source's
+/// paths of the member repos in the command's routed scope — every source's
 /// repo and the destination's, duplicates included. Entries and scope can
 /// differ when several entries move between the same repos.
 struct MoveOutcomes

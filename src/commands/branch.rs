@@ -13,11 +13,11 @@ pub fn run(
     {
         BranchAction::List => branches(workspace),
 
-        // Branch in each child repository
+        // Branch in each member repo
         BranchAction::Create(branch_name) =>
             workspace.run(|git, repo| git.branch(repo, branch_name)),
 
-        // Delete branch in each child repository
+        // Delete branch in each member repo
         BranchAction::Delete { branch_name, force } => workspace
             .run(|git, repo| git.delete_branch(repo, branch_name, force))
     }
@@ -25,7 +25,7 @@ pub fn run(
 
 fn branches(workspace: &Workspace) -> Result<Rendered>
 {
-    // Collect branch information from child repositories, in repo order
+    // Collect branch information from member repos, in repo order
     let branches = workspace
         .map(|git, repo| git.branches(repo))?
         .into_iter()
@@ -162,7 +162,7 @@ impl Git
 
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Renders the branch list grouped across child repos, marking active
+/// Renders the branch list grouped across member repos, marking active
 /// branches and detached heads.
 fn render(repos: &[(String, RepoBranches)]) -> String
 {

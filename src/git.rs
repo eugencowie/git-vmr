@@ -3,6 +3,7 @@ mod head;
 pub(crate) mod report;
 mod runner;
 
+use crate::vmr::Repo;
 use anyhow::{Result, bail};
 pub use head::Head;
 #[cfg(test)]
@@ -105,6 +106,21 @@ impl Git
             .chain(paths.into_iter().map(|path| git_path_arg(path.as_ref())))
             .collect::<Vec<_>>();
         self.output(repo_path, args)
+    }
+
+    /// A skip for `repo` when it has no remote configured, as every
+    /// upgraded VMR's root repo starts out, so remote operations pass over
+    /// it rather than fail.
+    pub(crate) fn skip_without_remote(
+        &self,
+        repo: &Repo
+    ) -> Result<Option<RepoOutcome>>
+    {
+        let remotes = self.stdout(&repo.absolute_path, ["remote"])?;
+        Ok(remotes
+            .trim_ascii()
+            .is_empty()
+            .then(|| skip_message(&repo.path, "no remote".to_owned())))
     }
 }
 

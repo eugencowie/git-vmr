@@ -317,12 +317,11 @@ fn rm_dry_run_root_requires_recursive_and_recursive_preview_does_not_mutate()
         .args(["rm", "-n", "-r", "."])
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains("rm 'README.md'")
-                .and(predicate::str::contains("(backend, frontend)").not())
-        );
+        .stdout("rm '.gitignore' (.)\nrm 'README.md' (backend, frontend)\n");
 
     // Assert
+    assert!(tmp.path().join(".gitvmr").exists());
+    assert_eq!(staged_names(tmp.path()), "");
     assert!(backend.join("README.md").exists());
     assert!(frontend.join("README.md").exists());
     assert_eq!(staged_names(&backend), "");
@@ -375,9 +374,9 @@ fn rm_rejects_invalid_paths_before_changing_any_repo()
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
-    fs::write(tmp.path().join("README.md"), "vmr\n")
-        .expect("failed to write root file");
+    init_repo(&tmp.path().join("scratch"));
+    fs::create_dir(tmp.path().join("vendor")).expect("failed to create dir");
+    init_repo(&tmp.path().join("vendor/lib"));
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "tracked.rs");
@@ -385,7 +384,7 @@ fn rm_rejects_invalid_paths_before_changing_any_repo()
     // Act
     git_vmr()
         .current_dir(tmp.path())
-        .args(["rm", "backend/tracked.rs", "docs/readme.md"])
+        .args(["rm", "backend/tracked.rs", "scratch/notes.md"])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
@@ -396,7 +395,7 @@ fn rm_rejects_invalid_paths_before_changing_any_repo()
     assert_eq!(staged_names(&backend), "");
 
     // Act
-    for invalid in [".gitvmr/config", "README.md", "../outside.txt"]
+    for invalid in ["vendor/lib/lib.rs", "../outside.txt"]
     {
         git_vmr()
             .current_dir(tmp.path())

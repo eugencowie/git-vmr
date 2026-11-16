@@ -426,23 +426,7 @@ fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
     // Make the fixture root a Git repository
     if !fixture_root.join(".git").exists()
     {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(fixture_root)
-            .args(["init", "--quiet"])
-            .stdin(Stdio::null())
-            .stderr(Stdio::piped())
-            .output()
-            .map_err(|err| format!("failed to start git init: {err}"))?;
-        if !output.status.success()
-        {
-            return Err(format!(
-                "failed to initialize fixture root repo '{}': {}: {}",
-                fixture_root.display(),
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
+        root_git(fixture_root, &["init", "--quiet"], "initialize")?;
     }
 
     // Declare and ignore every benchmark repository
@@ -466,6 +450,65 @@ fn prepare_root_repo(fixture_root: &Path) -> Result<(), String>
         fs::write(&path, contents).map_err(|err| {
             format!("failed to write '{}': {err}", path.display())
         })?;
+    }
+
+    // Commit the declarations, so the root repo is born like any member
+    // repo the benchmarks run in
+    root_git(fixture_root, &["add", ".gitvmr", ".gitignore"], "stage")?;
+    let staged = Command::new("git")
+        .arg("-C")
+        .arg(fixture_root)
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .map_err(|err| format!("failed to start git diff: {err}"))?;
+    if !staged.success()
+    {
+        root_git(
+            fixture_root,
+            &[
+                "-c",
+                "user.name=git-vmr bench",
+                "-c",
+                "user.email=bench@git-vmr.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "Declare benchmark repositories"
+            ],
+            "commit"
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Runs git in the fixture root repo, failing with `action` in the message.
+fn root_git(
+    fixture_root: &Path,
+    args: &[&str],
+    action: &str
+) -> Result<(), String>
+{
+    // Run git in the fixture root
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(fixture_root)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|err| format!("failed to start git to {action}: {err}"))?;
+
+    // Fail with the action and git's stderr
+    if !output.status.success()
+    {
+        return Err(format!(
+            "failed to {action} fixture root repo '{}': {}: {}",
+            fixture_root.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ));
     }
 
     Ok(())

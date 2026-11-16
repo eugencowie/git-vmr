@@ -358,9 +358,9 @@ fn mv_rejects_invalid_ownership_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
-    fs::write(tmp.path().join("README.md"), "vmr\n")
-        .expect("failed to write root file");
+    init_repo(&tmp.path().join("scratch"));
+    fs::create_dir(tmp.path().join("vendor")).expect("failed to create dir");
+    init_repo(&tmp.path().join("vendor/lib"));
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/main.rs");
@@ -368,9 +368,8 @@ fn mv_rejects_invalid_ownership_before_moving()
     for (source, destination, message) in [
         ("../outside.txt", "backend/outside.txt", "outside virtual monorepo"),
         ("backend/src/main.rs", "../outside.txt", "outside virtual monorepo"),
-        ("backend/src/main.rs", ".gitvmr/main.rs", "metadata"),
-        ("backend/src/main.rs", "docs/main.rs", "child Git repository"),
-        ("backend/src/main.rs", "README.md", "child Git repository"),
+        ("backend/src/main.rs", "scratch/main.rs", "child Git repository"),
+        ("backend/src/main.rs", "vendor/lib/main.rs", "nested Git repository"),
         (".", "backend/all", "VMR root aggregate")
     ]
     {
@@ -465,7 +464,7 @@ fn mv_rejects_multi_source_preflight_failures_before_moving()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
-    fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
+    init_repo(&tmp.path().join("scratch"));
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -515,7 +514,7 @@ fn mv_rejects_multi_source_preflight_failures_before_moving()
             "already exists"
         ),
         (
-            vec!["mv", "backend/src/a.rs", "docs/b.rs", "tools/archive"],
+            vec!["mv", "backend/src/a.rs", "scratch/b.rs", "tools/archive"],
             "child Git repository"
         ),
         (

@@ -22,7 +22,7 @@ pub fn run(
         }
     };
 
-    // Stage routed paths in each owning child repository
+    // Stage routed paths in each owning member repo
     workspace.run_routed(scope, |git, repo, repo_paths| {
         git.add(repo, repo_paths, &args.options)
     })
@@ -193,6 +193,7 @@ mod tests
             .collect::<Vec<_>>();
         paths.sort();
         assert_eq!(paths, vec![
+            tmp.path().to_path_buf(),
             tmp.path().join("backend"),
             tmp.path().join("frontend")
         ]);

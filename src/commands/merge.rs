@@ -9,7 +9,7 @@ pub fn run(
     args: &MergeArgs
 ) -> Result<Rendered>
 {
-    // Merge in each child repository
+    // Merge in each member repo
     workspace.run(|git, repo| git.merge(repo, args))
 }
 

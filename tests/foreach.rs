@@ -59,12 +59,12 @@ fn foreach_runs_command_across_child_repos_and_skips_non_git_children()
         ])
         .assert()
         .success()
-        .stdout(child_lines(&["backend", "frontend"]))
+        .stdout(child_lines(&[".", "backend", "frontend"]))
         .stderr(predicate::str::is_empty());
 }
 
 #[test]
-fn foreach_succeeds_without_output_when_no_child_repos_exist()
+fn foreach_runs_only_in_the_root_repo_when_no_child_repos_exist()
 {
     let tmp = create_vmr(&[]);
     fs::create_dir(tmp.path().join("docs"))
@@ -72,10 +72,10 @@ fn foreach_succeeds_without_output_when_no_child_repos_exist()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "pwd"])
+        .args(["foreach", "echo ok"])
         .assert()
         .success()
-        .stdout(predicate::str::is_empty())
+        .stdout(format!("Entering '.'\nok{CHILD_NEWLINE}"))
         .stderr(predicate::str::is_empty());
 }
 
@@ -114,7 +114,7 @@ fn foreach_renders_parallel_results_in_repository_order()
         ])
         .assert()
         .success()
-        .stdout(child_lines(&["alpha", "zeta"]))
+        .stdout(child_lines(&[".", "alpha", "zeta"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -132,8 +132,11 @@ fn foreach_replays_stdout_stderr_and_default_headers()
         ])
         .assert()
         .success()
-        .stdout(format!("Entering 'backend'\nout{CHILD_NEWLINE}"))
-        .stderr(format!("err{CHILD_NEWLINE}"));
+        .stdout(format!(
+            "Entering '.'\nout{CHILD_NEWLINE}\
+             Entering 'backend'\nout{CHILD_NEWLINE}"
+        ))
+        .stderr(format!("err{CHILD_NEWLINE}err{CHILD_NEWLINE}"));
 }
 
 #[test]
@@ -147,7 +150,7 @@ fn foreach_quiet_suppresses_headers_only()
         .args(["foreach", "--quiet", "echo ok"])
         .assert()
         .success()
-        .stdout(child_lines(&["ok"]))
+        .stdout(child_lines(&["ok", "ok"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -159,15 +162,20 @@ fn foreach_reports_single_child_failure()
 
     git_vmr()
         .current_dir(tmp.path())
-        .args(["foreach", "--quiet", shell_command("false", "exit /b 1")])
+        .args([
+            "foreach",
+            "--quiet",
+            shell_command(
+                "test \"$name\" != backend",
+                "if %name%==backend (exit /b 1) else (exit /b 0)"
+            )
+        ])
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
         .stderr(
-            predicate::str::contains(
-                "fatal: command failed in 'backend' with exit status 1"
-            )
-            .and(predicate::str::contains("fatal: foreach failed"))
+            "fatal: command failed in 'backend' with exit status 1\nfatal: \
+             foreach failed\n"
         );
 }
 
@@ -240,9 +248,9 @@ fn foreach_sets_vmr_environment_variables_without_sha1()
         .assert()
         .success()
         .stdout(format!(
-            "backend;backend;backend;{};unset{}",
-            shown_dir(tmp.path()).display(),
-            CHILD_NEWLINE
+            ".;.;.;{toplevel};unset{CHILD_NEWLINE}\
+             backend;backend;backend;{toplevel};unset{CHILD_NEWLINE}",
+            toplevel = shown_dir(tmp.path()).display()
         ))
         .stderr(predicate::str::is_empty());
 }
@@ -277,7 +285,7 @@ fn foreach_sets_name_to_the_manifest_name_and_sm_path_to_the_path()
     // Assert
     assert
         .success()
-        .stdout(child_lines(&["api;backend"]))
+        .stdout(child_lines(&[".;.", "api;backend"]))
         .stderr(predicate::str::is_empty());
 }
 
@@ -301,6 +309,7 @@ fn foreach_displaypath_respects_effective_working_directory()
         .assert()
         .success()
         .stdout(child_lines(&[
+            ".:..",
             if cfg!(windows)
             {
                 r"backend:..\backend"
@@ -348,6 +357,6 @@ fn foreach_discovers_vmr_from_nested_working_directory_and_global_c()
         ])
         .assert()
         .success()
-        .stdout(child_lines(&["backend", "frontend"]))
+        .stdout(child_lines(&[".", "backend", "frontend"]))
         .stderr(predicate::str::is_empty());
 }

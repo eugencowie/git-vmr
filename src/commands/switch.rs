@@ -9,7 +9,7 @@ pub fn run(
     args: &SwitchArgs
 ) -> Result<Rendered>
 {
-    // Switch in each child repository, creating the branch when asked
+    // Switch in each member repo, creating the branch when asked
     workspace.run(|git, repo| git.switch(repo, args))
 }
 
