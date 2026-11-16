@@ -223,26 +223,4 @@ impl Git
 
         Ok(!tracked.is_empty())
     }
-
-    /// The repo's `origin` URL as configured, if it has one.
-    fn origin_url(&self, repo: &Path) -> Result<Option<String>>
-    {
-        // Read the configured URL
-        let output =
-            self.output(repo, ["config", "--get", "remote.origin.url"])?;
-
-        // Exit code 1 means the key is unset
-        match output.status.code()
-        {
-            Some(0) => Ok(Some(
-                String::from_utf8_lossy(&output.stdout).trim().to_owned()
-            )),
-            Some(1) => Ok(None),
-            _ => bail!(
-                "fatal: failed to read the 'origin' remote of '{}': {}",
-                repo.display(),
-                stderr(&output)
-            )
-        }
-    }
 }

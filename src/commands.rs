@@ -48,7 +48,7 @@ pub use worktree::WorktreeCommand;
 #[derive(Subcommand)]
 pub enum Command
 {
-    // Clone and init run before a VMR exists
+    // Clone and init build a VMR rather than open one
     Clone(CloneArgs),
     Init(InitArgs),
 

@@ -44,8 +44,8 @@ _Avoid_: register, attach, adopt
 
 **Workspace command**:
 A command that runs inside an opened workspace — every command except clone
-and init, which run before a VMR exists. The distinction is encoded in the
-command type, not checked at run time.
+and init, which build a VMR rather than open one. The distinction is encoded
+in the command type, not checked at run time.
 _Avoid_: repo command, VMR command
 
 **VMR root**:

@@ -28,7 +28,7 @@ These are common git-vmr commands used in various situations:
 
 | Command | Description | Supported? |
 | ------- | ----------- | ---------- |
-| [clone](https://github.com/eugencowie/git-vmr/blob/main/docs/parity/git-clone.md) | Clone a repository into a new directory | ✅ |
+| [clone](https://github.com/eugencowie/git-vmr/blob/main/docs/parity/git-clone.md) | Clone a virtual monorepo into a new directory | ✅ |
 | [init](https://github.com/eugencowie/git-vmr/blob/main/docs/parity/git-init.md) | Create an empty virtual monorepo or reinitialize an existing one | ✅ |
 
 ### Work on the current change
