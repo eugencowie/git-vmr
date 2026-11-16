@@ -140,7 +140,8 @@ impl Git
         options: &AddOptions
     ) -> GitCommandResult
     {
-        let output = self.path_output(&repo.path, add_args(options), paths)?;
+        let output =
+            self.path_output(&repo.absolute_path, add_args(options), paths)?;
 
         command_result(
             repo,

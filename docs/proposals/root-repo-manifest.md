@@ -70,7 +70,7 @@ The root repo is not yet a member; children come from the manifest instead of sc
 
 A pure refactor with no expected-output changes.
 
-- `Repo` becomes one struct for every member: `path`, a `label` (`.` or the manifest path) that replaces `name` as the key in outcomes and aggregation, and a `kind` — `Root` or `Child { name }`. A hand-written `Ord` puts the root first, then sorts by path (`.` does not reliably sort first: `-` and `!` precede it). One struct rather than separate types, because nearly all code treats members uniformly; only routing, foreach, and worktrees branch on kind.
+- `Repo` becomes one struct for every member: an `absolute_path`, a `path` (`.` or the manifest path) that replaces `name` as the key in outcomes and aggregation, and a `kind` — `Root` or `Child { name }`. A hand-written `Ord` puts the root first, then sorts by path (`.` does not reliably sort first: `-` and `!` precede it). One struct rather than separate types, because nearly all code treats members uniformly; only routing, foreach, and worktrees branch on kind.
 - **Router classification.** Each target classifies as:
   - a member repo plus repo-relative path — inside a present child, otherwise the root repo;
   - a child root;
@@ -124,7 +124,7 @@ A pure refactor with no expected-output changes.
 - `src/vmr.rs`, `src/vmr/repo.rs`: discovery, marker lifecycle, and repo scanning become manifest reading. `src/config.rs`: VMR config removed. `src/store.rs` untouched.
 - `src/cli/pipeline.rs`, `src/cli/context.rs`, `src/commands.rs`: the workspace opens as a pipeline step and contributes load warnings.
 - `src/workspace.rs`, `src/workspace/routing.rs`: the member set, the declare transition, and Router classification.
-- `src/git.rs`, `src/render/outcomes.rs`: outcomes and aggregation keyed by label.
+- `src/git.rs`, `src/render/outcomes.rs`: outcomes and aggregation keyed by path.
 - `src/commands/{init,clone,add,rm,mv,foreach,worktree}.rs` and `src/commands/worktree/roots.rs`.
 - `Cargo.toml`: new `toml_edit` dependency.
 - `tests/common/mod.rs`, `src/test_support.rs`, `benches/real_repos.rs`: fixtures build a root repo with a manifest.

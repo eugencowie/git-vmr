@@ -47,7 +47,7 @@ impl Git
 
         args.extend(fetch.refspecs.iter().map(OsString::from));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,

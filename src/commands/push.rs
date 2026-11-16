@@ -16,7 +16,7 @@ pub fn run(
 
     render::outcomes(
         results.into_iter().flatten().collect(),
-        workspace.repos().iter().map(|repo| repo.name.as_str())
+        workspace.members().iter().map(|repo| repo.path.as_str())
     )
 }
 
@@ -189,7 +189,7 @@ impl Git
         args: &PushArgs
     ) -> Vec<GitCommandResult>
     {
-        let plan = match self.plan_push(&repo.path, args)
+        let plan = match self.plan_push(&repo.absolute_path, args)
         {
             Ok(plan) => plan,
             Err(error) => return vec![Err(error)]
@@ -198,7 +198,7 @@ impl Git
         let mut results = plan
             .skips
             .into_iter()
-            .map(|reason| Ok(skip_message(&repo.name, reason)))
+            .map(|reason| Ok(skip_message(&repo.path, reason)))
             .collect::<Vec<_>>();
 
         if let Some(refspecs) = plan.attempt
@@ -603,7 +603,7 @@ impl Git
 
         args.extend(refspecs.iter().map(OsString::from));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,

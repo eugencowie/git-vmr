@@ -32,8 +32,8 @@ impl Git
 {
     fn rebase(&self, repo: &Repo, args: &RebaseArgs) -> GitCommandResult
     {
-        let output =
-            self.output(&repo.path, ["rebase", args.upstream.as_str()])?;
+        let output = self
+            .output(&repo.absolute_path, ["rebase", args.upstream.as_str()])?;
 
         command_result(
             repo,

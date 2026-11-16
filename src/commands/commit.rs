@@ -11,7 +11,9 @@ pub fn run(
 {
     // Filter child repositories without staged changes
     let dirty_repos = workspace
-        .map(|git, repo| Ok(git.is_dirty(&repo.path)?.then(|| repo.clone())))?
+        .map(|git, repo| {
+            Ok(git.is_dirty(&repo.absolute_path)?.then(|| repo.clone()))
+        })?
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
@@ -47,7 +49,7 @@ impl Git
     fn commit(&self, repo: &Repo, args: &CommitArgs) -> GitCommandResult
     {
         let output =
-            self.output(&repo.path, ["commit", "-m", &args.message])?;
+            self.output(&repo.absolute_path, ["commit", "-m", &args.message])?;
 
         command_result(
             repo,

@@ -69,7 +69,7 @@ impl<'a> WorktreeRoots<'a>
     /// The scope of a root operation: one child worktree per child repo.
     fn scope(&self) -> Vec<String>
     {
-        self.workspace.repos().iter().map(|repo| repo.name.clone()).collect()
+        self.workspace.children().iter().map(|repo| repo.path.clone()).collect()
     }
 
     /// Materializes the root at `target`, then adds one child worktree per
@@ -124,10 +124,11 @@ impl<'a> WorktreeRoots<'a>
         force_delete: bool
     ) -> Result<RootOutcomes>
     {
-        let removals = self.workspace.map(|git, repo| {
-            // Wrap per-repo errors so map attempts every repository.
-            Ok(remove_child(git, repo, target, force, delete, force_delete))
-        })?;
+        let removals =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                // Wrap per-repo errors so map attempts every repository.
+                Ok(remove_child(git, repo, target, force, delete, force_delete))
+            })?;
 
         let mut all_child_removals_succeeded = true;
         let mut outcomes = Vec::new();
@@ -195,14 +196,15 @@ impl<'a> WorktreeRoots<'a>
     {
         Vmr::create_worktree_root(destination)?;
 
-        let outcomes = self.workspace.map(|git, repo| {
-            Ok(git.worktree_move(
-                repo,
-                &source.join(&repo.name),
-                &destination.join(&repo.name),
-                force
-            ))
-        })?;
+        let outcomes =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                Ok(git.worktree_move(
+                    repo,
+                    &source.join(&repo.path),
+                    &destination.join(&repo.path),
+                    force
+                ))
+            })?;
 
         let all_child_moves_succeeded = outcomes
             .iter()
@@ -224,9 +226,11 @@ impl<'a> WorktreeRoots<'a>
     /// the worktree root (or main VMR root) it belongs to.
     pub fn list(&self) -> Result<BTreeMap<PathBuf, Vec<WorktreeRootEntry>>>
     {
-        let results = self.workspace.map(|git, repo| {
-            git.worktree_list(repo).map(|entries| (repo.name.clone(), entries))
-        })?;
+        let results =
+            self.workspace.map_in(self.workspace.children(), |git, repo| {
+                git.worktree_list(repo)
+                    .map(|entries| (repo.path.clone(), entries))
+            })?;
 
         let mut groups: BTreeMap<PathBuf, Vec<WorktreeRootEntry>> =
             BTreeMap::new();
@@ -265,7 +269,7 @@ fn remove_child(
     force_delete: bool
 ) -> Result<ChildRemoval>
 {
-    let child_target = target.join(&repo.name).clean();
+    let child_target = target.join(&repo.path).clean();
     let branch = if delete || force_delete
     {
         child_worktree_branch(git, repo, &child_target)?
@@ -324,12 +328,12 @@ fn add_child(
             (Some(branch.as_str()), commit_ish.as_deref()),
         AddMode::CommitIsh(commit_ish) => (None, Some(commit_ish.as_str())),
         AddMode::InferredBranch(branch)
-            if git.branch_exists(&repo.path, branch)? =>
+            if git.branch_exists(&repo.absolute_path, branch)? =>
             (None, Some(branch.as_str())),
         AddMode::InferredBranch(branch) => (Some(branch.as_str()), None)
     };
 
-    git.worktree_add(repo, &target.join(&repo.name), branch, commit_ish)
+    git.worktree_add(repo, &target.join(&repo.path), branch, commit_ish)
 }
 
 /// The reverse of the layout convention: the root a child worktree belongs
@@ -414,7 +418,7 @@ impl Git
             args.push(OsString::from(commit_ish));
         }
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -444,7 +448,7 @@ impl Git
 
         args.push(git_path_arg(target));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -475,7 +479,7 @@ impl Git
         args.push(git_path_arg(source));
         args.push(git_path_arg(destination));
 
-        let output = self.output(&repo.path, args)?;
+        let output = self.output(&repo.absolute_path, args)?;
 
         command_result(
             repo,
@@ -490,7 +494,7 @@ impl Git
 
     fn worktree_list(&self, repo: &Repo) -> Result<Vec<ChildWorktree>>
     {
-        let output = self.output(&repo.path, [
+        let output = self.output(&repo.absolute_path, [
             OsString::from("worktree"),
             OsString::from("list"),
             OsString::from("--porcelain"),
@@ -501,13 +505,13 @@ impl Git
         {
             bail!(
                 "fatal: failed to list worktrees for '{}': {}",
-                repo.name,
+                repo.path,
                 Streams::StderrThenStdout
                     .first_line(&output, "git worktree list failed")
             );
         }
 
-        parse_worktree_list(&repo.name, &output.stdout)
+        parse_worktree_list(&repo.path, &output.stdout)
     }
 }
 

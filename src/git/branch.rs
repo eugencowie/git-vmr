@@ -19,7 +19,8 @@ impl Git
     ) -> GitCommandResult
     {
         let flag = if force { "-D" } else { "-d" };
-        let output = self.output(&repo.path, ["branch", flag, branch_name])?;
+        let output =
+            self.output(&repo.absolute_path, ["branch", flag, branch_name])?;
 
         command_result(
             repo,

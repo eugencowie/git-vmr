@@ -66,8 +66,8 @@ fn mv(workspace: &Workspace, args: &MvArgs) -> Result<MoveOutcomes>
     let destination = workspace.route_single(&args.destination)?;
     let scope_repos = sources
         .iter()
-        .map(|(repo, _)| repo.name.clone())
-        .chain(std::iter::once(destination.0.name.clone()))
+        .map(|(repo, _)| repo.path.clone())
+        .chain(std::iter::once(destination.0.path.clone()))
         .collect::<Vec<_>>();
 
     if sources.len() == 1 && sources[0].0 == destination.0
@@ -76,7 +76,7 @@ fn mv(workspace: &Workspace, args: &MvArgs) -> Result<MoveOutcomes>
         return Ok(MoveOutcomes {
             outcomes: vec![in_repo_outcome(
                 repo,
-                git.mv(&repo.path, source_relative, &destination.1)
+                git.mv(&repo.absolute_path, source_relative, &destination.1)
             )],
             scope_repos
         });
@@ -139,7 +139,7 @@ impl MovePlan
         if multi_source
         {
             let destination_path =
-                destination_repo.path.join(&destination_relative);
+                destination_repo.absolute_path.join(&destination_relative);
             if !destination_path.is_dir()
             {
                 bail!(
@@ -151,7 +151,7 @@ impl MovePlan
 
         for (source_repo, source_relative) in sources
         {
-            git.ensure_tracked(&source_repo.path, &source_relative)?;
+            git.ensure_tracked(&source_repo.absolute_path, &source_relative)?;
 
             let final_destination_relative = if multi_source
             {
@@ -164,13 +164,14 @@ impl MovePlan
             {
                 final_destination_path(
                     &source_relative,
-                    &destination_repo.path,
+                    &destination_repo.absolute_path,
                     &destination_relative
                 )?
             };
 
-            let destination_key =
-                destination_repo.path.join(&final_destination_relative);
+            let destination_key = destination_repo
+                .absolute_path
+                .join(&final_destination_relative);
             if !final_destinations.insert(destination_key.clone())
             {
                 bail!(
@@ -222,7 +223,7 @@ fn execute_plan(git: &Git, plan: MovePlan) -> Vec<GitCommandResult>
         return vec![in_repo_outcome(
             &plan.destination_repo,
             git.mv_to_directory(
-                &plan.destination_repo.path,
+                &plan.destination_repo.absolute_path,
                 &sources,
                 &plan.destination_relative
             )
@@ -237,21 +238,24 @@ fn in_repo_outcome(repo: &Repo, result: Result<()>) -> GitCommandResult
     Ok(match result
     {
         Ok(()) => quiet_success(),
-        Err(error) => failure_message(&repo.name, format!("{error:#}"))
+        Err(error) => failure_message(&repo.path, format!("{error:#}"))
     })
 }
 
 fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
 {
-    let source_path = entry.source_repo.path.join(&entry.source_relative);
-    let destination_path =
-        entry.destination_repo.path.join(&entry.final_destination_relative);
+    let source_path =
+        entry.source_repo.absolute_path.join(&entry.source_relative);
+    let destination_path = entry
+        .destination_repo
+        .absolute_path
+        .join(&entry.final_destination_relative);
 
     // Move the worktree path across child repositories
     if let Err(error) = fs::rename(&source_path, &destination_path)
     {
         return Ok(failure_message(
-            &entry.source_repo.name,
+            &entry.source_repo.path,
             format!(
                 "fatal: failed to move '{}' to '{}': {error}",
                 source_path.display(),
@@ -262,27 +266,27 @@ fn mv_between_repos(git: &Git, entry: MovePlanEntry) -> GitCommandResult
 
     // Stage the source deletion and destination addition in their repositories
     if let Err(error) =
-        git.add_path(&entry.source_repo.path, &entry.source_relative)
+        git.add_path(&entry.source_repo.absolute_path, &entry.source_relative)
     {
         return Ok(failure_message(
-            &entry.source_repo.name,
+            &entry.source_repo.path,
             format!(
                 "fatal: failed to stage source deletion in '{}': {error:#}",
-                entry.source_repo.path.display()
+                entry.source_repo.absolute_path.display()
             )
         ));
     }
 
     if let Err(error) = git.add_path(
-        &entry.destination_repo.path,
+        &entry.destination_repo.absolute_path,
         &entry.final_destination_relative
     )
     {
         return Ok(failure_message(
-            &entry.destination_repo.name,
+            &entry.destination_repo.path,
             format!(
                 "fatal: failed to stage destination addition in '{}': {error:#}",
-                entry.destination_repo.path.display()
+                entry.destination_repo.absolute_path.display()
             )
         ));
     }

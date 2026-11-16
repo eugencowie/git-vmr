@@ -73,7 +73,7 @@ impl Git
         }
 
         args.push(OsString::from("--"));
-        let output = self.path_output(&repo.path, args, paths)?;
+        let output = self.path_output(&repo.absolute_path, args, paths)?;
 
         command_result(
             repo,

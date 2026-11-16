@@ -3,16 +3,22 @@
 use crate::cli::CliContext;
 use crate::git::Git;
 use crate::vmr::{
-    Declaration, Gitignore, Manifest, ManifestEditor, Repo, RepoPath, RepoUrl
+    Declaration, Gitignore, Manifest, ManifestEditor, Repo, RepoKind, RepoPath,
+    RepoUrl
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// A child repo value for exercising git ops directly.
-pub(crate) fn repo(name: &str, path: &str) -> Repo
+/// A child repo value at `path`, named `path` too, for exercising git ops
+/// directly.
+pub(crate) fn repo(path: &str, absolute_path: impl Into<PathBuf>) -> Repo
 {
-    Repo { name: name.to_owned(), path: PathBuf::from(path) }
+    Repo {
+        absolute_path: absolute_path.into(),
+        path: path.to_owned(),
+        kind: RepoKind::Child { name: path.to_owned() }
+    }
 }
 
 /// A CLI context rooted at `working_dir` whose git is never invoked —
