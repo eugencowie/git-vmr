@@ -27,7 +27,7 @@ fn commit_count(path: &Path) -> String
 fn commit_staged_changes_in_multiple_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -57,7 +57,7 @@ fn commit_staged_changes_in_multiple_child_repositories()
 fn commit_skips_non_git_children_and_clean_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -88,7 +88,7 @@ fn commit_skips_non_git_children_and_clean_child_repositories()
 fn commit_accepts_short_and_long_message_options_and_requires_one()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -132,7 +132,7 @@ fn commit_accepts_short_and_long_message_options_and_requires_one()
 fn commit_preserves_initial_commit_summary_line()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     stage_file(&backend, "README.md", "initial\n");
@@ -154,7 +154,7 @@ fn commit_preserves_initial_commit_summary_line()
 fn commit_partial_failures_still_attempt_later_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -188,7 +188,7 @@ fn commit_partial_failures_still_attempt_later_repositories()
 fn commit_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let zeta = tmp.path().join("zeta");
     init_repo(&alpha);
@@ -216,7 +216,7 @@ fn commit_reports_multiple_failures_in_repository_name_order()
 fn commit_reports_nothing_to_commit_when_no_child_repo_has_staged_changes()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -239,7 +239,7 @@ fn commit_reports_nothing_to_commit_when_no_child_repo_has_staged_changes()
 fn commit_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);

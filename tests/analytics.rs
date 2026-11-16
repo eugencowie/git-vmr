@@ -65,7 +65,7 @@ fn successful_dispatched_command_records_analytics()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let log = tmp.path().join("analytics.jsonl");
 
     git_vmr()
@@ -112,7 +112,7 @@ fn consecutive_dispatched_commands_reuse_analytics_session()
     let state_dir = tmp.path().join("state");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let log = tmp.path().join("analytics.jsonl");
 
     git_vmr_with_state(&config_dir, &state_dir)
@@ -176,7 +176,7 @@ fn analytics_payload_records_flag_names_only()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let log = tmp.path().join("analytics.jsonl");
 
     git_vmr()
@@ -204,7 +204,7 @@ fn disabled_analytics_skips_event()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &[]);
     let log = tmp.path().join("analytics.jsonl");
     let config_dir = tmp.path().join("config");
     let config_file = config_dir.join("git-vmr").join("config.toml");

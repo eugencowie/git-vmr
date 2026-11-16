@@ -8,3 +8,7 @@ This project uses mise to manage the development environment.
 - Use `mise run <task>` for standard operations.
 - Run `mise ls -l` to see the managed tools.
 - When invoking a managed tool directly, use `mise exec -- <command> [args]` rather than invoking the tool by its bare name.
+
+## Coding standards
+
+Follow [STANDARDS.md](STANDARDS.md) when writing or reviewing code.

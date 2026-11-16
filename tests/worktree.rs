@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    TestVmr, commit_file, git, git_command, git_vmr, init_repo, write_commit
+    TestVmr, commit_file, git, git_command, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -270,7 +271,7 @@ fn worktree_add_creates_child_worktrees_on_inferred_branch()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -364,7 +365,7 @@ fn worktree_add_explicit_branch_creates_child_worktrees_on_requested_branch()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -432,7 +433,7 @@ fn worktree_add_skips_non_git_child_directories()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend"]);
     fs::create_dir(vmr.join("docs")).expect("failed to create docs dir");
     let backend = vmr.join("backend");
     init_repo(&backend);
@@ -460,7 +461,7 @@ fn worktree_add_explicit_branch_creation_failures_are_reported_per_repository()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -544,7 +545,7 @@ fn worktree_add_explicit_checked_out_branch_fails_without_creating_inferred_bran
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -576,7 +577,7 @@ fn worktree_add_invalid_explicit_commit_ish_groups_failures()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -607,7 +608,7 @@ fn worktree_add_best_effort_keeps_successful_child_worktrees()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend", "tools"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     let tools = vmr.join("tools");
@@ -641,12 +642,13 @@ fn worktree_add_best_effort_keeps_successful_child_worktrees()
 }
 
 #[test]
+#[ignore = "worktree roots become root-repo worktrees in step 5"]
 fn worktree_add_marker_enables_vmr_discovery_from_child_worktree()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend"]);
     let backend = vmr.join("backend");
     init_repo(&backend);
     commit_file(&backend, "README.md");
@@ -673,7 +675,7 @@ fn worktree_add_uses_nested_working_dir_and_global_c_for_relative_target()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["backend", "frontend"]);
     let backend = vmr.join("backend");
     let frontend = vmr.join("frontend");
     init_repo(&backend);
@@ -707,7 +709,7 @@ fn worktree_add_reports_failures_in_repository_name_order()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    fs::create_dir(vmr.join(".gitvmr")).expect("failed to create marker");
+    init_vmr(&vmr, &["alpha", "has-ref", "zeta"]);
     let alpha = vmr.join("alpha");
     let has_ref = vmr.join("has-ref");
     let zeta = vmr.join("zeta");

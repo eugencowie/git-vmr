@@ -9,7 +9,7 @@ use std::path::Path;
 fn diff_shows_worktree_changes_across_child_repos()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -43,7 +43,7 @@ fn diff_shows_worktree_changes_across_child_repos()
 fn diff_staged_shows_index_changes_only()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -72,7 +72,7 @@ fn diff_staged_shows_index_changes_only()
 fn diff_routes_paths_to_the_owning_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -98,7 +98,7 @@ fn diff_routes_paths_to_the_owning_repo()
 fn diff_aggregate_path_expands_to_all_child_repos()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -124,7 +124,7 @@ fn diff_aggregate_path_expands_to_all_child_repos()
 fn diff_errors_on_a_path_owned_by_no_child_repo()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     write_commit(&backend, "src.rs", "old\n", "initial");
@@ -145,7 +145,7 @@ fn diff_errors_on_a_path_owned_by_no_child_repo()
 fn diff_aggregates_a_failing_repo_while_surviving_diffs_still_print()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["broken", "frontend"]);
     let broken = tmp.path().join("broken");
     let frontend = tmp.path().join("frontend");
     fs::create_dir(&broken).expect("failed to create repo dir");
@@ -171,7 +171,7 @@ fn diff_aggregates_a_failing_repo_while_surviving_diffs_still_print()
 fn diff_with_no_pager_prints_directly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     write_commit(&backend, "src.rs", "old\n", "initial");
@@ -202,7 +202,7 @@ fn diff_output_round_trips_through_git_apply()
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let vmr = tmp.path().join("vmr");
     fs::create_dir(&vmr).expect("failed to create vmr dir");
-    init_vmr(&vmr);
+    init_vmr(&vmr, &["backénd", "frontend"]);
 
     // The non-ASCII character forces Git C-quoting in prefixed paths while
     // remaining a valid Windows filename; the quoted-path rename also makes

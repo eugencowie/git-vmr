@@ -740,7 +740,7 @@ mod combined_tests
                 ""
             ));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let rendered =
@@ -786,7 +786,7 @@ mod combined_tests
                 .on(["var", "GIT_PAGER"], 0, "cat\n", "")
         );
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let mut context = cli_context(tmp.path());
         context.stdout_is_tty = true;
         let mut args = diff_args(&[]);
@@ -812,7 +812,7 @@ mod combined_tests
         let fake =
             Arc::new(ScriptedFake::new().on(&backend, 0, BACKEND_DIFF, ""));
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let rendered = run(
@@ -839,7 +839,7 @@ mod combined_tests
             .on(child_args("backend", &[], &["."]), 0, "", "")
             .on(child_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
         let git = Git::with(fake);
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let rendered =
@@ -861,7 +861,7 @@ mod combined_tests
             b""
         );
         let git = Git::with(fake);
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         let error = run(
             &workspace,
@@ -886,7 +886,7 @@ mod combined_tests
             .on(child_args("backend", &[], &["."]), 1, "", "fatal: bad\n")
             .on(child_args("frontend", &[], &["."]), 0, FRONTEND_DIFF, "");
         let git = Git::with(fake);
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let err = run(&workspace, &cli_context(tmp.path()), &diff_args(&[]))
@@ -906,7 +906,7 @@ mod combined_tests
         // Arrange
         let tmp = vmr_fixture();
         let git = Git::with(ScriptedFake::new());
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
 
         // Act
         let err = run(
@@ -956,7 +956,7 @@ mod pager_tests
     {
         let tmp = vmr_fixture();
         let git = Git::with(fake);
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let mut context = cli_context(tmp.path());
         context.stdout_is_tty = true;
         let args = DiffArgs {
@@ -1062,7 +1062,7 @@ mod pager_tests
                 "",
                 ""
             ));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let args = DiffArgs {
             staged: false,
             color: ColorWhen::Auto,
@@ -1102,7 +1102,7 @@ mod pager_tests
         );
         let tmp = vmr_fixture();
         let git = Git::with(Arc::clone(&fake));
-        let workspace = Workspace::find(&git, tmp.path()).unwrap();
+        let workspace = Workspace::open(&git, tmp.path()).unwrap();
         let mut context = cli_context(tmp.path());
         context.stdout_is_tty = true;
         let args = DiffArgs {

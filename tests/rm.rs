@@ -1,6 +1,6 @@
 mod common;
 
-use common::{commit_file, git_output, git_vmr, init_repo};
+use common::{commit_file, git_output, git_vmr, init_repo, init_vmr};
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -20,8 +20,7 @@ fn rm_removes_tracked_file_from_vmr_root()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/main.rs");
@@ -45,8 +44,7 @@ fn rm_removes_paths_across_multiple_repositories()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -71,8 +69,7 @@ fn rm_removes_from_child_repo_and_with_working_dir_argument()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -104,8 +101,7 @@ fn rm_preserves_git_failure_for_untracked_path_with_repo_context()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "tracked.rs");
@@ -134,8 +130,7 @@ fn rm_recursive_removes_directories_with_short_flag()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/main.rs");
@@ -157,8 +152,7 @@ fn rm_force_removes_modified_tracked_file_with_short_and_long_flags()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -196,8 +190,7 @@ fn rm_dry_run_reports_preview_without_mutating_short_and_long_flags()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -239,8 +232,7 @@ fn rm_cached_removes_file_and_directory_from_index_only()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -274,8 +266,7 @@ fn rm_directory_without_recursive_fails_without_removing_files()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     init_repo(&backend);
     commit_file(&backend, "src/main.rs");
@@ -299,8 +290,7 @@ fn rm_dry_run_root_requires_recursive_and_recursive_preview_does_not_mutate()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     init_repo(&backend);
@@ -344,8 +334,7 @@ fn rm_vmr_root_requires_recursive_and_expands_to_git_children()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
@@ -385,8 +374,7 @@ fn rm_rejects_invalid_paths_before_changing_any_repo()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     fs::write(tmp.path().join("README.md"), "vmr\n")
         .expect("failed to write root file");
@@ -428,8 +416,7 @@ fn rm_flags_do_not_bypass_vmr_path_validation()
 {
     // Arrange
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    fs::create_dir(tmp.path().join(".gitvmr"))
-        .expect("failed to create marker");
+    init_vmr(tmp.path(), &["backend"]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
     fs::write(tmp.path().join("docs/readme.md"), "docs\n")
         .expect("failed to write docs file");

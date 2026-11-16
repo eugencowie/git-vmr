@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    git, git_command, git_output, git_vmr, init_repo, init_vmr, write_commit
+    declare, git, git_command, git_output, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -52,7 +53,7 @@ fn commit_count(path: &Path) -> String
 fn merge_clean_branch_across_multiple_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -79,7 +80,7 @@ fn merge_clean_branch_across_multiple_child_repositories()
 fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -94,6 +95,7 @@ fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     setup_repo_with_initial_commit(&backend);
     create_mergeable_branch(&backend, "feature/auth");
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["merge", "feature/auth"])
@@ -113,7 +115,7 @@ fn merge_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 fn merge_missing_ref_fails_only_that_repository_and_still_attempts_others()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -146,7 +148,7 @@ fn merge_conflict_leaves_repository_conflicted_and_does_not_stop_clean_repositor
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -173,7 +175,7 @@ fn merge_conflict_leaves_repository_conflicted_and_does_not_stop_clean_repositor
 fn merge_successes_are_not_rolled_back_after_later_failure()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -196,7 +198,7 @@ fn merge_reports_colored_repository_suffixes_and_orders_failures_by_repository_n
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "beta", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let beta = tmp.path().join("beta");
     let zeta = tmp.path().join("zeta");
@@ -225,7 +227,7 @@ fn merge_reports_colored_repository_suffixes_and_orders_failures_by_repository_n
 fn merge_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);

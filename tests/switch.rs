@@ -1,7 +1,8 @@
 mod common;
 
 use common::{
-    git, git_command, git_output, git_vmr, init_repo, init_vmr, write_commit
+    declare, git, git_command, git_output, git_vmr, init_repo, init_vmr,
+    write_commit
 };
 use predicates::prelude::*;
 use std::fs;
@@ -77,7 +78,7 @@ fn current_branch(path: &Path) -> String
 fn switch_shared_branch_across_multiple_child_repositories()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -104,7 +105,7 @@ fn switch_shared_branch_across_multiple_child_repositories()
 fn switch_normalizes_behind_counts_before_grouping_success_output()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_behind_upstream(
@@ -147,7 +148,7 @@ fn switch_normalizes_behind_counts_before_grouping_success_output()
 fn switch_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -162,6 +163,7 @@ fn switch_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     setup_repo_with_initial_commit(&backend);
     create_branch(&backend, "feature/auth");
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["switch", "feature/auth"])
@@ -181,7 +183,7 @@ fn switch_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -214,7 +216,7 @@ fn switch_missing_branch_fails_only_that_repository_and_still_attempts_others()
 fn switch_successes_are_not_rolled_back_after_later_failure()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -241,7 +243,7 @@ fn switch_successes_are_not_rolled_back_after_later_failure()
 fn switch_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "has-branch", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let has_branch = tmp.path().join("has-branch");
     let zeta = tmp.path().join("zeta");
@@ -264,7 +266,7 @@ fn switch_reports_multiple_failures_in_repository_name_order()
 fn switch_dirty_worktree_protection_is_delegated_to_git()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);
     git(&backend, ["checkout", "-b", "feature/auth"]);
@@ -290,7 +292,7 @@ fn switch_dirty_worktree_protection_is_delegated_to_git()
 fn switch_uses_nested_working_dir_and_global_c_option_for_discovery()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -333,7 +335,7 @@ fn switch_create_shared_branch_across_multiple_child_repositories_deduplicates_s
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -358,7 +360,7 @@ fn switch_create_shared_branch_across_multiple_child_repositories_deduplicates_s
 fn switch_create_short_form_creates_and_switches()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend"]);
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);
 
@@ -380,7 +382,7 @@ fn switch_create_short_form_creates_and_switches()
 fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &[]);
     fs::create_dir(tmp.path().join("docs")).expect("failed to create docs dir");
 
     git_vmr()
@@ -394,6 +396,7 @@ fn switch_create_skips_non_git_children_and_empty_vmrs_succeed_quietly()
     let backend = tmp.path().join("backend");
     setup_repo_with_initial_commit(&backend);
 
+    declare(tmp.path(), &["backend"]);
     git_vmr()
         .current_dir(tmp.path())
         .args(["switch", "--create", "feature/auth"])
@@ -414,7 +417,7 @@ fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_o
 
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend", "tools"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     let tools = tmp.path().join("tools");
@@ -446,7 +449,7 @@ fn switch_create_existing_branch_fails_only_that_repository_and_still_attempts_o
 fn switch_create_successes_are_not_rolled_back_after_failure()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["backend", "frontend"]);
     let backend = tmp.path().join("backend");
     let frontend = tmp.path().join("frontend");
     setup_repo_with_initial_commit(&backend);
@@ -473,7 +476,7 @@ fn switch_create_successes_are_not_rolled_back_after_failure()
 fn switch_create_reports_multiple_failures_in_repository_name_order()
 {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
-    init_vmr(tmp.path());
+    init_vmr(tmp.path(), &["alpha", "clean", "zeta"]);
     let alpha = tmp.path().join("alpha");
     let clean = tmp.path().join("clean");
     let zeta = tmp.path().join("zeta");
