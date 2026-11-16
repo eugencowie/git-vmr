@@ -347,39 +347,45 @@ url_api = "https://api.github.com/repos/jgm/pandoc/releases/assets/438414170"
 provenance = "github-attestations"
 
 [[tools.release-plz]]
-version = "0.3.159"
+version = "0.4.3"
 backend = "aqua:release-plz/release-plz"
 specifiers = ["latest"]
 
 [tools.release-plz."platforms.linux-arm64"]
-checksum = "sha256:68c8a1790cb30dbf6a1a16de8e4ab5c343a961197c381b0e4dc4e314fbfa1c99"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442831569"
+checksum = "sha256:2cde0ccd8355abb8f710f0173d37fcd2eb216d6d91d81cf340ca6c047a9119c9"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701219281"
 
 [tools.release-plz."platforms.linux-arm64-musl"]
-checksum = "sha256:58b80ecce86ac24cbecf3f4cf37eeb0412583a0adf3a8ae608b6a4eb71737f35"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442830780"
+checksum = "sha256:f9968983da816f30ad8423b5ce7ac93e1e305f913bab6c164b88fbeab434d7cb"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701215871"
 
 [tools.release-plz."platforms.linux-x64"]
-checksum = "sha256:baeb11c5dd4a3d76971bbd9b48583519d0e0644a5ae60eb666c4f9331598157f"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442829710"
+checksum = "sha256:f4b0cc404cd9a58cd1b33f49e439bba65186773f63e323ea47f3ea57e557a3d3"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701209939"
 
 [tools.release-plz."platforms.linux-x64-musl"]
-checksum = "sha256:b634dcb4a1b0724e00e924ab50e685704ef2bf8c6ebb809f4ac2ab16ac8458d9"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442830250"
+checksum = "sha256:4a4cfa92ea2abaee02b40daa596a95ca2725816a6a32cb03a8f48ddead287681"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701216315"
 
 [tools.release-plz."platforms.macos-arm64"]
-checksum = "sha256:c9ff7e895a018c6d6c1cd62c85d0ff296a8e6dd1647bc816b9251d8056b72e2f"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442829894"
+checksum = "sha256:b2c6e636199c7fa9dae8838fbebb49cb99933908eb7dd67f25ec831bb38e1c52"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701217491"
 
 [tools.release-plz."platforms.windows-x64"]
-checksum = "sha256:cd6d49c63a8800a40599e2f85a488e9c5efbacba6e53e3e45eb71aa02b1b2876"
-url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.3.159/release-plz-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/442833961"
+checksum = "sha256:a8597928a5d9e326b3ebfc4b85ed2016ae9765347bc77f12a07ffd267de13eeb"
+checksum_source = "mise-versions"
+url = "https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/release-plz/release-plz/releases/assets/701226976"
 
 [[tools.rust]]
 version = "nightly-2026-10-05"
