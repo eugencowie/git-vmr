@@ -10,6 +10,9 @@ concurrency:
 
 env:
   MISE_TASK_RUN_AUTO_INSTALL: false
+  # release-plz runs cargo (a mise wrapper) at older commits. Without this, mise
+  # rewrites their mise.lock and release-plz's next checkout fails.
+  MISE_LOCKED: 1
 
 jobs:
   prepare-release:
